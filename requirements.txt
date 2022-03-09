@@ -1,0 +1,3 @@
+sqlparse
+configparser
+moz-sql-parser
