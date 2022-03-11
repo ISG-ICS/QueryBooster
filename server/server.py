@@ -1,7 +1,9 @@
 import sys
 # append the path of the parent directory
 sys.path.append("..")
+import configparser
 from http.server import HTTPServer, SimpleHTTPRequestHandler
+import json
 import logging
 from io import BytesIO
 from core.query_rewritter import QueryRewritter
@@ -17,7 +19,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
-    def do_POST(self):
+    def post_query(self):
         content_length = int(self.headers['Content-Length'])
         body = self.rfile.read(content_length)
         request = body.decode('utf-8')
@@ -44,6 +46,34 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         response = BytesIO()
         response.write(rewritten_query.encode('utf-8'))
         self.wfile.write(response.getvalue())
+    
+    def post_update_rule(self):
+        content_length = int(self.headers['Content-Length'])
+        body = self.rfile.read(content_length)
+        request = body.decode('utf-8')
+
+        # logic
+        logging.info(request)
+        rule = json.loads(request)
+        # read config.ini
+        config = configparser.ConfigParser()
+        config.read('../config.ini')
+        if rule['key'] in config['RULES']:
+            config['RULES'][rule['key']] = 'yes' if rule['enabled'] else 'no'
+        with open('../config.ini', 'w') as configfile:
+            config.write(configfile)
+
+        self.send_response(200)
+        self.end_headers()
+        response = BytesIO()
+        response.write("done".encode('utf-8'))
+        self.wfile.write(response.getvalue())
+
+    def do_POST(self):
+        if self.path == "/":
+            self.post_query()
+        elif self.path == "/updateRule":
+            self.post_update_rule()
 
 
 if __name__ == '__main__':
