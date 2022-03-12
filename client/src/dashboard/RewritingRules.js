@@ -43,13 +43,22 @@ function preventDefault(event) {
 }
 
 export default function RewrittingRules() {
-  const [checked, setChecked] = React.useState(true);
+  // use state {row[0].key: row[0].enabled, row[1].key: row[1].enabled, ...}
+  const switchState = rows.reduce((acc, cur) => ({ ...acc, [cur.key]: cur.enabled }), {});
+  const [state, setState] = React.useState(switchState);
 
   const handleChange = (event, id) => {
-    setChecked(event.target.checked);
+    
+    // change the data rows according to switch checked
     const row = rows.find((row) => {return row.id === id});
     row.enabled = event.target.checked;
-    // console.log("[handleChange] row {" + row.id + "}.enabled = " + row.enabled);
+    console.log("[handleChange] row {" + row.id + "}.enabled = " + row.enabled);
+    
+    // set the state based on the changed data
+    const switchState = rows.reduce((acc, cur) => ({ ...acc, [cur.key]: cur.enabled }), {});
+    setState(switchState);
+
+    // post updateRule request to server
     axios.post('/updateRule', row)
     .then(function (response) {
       console.log(response);
@@ -79,7 +88,7 @@ export default function RewrittingRules() {
               <TableCell>{row.formula}</TableCell>
               <TableCell align="right">
                 <Switch
-                  checked={row.enabled}
+                  checked={state[row.key]}
                   onChange={(event) => handleChange(event, row.id)}
                   inputProps={{ 'aria-label': 'controlled' }}
                 />
