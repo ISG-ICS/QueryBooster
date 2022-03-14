@@ -9,61 +9,52 @@ import TableRow from '@mui/material/TableRow';
 import Switch from '@mui/material/Switch';
 import Title from './Title';
 
-// Generate Rewriting Rules Data
-function createData(id, key, name, formula, enabled) {
-  return { id, key, name, formula, enabled };
-}
-
-const rows = [
-  createData(
-    0,
-    'REMOVE_CAST',
-    'Remove Cast',
-    'CAST(<exp> AS <type>) => <exp>',
-    true,
-  ),
-  createData(
-    1,
-    'REPLACE_STRPOS',
-    'Replace Strpos',
-    'STRPOS(LOWER(<exp>), \'<literal>\') > 0 => <exp> ILIKE \'%<literal>%\'',
-    true,
-  ),
-  createData(
-    2,
-    'USE_INDEX',
-    'Use Index',
-    'BitmapScan(tweets idx_tweets_monthly_created_at)',
-    true,
-  ),
-];
-
-function preventDefault(event) {
-  event.preventDefault();
-}
 
 export default function RewrittingRules() {
-  // use state {row[0].key: row[0].enabled, row[1].key: row[1].enabled, ...}
-  const switchState = rows.reduce((acc, cur) => ({ ...acc, [cur.key]: cur.enabled }), {});
-  const [state, setState] = React.useState(switchState);
+  // Set up a state for list of rules
+  const [rules, setRules] = React.useState([]);
+  // Set up a state for providing forceUpdate function
+  const [, updateState] = React.useState();
+  const forceUpdate = React.useCallback(() => updateState({}), []);
 
-  const handleChange = (event, id) => {
+  // initial loading rules from server
+  const listRules = () => {
+    // post listRules request to server
+    axios.post('/listRules', {})
+      .then(function (response) {
+        console.log('[/listRules] -> response:');
+        console.log(response);
+        // update the state for list of rules
+        setRules(response.data);
+      })
+      .catch(function (error) {
+        console.log('[/listRules] -> error:');
+        console.log(error);
+      });
+  };
+
+  // call listRules() only once after initial rendering
+  React.useEffect(() => {listRules()}, []);
+  
+  // handle change on the switch of a rule
+  const handleChange = (event, rule) => {
     
-    // change the data rows according to switch checked
-    const row = rows.find((row) => {return row.id === id});
-    row.enabled = event.target.checked;
-    console.log("[handleChange] row {" + row.id + "}.enabled = " + row.enabled);
-    
-    // set the state based on the changed data
-    const switchState = rows.reduce((acc, cur) => ({ ...acc, [cur.key]: cur.enabled }), {});
-    setState(switchState);
+    // enable/disable the rule according to the switch checked
+    rule.enabled = event.target.checked;
+
+    // ! this will not re-render because the reference of rules has not changed.
+    setRules(rules); 
+    // ! use the forceUpdate() function instead to force re-rendering.
+    forceUpdate();
 
     // post updateRule request to server
-    axios.post('/updateRule', row)
+    axios.post('/updateRule', rule)
     .then(function (response) {
+      console.log('[/updateRule] -> response:');
       console.log(response);
     })
     .catch(function (error) {
+      console.log('[/updateRule] -> error:');
       console.log(error);
     });
   };
@@ -81,15 +72,15 @@ export default function RewrittingRules() {
           </TableRow>
         </TableHead>
         <TableBody>
-          {rows.map((row) => (
-            <TableRow key={row.id}>
-              <TableCell>{row.id}</TableCell>
-              <TableCell>{row.name}</TableCell>
-              <TableCell>{row.formula}</TableCell>
+          {rules.map((rule) => (
+            <TableRow key={rule.id}>
+              <TableCell>{rule.id}</TableCell>
+              <TableCell>{rule.name}</TableCell>
+              <TableCell>{rule.formula}</TableCell>
               <TableCell align="right">
                 <Switch
-                  checked={state[row.key]}
-                  onChange={(event) => handleChange(event, row.id)}
+                  checked={rule.enabled}
+                  onChange={(event) => handleChange(event, rule)}
                   inputProps={{ 'aria-label': 'controlled' }}
                 />
               </TableCell>

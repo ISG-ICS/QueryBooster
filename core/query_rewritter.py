@@ -14,9 +14,9 @@ class QueryRewritter:
         # parse query
         parsed = sqlparse.parse(query)[0]
         # rewrite query according to config rules
-        if config['RULES']['REMOVE_CAST'] == 'yes':
+        if config['RULES']['remove_cast'] == 'yes':
             QueryRewritter.remove_cast(parsed)
-        if config['RULES']['REPLACE_STRPOS'] == 'yes':
+        if config['RULES']['replace_strpos'] == 'yes':
             QueryRewritter.replace_strpos(parsed)
         return str(parsed)
     
