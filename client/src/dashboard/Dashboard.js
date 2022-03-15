@@ -18,7 +18,9 @@ import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import { mainListItems, secondaryListItems } from './listItems';
+import { Routes, Route } from "react-router-dom";
 import RewritingRules from './RewritingRules';
+import JDBCDrivers from './JDBCDrivers';
 
 function Copyright(props) {
   return (
@@ -163,7 +165,11 @@ function DashboardContent() {
               {/* Rewriting Rules */}
               <Grid item xs={12}>
                 <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
-                  <RewritingRules />
+                  <Routes>
+                    {/* <RewritingRules /> */}
+                    <Route exact path="/" element={<RewritingRules />} />
+                    <Route path="/jdbc" element={<JDBCDrivers />} />
+                  </Routes>
                 </Paper>
               </Grid>
             </Grid>
