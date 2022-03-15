@@ -12,8 +12,8 @@ export default function JDBCDrivers() {
 
   const onDownload = () => {
     const link = document.createElement("a");
-    link.download = `postgresql-42.3.2-SNAPSHOT.jar`;
-    link.href = "./postgresql-42.3.2-SNAPSHOT.jar";
+    link.download = `postgresql-42.3.3-SNAPSHOT.jar`;
+    link.href = "https://github.com/ISG-ICS/smart-pgjdbc/releases/download/smart_v42.3.3/postgresql-42.3.3-SNAPSHOT.jar";
     link.click();
   };
 
