@@ -47,14 +47,14 @@ export default function RewrittingRules() {
     // ! use the forceUpdate() function instead to force re-rendering.
     forceUpdate();
 
-    // post updateRule request to server
-    axios.post('/updateRule', rule)
+    // post switchRule request to server
+    axios.post('/switchRule', {id: rule.id, key: rule.key, enabled: rule.enabled})
     .then(function (response) {
-      console.log('[/updateRule] -> response:');
+      console.log('[/switchRule] -> response:');
       console.log(response);
     })
     .catch(function (error) {
-      console.log('[/updateRule] -> error:');
+      console.log('[/switchRule] -> error:');
       console.log(error);
     });
   };

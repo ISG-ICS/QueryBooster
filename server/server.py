@@ -7,11 +7,14 @@ import json
 import logging
 from io import BytesIO
 from core.query_rewritter import QueryRewritter
+from core.data_manager import DataManager
 
 PORT = 8000
 DIRECTORY = "static"
 
 class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
+
+    dm = DataManager()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=DIRECTORY, **kwargs)
@@ -52,50 +55,45 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         body = self.rfile.read(content_length)
         request = body.decode('utf-8')
 
-        # logic
+        # logging
+        logging.info("[/listRules] request:")
         logging.info(request)
-        # TODO - load rules list from database
-        rules = [
-            {'id': 0, 'key': 'remove_cast', 'name': 'Remove Cast', 'formula': 'CAST(<exp> AS <type>) => <exp>', 'enabled': True},
-            {'id': 1, 'key': 'replace_strpos', 'name': 'Replace Strpos', 'formula': 'STRPOS(LOWER(<exp>), \'<literal>\') > 0 => <exp> ILIKE \'%<literal>%\'', 'enabled': True},
-            {'id': 2, 'key': 'use_index', 'name': 'Use Index', 'formula': 'BitmapScan(tweets idx_tweets_monthly_created_at)', 'enabled': True}
-        ]
-        # read config.ini
-        config = configparser.ConfigParser()
-        config.read('../config.ini')
-        # join config rules
-        for rule_key, rule_enabled in config['RULES'].items():
-            print(rule_key, rule_enabled)
-            for rule in rules:
-                if rule_key == rule['key']:
-                    rule['enabled'] = True if rule_enabled == 'yes' else False
+
+        # list rules from data manager
+        rules = self.dm.list_rules()
+        rules_json = []
+        for rule in rules:
+            rules_json.append({
+                'id': rule[0],
+                'key': rule[1],
+                'name': rule[2],
+                'formula': rule[3],
+                'enabled': True if rule[4] == 1 else False
+            })
 
         self.send_response(200)
         self.end_headers()
         response = BytesIO()
-        response.write(json.dumps(rules).encode('utf-8'))
+        response.write(json.dumps(rules_json).encode('utf-8'))
         self.wfile.write(response.getvalue())
 
-    def post_update_rule(self):
+    def post_switch_rule(self):
         content_length = int(self.headers['Content-Length'])
         body = self.rfile.read(content_length)
         request = body.decode('utf-8')
 
-        # logic
+        # logging
+        logging.info("[/switcheRule] request:")
         logging.info(request)
+
+        # enable/disable rule to data manager
         rule = json.loads(request)
-        # read config.ini
-        config = configparser.ConfigParser()
-        config.read('../config.ini')
-        if rule['key'] in config['RULES']:
-            config['RULES'][rule['key']] = 'yes' if rule['enabled'] else 'no'
-        with open('../config.ini', 'w') as configfile:
-            config.write(configfile)
+        success = self.dm.switch_rule(rule['id'], rule['enabled'])
 
         self.send_response(200)
         self.end_headers()
         response = BytesIO()
-        response.write("done".encode('utf-8'))
+        response.write(str(success).encode('utf-8'))
         self.wfile.write(response.getvalue())
 
     def do_POST(self):
@@ -103,8 +101,8 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.post_query()
         elif self.path == "/listRules":
             self.post_list_rules()
-        elif self.path == "/updateRule":
-            self.post_update_rule()
+        elif self.path == "/switchRule":
+            self.post_switch_rule()
 
 
 if __name__ == '__main__':
