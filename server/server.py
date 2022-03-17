@@ -1,7 +1,6 @@
 import sys
 # append the path of the parent directory
 sys.path.append("..")
-import configparser
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 import json
 import logging
@@ -26,15 +25,20 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         content_length = int(self.headers['Content-Length'])
         body = self.rfile.read(content_length)
         request = body.decode('utf-8')
+
+        # logging
+        logging.debug("\n[/] request:")
+        logging.debug(request)
         
-        # TODO - Currently, request is the original query itself. 
-        #        Use Json for request in the future if we need more information.
-        original_query = request
+        # rewrite
+        request = json.loads(request, strict=False)
+        original_query = request['query']
         log_text = ""
         log_text += "\n=================================================="
         log_text += "\n    Original query"
         log_text += "\n--------------------------------------------------"
         log_text += "\n" + QueryRewritter.format(original_query)
+        log_text += "\n--------------------------------------------------"
         logging.info(log_text)
         rewritten_query = QueryRewritter.rewrite(original_query)
         log_text = ""
@@ -42,6 +46,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         log_text += "\n    Rewritten query"
         log_text += "\n--------------------------------------------------"
         log_text += "\n" + QueryRewritter.format(rewritten_query)
+        log_text += "\n--------------------------------------------------"
         logging.info(log_text)
 
         self.send_response(200)
@@ -56,7 +61,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         request = body.decode('utf-8')
 
         # logging
-        logging.info("[/listRules] request:")
+        logging.info("\n[/listRules] request:")
         logging.info(request)
 
         # list rules from data manager
@@ -83,7 +88,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         request = body.decode('utf-8')
 
         # logging
-        logging.info("[/switcheRule] request:")
+        logging.info("\n[/switcheRule] request:")
         logging.info(request)
 
         # enable/disable rule to data manager
