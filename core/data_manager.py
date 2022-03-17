@@ -33,6 +33,16 @@ class DataManager:
         except Error as e:
             print(e)
     
+    def enabled_rules(self) -> List[Dict]:
+        try:
+            cur = self.db_conn.cursor()
+            cur.execute('''SELECT id, key, name, formula 
+                           FROM rules LEFT JOIN disable_rules ON rules.id = disable_rules.rule_id 
+                           WHERE disable_rules.disabled IS NULL ORDER BY rules.id''')
+            return cur.fetchall()
+        except Error as e:
+            print(e)
+    
     def switch_rule(self, rule_id: int, enabled: bool) -> bool:
         try:
             cur = self.db_conn.cursor()

@@ -1,24 +1,44 @@
-from tokenize import Whitespace
 import configparser
+from typing import Dict, List
 import sqlparse
 from sqlparse.sql import Where, Parenthesis, Function, TokenList, Identifier, Token, Comparison
 from sqlparse.tokens import Token as T
 
+from core.data_manager import DataManager
+
 class QueryRewritter:
 
     @staticmethod
-    def rewrite(query):
-        # read config.ini
-        config = configparser.ConfigParser()
-        config.read('../config.ini')
+    def rewrite(query: str, dm: DataManager):
+        # fetch enabled rules order by id ascending
+        enabled_rules = QueryRewritter.fetch_enabled_rules(dm)
         # parse query
         parsed = sqlparse.parse(query)[0]
-        # rewrite query according to config rules
-        if config['RULES']['remove_cast'] == 'yes':
-            QueryRewritter.remove_cast(parsed)
-        if config['RULES']['replace_strpos'] == 'yes':
-            QueryRewritter.replace_strpos(parsed)
+        # rewrite query by firing enabled rules in order
+        for rule in enabled_rules:
+            QueryRewritter.fire_rule(parsed, rule)
         return str(parsed)
+    
+    @staticmethod
+    def fetch_enabled_rules(dm: DataManager) -> List:
+        enabled_rules = dm.enabled_rules()
+        res = []
+        for enabled_rule in enabled_rules:
+            res.append({
+                'id': enabled_rule[0],
+                'key': enabled_rule[1],
+                'name': enabled_rule[2],
+                'formula': enabled_rule[3]
+            })
+        return res
+    
+    @staticmethod
+    def fire_rule(parsed, rule) -> None:
+        if rule['key'] == 'remove_cast':
+            QueryRewritter.remove_cast(parsed)
+        if rule['key'] == 'replace_strpos':
+            QueryRewritter.replace_strpos(parsed)
+        return
     
     @staticmethod
     def format(query):

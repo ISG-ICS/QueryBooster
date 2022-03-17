@@ -1,5 +1,5 @@
-from moz_sql_parser import parse
-from moz_sql_parser import format
+from mo_sql_parsing import parse
+from mo_sql_parsing import format
 import json
 from pathlib import Path
 
@@ -13,9 +13,15 @@ if __name__ == '__main__':
             print("==================================================")
             print("    " + sql_file.name)
             print("==================================================")
+            print("Original SQL: ")
+            print("--------------------------------------------------")
             print(sql)
             print("--------------------------------------------------")
+            print("Parsed JSON: ")
+            print("--------------------------------------------------")
             print(json.dumps(parse(sql)))
+            print("--------------------------------------------------")
+            print("Formated SQL: ")
             print("--------------------------------------------------")
             print(format(parse(sql)))
             print()

@@ -40,7 +40,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         log_text += "\n" + QueryRewritter.format(original_query)
         log_text += "\n--------------------------------------------------"
         logging.info(log_text)
-        rewritten_query = QueryRewritter.rewrite(original_query)
+        rewritten_query = QueryRewritter.rewrite(original_query, self.dm)
         log_text = ""
         log_text += "\n=================================================="
         log_text += "\n    Rewritten query"
