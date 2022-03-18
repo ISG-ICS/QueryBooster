@@ -1,27 +1,43 @@
-import configparser
-from typing import Dict, List
+from typing import Any, Dict, List
 import sqlparse
 from sqlparse.sql import Where, Parenthesis, Function, TokenList, Identifier, Token, Comparison
 from sqlparse.tokens import Token as T
+from mo_sql_parsing import parse
+from mo_sql_parsing import format
 
 from core.data_manager import DataManager
 
 class QueryRewritter:
 
     @staticmethod
-    def rewrite(query: str, dm: DataManager):
+    def rewrite(query: str, dm: DataManager, database: str) -> str:
+        
         # fetch enabled rules order by id ascending
-        enabled_rules = QueryRewritter.fetch_enabled_rules(dm)
-        # parse query
-        parsed = sqlparse.parse(query)[0]
-        # rewrite query by firing enabled rules in order
-        for rule in enabled_rules:
-            QueryRewritter.fire_rule(parsed, rule)
-        return str(parsed)
+        enabled_rules = QueryRewritter.fetch_enabled_rules(dm, database)
+        
+        # TODO - use different paths for PostgreSQL and MySQL rules,
+        #        combine them when re-implement PostgreSQL rules using mo-sql-parsing
+        # 
+        # - PostgreSQL rules
+        # 
+        if database == 'postgresql':
+            # parse query
+            parsed = sqlparse.parse(query)[0]
+            # rewrite query by firing enabled rules in order
+            for rule in enabled_rules:
+                QueryRewritter.fire_rule_pg(parsed, rule)
+            return str(parsed)
+        elif database == 'mysql':
+            # parse query
+            parsed = parse(query)
+            # rewrite query by firing enabled rules in order
+            for rule in enabled_rules:
+                parsed = QueryRewritter.fire_rule_mysql(parsed, rule)
+            return format(parsed)
     
     @staticmethod
-    def fetch_enabled_rules(dm: DataManager) -> List:
-        enabled_rules = dm.enabled_rules()
+    def fetch_enabled_rules(dm: DataManager, database: str) -> List:
+        enabled_rules = dm.enabled_rules(database)
         res = []
         for enabled_rule in enabled_rules:
             res.append({
@@ -33,16 +49,78 @@ class QueryRewritter:
         return res
     
     @staticmethod
-    def fire_rule(parsed, rule) -> None:
+    def fire_rule_pg(parsed, rule) -> None:
         if rule['key'] == 'remove_cast':
             QueryRewritter.remove_cast(parsed)
         if rule['key'] == 'replace_strpos':
             QueryRewritter.replace_strpos(parsed)
         return
+
+    @staticmethod
+    def fire_rule_mysql(parsed, rule) -> Any:
+        if rule['key'] == 'remove_adddate':
+            return QueryRewritter.remove_adddate(parsed)
+        if rule['key'] == 'remove_timestamp':
+            return QueryRewritter.remove_timestamp(parsed)
+        return parsed
     
     @staticmethod
     def format(query):
         return sqlparse.format(query, reindent=True)
+    
+    @staticmethod
+    def remove_adddate(parsed: Any) -> Any:
+        if isinstance(parsed, Dict):
+            for key, value in parsed.items():
+                # function name is 'adddate'
+                if key == 'adddate':
+                    # adddate function is a list with two elements
+                    if isinstance(value, List) and len(value) == 2:
+                        # the second element is the literal to add
+                        added_literal = value[1]
+                        # the literal is a dict with key 'interval'
+                        if isinstance(added_literal, Dict) and 'interval' in added_literal.keys():
+                            interval = added_literal['interval']
+                            # interval is a list with two elements:
+                            if isinstance(interval, List) and len(interval) == 2:
+                                # the first element of interval is the length of interval
+                                # if the added interval has length 0,
+                                # then it is safe to remove adddate function
+                                if interval[0] == 0:
+                                    # upgrade the operand of 'adddate' function as result,
+                                    # which is the parent of 'adddate' function
+                                    return value[0]
+                else:
+                    parsed[key] = QueryRewritter.remove_adddate(value)
+            return parsed
+        elif isinstance(parsed, List):
+            for index, element in enumerate(parsed):
+                parsed[index] = QueryRewritter.remove_adddate(element)
+            return parsed
+        else:
+            return parsed
+    
+    @staticmethod
+    def remove_timestamp(parsed: Any) -> Any:
+        if isinstance(parsed, Dict):
+            for key, value in parsed.items():
+                # function name is 'timestamp'
+                if key == 'timestamp':
+                    # timestamp() has only one paramter
+                    if isinstance(value, Dict):
+                        return value
+                    else:
+                        return parsed
+                else:
+                    parsed[key] = QueryRewritter.remove_timestamp(value)
+            return parsed
+        elif isinstance(parsed, List):
+            for index, element in enumerate(parsed):
+                parsed[index] = QueryRewritter.remove_timestamp(element)
+            return parsed
+        else:
+            return parsed
+                        
     
     @staticmethod
     def get_column(parsed):
@@ -208,15 +286,20 @@ class QueryRewritter:
 
 if __name__ == '__main__':
     
-    sql = 'SELECT "tweets"."latitude" AS "latitude", \
-  "tweets"."longitude" AS "longitude" \
-FROM "public"."tweets" "tweets" \
-WHERE (("tweets"."latitude" >= -90) AND ("tweets"."latitude" <= 80) AND ((("tweets"."longitude" >= -173.80000000000001) AND ("tweets"."longitude" <= 180)) OR ("tweets"."longitude" IS NULL)) AND (CAST((DATE_TRUNC( \'day\', CAST("tweets"."created_at" AS DATE) ) + (-EXTRACT(DOW FROM "tweets"."created_at") * INTERVAL \'1 DAY\')) AS DATE) = (TIMESTAMP \'2018-04-22 00:00:00.000\')) AND (STRPOS(CAST(LOWER(CAST(CAST("tweets"."text" AS TEXT) AS TEXT)) AS TEXT),CAST(\'microsoft\' AS TEXT)) > 0)) \
-GROUP BY 1, \
-  2'
+    # PostgreSQL Query
+    # 
+    sql = '''SELECT "tweets"."latitude" AS "latitude",
+                    "tweets"."longitude" AS "longitude"
+               FROM "public"."tweets" "tweets"
+              WHERE (("tweets"."latitude" >= -90) AND ("tweets"."latitude" <= 80) 
+                AND ((("tweets"."longitude" >= -173.80000000000001) AND ("tweets"."longitude" <= 180)) OR ("tweets"."longitude" IS NULL)) 
+                AND (CAST((DATE_TRUNC( \'day\', CAST("tweets"."created_at" AS DATE) ) + (-EXTRACT(DOW FROM "tweets"."created_at") * INTERVAL \'1 DAY\')) AS DATE) 
+                    = (TIMESTAMP \'2018-04-22 00:00:00.000\')) 
+                AND (STRPOS(CAST(LOWER(CAST(CAST("tweets"."text" AS TEXT) AS TEXT)) AS TEXT),CAST(\'microsoft\' AS TEXT)) > 0))
+              GROUP BY 1, 2'''
     
     print("======================================")
-    print("    Original Query")
+    print("    PostgreSQL Original Query")
     print("--------------------------------------")
     print(sqlparse.format(sql, reindent=True))
     parsed = sqlparse.parse(sql)[0]
@@ -227,16 +310,8 @@ GROUP BY 1, \
     print("    After remove_cast()")
     print("--------------------------------------")
     QueryRewritter.remove_cast(parsed)
-    print(sqlparse.format(str(parsed), reindent=True))
-
-    # # test LIKE template
-    # #
-    # print("======================================")
-    # print("    Like Template")
-    # print("--------------------------------------")
-    # like_template = '"tweets"."text" ILIKE \'microsoft\''
-    # parsed = sqlparse.parse(like_template)[0]
-    # parsed._pprint_tree()
+    sql1 = str(parsed)
+    print(sqlparse.format(sql1, reindent=True))
 
     # test QueryRewritter.replace_strpos()
     #
@@ -244,5 +319,40 @@ GROUP BY 1, \
     print("    After replace_strpos()")
     print("--------------------------------------")
     QueryRewritter.replace_strpos(parsed)
-    print(sqlparse.format(str(parsed), reindent=True))
+    sql2 = str(parsed)
+    print(sqlparse.format(sql2, reindent=True))
+
+
+    # MySQL Query
+    # 
+    sql = '''SELECT `tweets`.`latitude` AS `latitude`,
+                    `tweets`.`longitude` AS `longitude`
+               FROM `tweets`
+              WHERE ((ADDDATE(DATE_FORMAT(`tweets`.`created_at`, '%Y-%m-01 00:00:00'), INTERVAL 0 SECOND) = TIMESTAMP('2017-03-01 00:00:00'))
+                AND (LOCATE('iphone', LOWER(`tweets`.`text`)) > 0))
+              GROUP BY 1, 2'''
     
+    print("======================================")
+    print("    MySQL Original Query")
+    print("--------------------------------------")
+    print(sqlparse.format(sql, reindent=True))
+    
+    # test QueryRewritter.remove_adddate()
+    #
+    print("======================================")
+    print("    After remove_adddate()")
+    print("--------------------------------------")
+    parsed = parse(sql)
+    parsed = QueryRewritter.remove_adddate(parsed)
+    sql1 = format(parsed)
+    print(sqlparse.format(sql1, reindent=True))
+
+    # test QueryRewritter.remove_timestamp()
+    #
+    print("======================================")
+    print("    After remove_timestamp()")
+    print("--------------------------------------")
+    parsed = parse(sql1)
+    parsed = QueryRewritter.remove_timestamp(parsed)
+    sql2 = format(parsed)
+    print(sqlparse.format(sql2, reindent=True))

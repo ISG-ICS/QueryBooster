@@ -27,18 +27,28 @@ class DataManager:
     def list_rules(self) -> List[Dict]:
         try:
             cur = self.db_conn.cursor()
-            cur.execute('''SELECT id, key, name, formula, CASE WHEN disabled is NULL THEN 1 ELSE 0 END AS enabled 
-                           FROM rules LEFT OUTER JOIN disable_rules ON rules.id = disable_rules.rule_id''')
+            cur.execute('''SELECT id, 
+                                  key, 
+                                  name, 
+                                  formula, 
+                                  CASE WHEN disabled is NULL THEN 1 ELSE 0 END AS enabled,
+                                  database 
+                           FROM rules LEFT OUTER JOIN disable_rules 
+                                      ON rules.id = disable_rules.rule_id''')
             return cur.fetchall()
         except Error as e:
             print(e)
     
-    def enabled_rules(self) -> List[Dict]:
+    def enabled_rules(self, database: str) -> List[Dict]:
         try:
             cur = self.db_conn.cursor()
-            cur.execute('''SELECT id, key, name, formula 
+            cur.execute('''SELECT id, 
+                                  key, 
+                                  name, 
+                                  formula 
                            FROM rules LEFT JOIN disable_rules ON rules.id = disable_rules.rule_id 
-                           WHERE disable_rules.disabled IS NULL ORDER BY rules.id''')
+                           WHERE disable_rules.disabled IS NULL AND rules.database = ? 
+                           ORDER BY rules.id''', [database])
             return cur.fetchall()
         except Error as e:
             print(e)
@@ -60,3 +70,5 @@ class DataManager:
 if __name__ == '__main__':
     dm = DataManager()
     print(dm.list_rules())
+    print(dm.enabled_rules('postgresql'))
+    print(dm.enabled_rules('mysql'))

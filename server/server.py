@@ -33,6 +33,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         # rewrite
         request = json.loads(request, strict=False)
         original_query = request['query']
+        database = request['db']
         log_text = ""
         log_text += "\n=================================================="
         log_text += "\n    Original query"
@@ -40,7 +41,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         log_text += "\n" + QueryRewritter.format(original_query)
         log_text += "\n--------------------------------------------------"
         logging.info(log_text)
-        rewritten_query = QueryRewritter.rewrite(original_query, self.dm)
+        rewritten_query = QueryRewritter.rewrite(original_query, self.dm, database)
         log_text = ""
         log_text += "\n=================================================="
         log_text += "\n    Rewritten query"
