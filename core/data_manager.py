@@ -32,7 +32,8 @@ class DataManager:
                                   name, 
                                   formula, 
                                   CASE WHEN disabled is NULL THEN 1 ELSE 0 END AS enabled,
-                                  database 
+                                  database,
+                                  is_hint
                            FROM rules LEFT OUTER JOIN disable_rules 
                                       ON rules.id = disable_rules.rule_id''')
             return cur.fetchall()
@@ -45,7 +46,8 @@ class DataManager:
             cur.execute('''SELECT id, 
                                   key, 
                                   name, 
-                                  formula 
+                                  formula,
+                                  is_hint
                            FROM rules LEFT JOIN disable_rules ON rules.id = disable_rules.rule_id 
                            WHERE disable_rules.disabled IS NULL AND rules.database = ? 
                            ORDER BY rules.id''', [database])
