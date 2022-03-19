@@ -10,10 +10,23 @@ import Title from './Title';
 
 export default function JDBCDrivers() {
 
-  const onDownload = () => {
+  const jdbcDrivers = [
+    { database: "postgresql",
+      version: "v42.3.3", 
+      download: "postgresql-42.3.3-SNAPSHOT.jar", 
+      href: "https://github.com/ISG-ICS/smart-pgjdbc/releases/download/smart_v42.3.3/postgresql-42.3.3-SNAPSHOT.jar"
+    },
+    { database: "mysql",
+      version: "v8.0.28",
+      download: "mysql-connector-java-8.0.28-SNAPSHOT.jar",
+      href: "https://github.com/ISG-ICS/smart-mysql-connector-j/releases/download/smart_v8.0.28/mysql-connector-java-8.0.28-SNAPSHOT.jar"
+    }
+  ];
+
+  const onDownload = (download, href) => {
     const link = document.createElement("a");
-    link.download = `postgresql-42.3.3-SNAPSHOT.jar`;
-    link.href = "https://github.com/ISG-ICS/smart-pgjdbc/releases/download/smart_v42.3.3/postgresql-42.3.3-SNAPSHOT.jar";
+    link.download = download;
+    link.href = href;
     link.click();
   };
 
@@ -24,18 +37,22 @@ export default function JDBCDrivers() {
         <TableHead>
           <TableRow>
             <TableCell>Database</TableCell>
+            <TableCell>Driver Version</TableCell>
             <TableCell>JDBC Driver</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
-          <TableRow>
-            <TableCell>PostgreSQL</TableCell>
-            <TableCell>
-              <Button onClick={onDownload} variant="contained" color="primary">
-                Download
-              </Button>
-            </TableCell>
-          </TableRow>
+          {jdbcDrivers.map((driver) => (
+            <TableRow key={driver.database}>
+              <TableCell>{driver.database}</TableCell>
+              <TableCell>{driver.version}</TableCell>
+              <TableCell>
+                <Button onClick={() => onDownload(driver.download, driver.href)} variant="contained" color="primary">
+                  Download
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
         </TableBody>
       </Table>
     </React.Fragment>
