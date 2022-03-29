@@ -10,6 +10,9 @@ VisBooster is a middleware-based **query rewriting** framework.
 
 VisBooster intercepts SQL queries by customizing JDBC drivers used by Tableau and uses rules to rewrite the queries to semantically equivalent yet more efficient queries. The rewriting rules are designed by data experts who analyze slow queries and apply their domain knowledge and optimization expertise. VisBooster can accelerate visualization queries formulated by Tableau up to 100 times faster.
 
+The following is the demo we showed at BigVis 2022 Workshop (jointly held with EDBT/ICDT 2022).
+[![IMAGE ALT TEXT HERE](https://i.ytimg.com/vi/TsO6EaRzrb4/hqdefault.jpg?sqp=-oaymwEcCNACELwBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLB9RKsckkw7Tgpm8l59eOgFCExekA)](https://youtu.be/TsO6EaRzrb4)
+
 ## JDBC Drivers
 
 The VisBooster customized JDBC drivers repository are listed below:
