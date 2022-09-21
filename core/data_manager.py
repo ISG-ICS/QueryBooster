@@ -7,7 +7,7 @@ class DataManager:
 
     def __init__(self) -> None:
         db_path = Path(__file__).parent / "../"
-        self.db_conn = sqlite3.connect(db_path / 'visbooster.db')
+        self.db_conn = sqlite3.connect(db_path / 'querybooster.db')
         self.__init_rules()
     
     def __init_rules(self) -> None:

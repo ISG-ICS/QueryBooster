@@ -1,0 +1,12 @@
+<?xml version="1.0" standalone="no"?>
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" xmlns="http://www.w3.org/2000/svg" class="vtree" width="960" height="800"><style>
+.vtree-node text { font: 14px sans-serif; }
+.vtree-link { fill: none; stroke: #888; stroke-width: 2px; }
+.vtree-table { stroke-width: 2px; stroke: steelblue; }
+path.vtree-table { fill: white; }
+g.vtree-node rect { fill: white; stroke: black; stroke-width: 1px; }
+g.vtree-node rect.number-text { fill: #d8f0ed; }
+g.vtree-node rect.string-text { fill: #e7f0db; }
+g.vtree-node rect.boolean-text { fill: #e1d8f0; }
+g.vtree-node rect.null-text { fill: #888; }
+</style><g class="vtree-root" transform="translate(-414.7135699354942,-395.65504190537047)scale(1.871246995662803)"><g class="vtree-node" transform="translate(480,349)"><g class="vtree-node" transform="translate(-8,0)"><path class="vtree-link" d="M8,4C8,47 8,47 8,90"/><g class="vtree-node" transform="translate(-73,58)"><g transform="translate(0,20)"><g transform="translate(0,0)"><rect class="string-text" x="0" y="0" width="42" height="24"/><text x="4" y="20">value</text></g><g transform="translate(42,0)"><rect class="string-text" x="0" y="0" width="119" height="24"/><text x="4" y="20">tweets.created_at</text></g></g><g><text x="81" y="16" text-anchor="middle">select</text></g></g><g transform="translate(0,0)"><rect class="string-text" x="0" y="0" width="8" height="8"/><text x="4" y="4"> </text></g><g transform="translate(8,0)"><rect class="string-text" x="0" y="0" width="8" height="8"/><text x="4" y="4"> </text></g></g></g></g></svg>
