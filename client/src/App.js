@@ -3,7 +3,7 @@ import './App.css';
 import Dashboard from './dashboard/Dashboard';
 
 function App() {
-  document.title = 'VisBooster';
+  document.title = 'QueryBooster';
   return (
     <div className="App">
       {/* <header className="App-header">

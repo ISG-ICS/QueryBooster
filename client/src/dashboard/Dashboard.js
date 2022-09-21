@@ -26,8 +26,8 @@ function Copyright(props) {
   return (
     <Typography variant="body2" color="text.secondary" align="center" {...props}>
       {'Copyright © '}
-      <Link color="inherit" href="https://visbooster.ics.uci.edu/">
-        VisBooster
+      <Link color="inherit" href="https://querybooster.ics.uci.edu/">
+        QueryBooster
       </Link>{' '}
       {new Date().getFullYear()}
       {'.'}
@@ -118,7 +118,7 @@ function DashboardContent() {
               noWrap
               sx={{ flexGrow: 1 }}
             >
-              VisBooster
+              QueryBooster
             </Typography>
             {/* <IconButton color="inherit">
               <Badge badgeContent={4} color="secondary">
