@@ -13,34 +13,11 @@ def json_to_str(jsonStr: Any) -> str:
 def json_to_sql(jsonObj: Any) -> str:
     return mosql.format(jsonObj)
 
-def test_sql_files() -> None:
-    sql_path = Path(__file__).parent / "../sql"
-    sql_files = [f for f in sql_path.iterdir() if f.is_file() and f.suffix == '.sql']
-    for sql_file in sql_files:
-        with sql_file.open() as f:
-            sql = sql_file.read_text()
-            sqlJson = sql_to_json(sql)
-            print()
-            print("==================================================")
-            print("    " + sql_file.name)
-            print("==================================================")
-            print("Original SQL: ")
-            print("--------------------------------------------------")
-            print(sql)
-            print("--------------------------------------------------")
-            print("Parsed JSON: ")
-            print("--------------------------------------------------")
-            print(json_to_str(sqlJson))
-            print("--------------------------------------------------")
-            print("Formated SQL: ")
-            print("--------------------------------------------------")
-            print(json_to_sql(sqlJson))
-            print()
-
-
-def test_sql_str(sqlStr: str) -> None:
+def test_sql_str(title: str, sqlStr: str) -> None:
     sqlJson = sql_to_json(sqlStr)
     print()
+    print("==================================================")
+    print("    " + title)
     print("==================================================")
     print("Original SQL: ")
     print("--------------------------------------------------")
@@ -55,21 +32,38 @@ def test_sql_str(sqlStr: str) -> None:
     print(json_to_sql(sqlJson))
     print()
 
+def test_sql_files() -> None:
+    sql_path = Path(__file__).parent / "../sql"
+    sql_files = [f for f in sql_path.iterdir() if f.is_file() and f.suffix == '.sql']
+    for sql_file in sql_files:
+        with sql_file.open() as f:
+            sql = sql_file.read_text()
+            test_sql_str(sql_file.name, sql)
 
-if __name__ == '__main__':
-    # test_sql_files()
-    
+def test_rules() -> None:
     # Rule #1 -> pattern
     sqlStr = '''
         SELECT * FROM t0 WHERE CAST(e AS DATE)
     '''
-    test_sql_str(sqlStr)
+    test_sql_str('Rule #1 -> pattern', sqlStr)
 
     # Rule #1 -> rewrite
     sqlStr = '''
         SELECT * FROM t0 WHERE e
     '''
-    test_sql_str(sqlStr)
+    test_sql_str('Rule #1 -> rewrite', sqlStr)
+
+    # Rule #2 -> pattern
+    sqlStr = '''
+        SELECT * FROM t0 WHERE STRPOS(LOWER(e), s) > 0
+    '''
+    test_sql_str('Rule #2 -> pattern', sqlStr)
+
+    # Rule #2 -> rewrite
+    sqlStr = '''
+        SELECT * FROM t0 WHERE e ILIKE '%s%'
+    '''
+    test_sql_str('Rule #2 -> rewrite', sqlStr)
 
     # Rule #3 -> pattern
     sqlStr = '''
@@ -78,7 +72,7 @@ if __name__ == '__main__':
          WHERE t1.a1 = t2.a2
            AND p1
     '''
-    test_sql_str(sqlStr)
+    test_sql_str('Rule #3 -> pattern', sqlStr)
 
     # Rule #3 -> rewrite
     sqlStr = '''
@@ -86,27 +80,9 @@ if __name__ == '__main__':
           FROM tab1 t1
          WHERE 1=1 AND p1
     '''
-    test_sql_str(sqlStr)
+    test_sql_str('Rule #3 -> rewrite', sqlStr)
 
-    # Rule #3 -> left
-    sqlStr = '''
-        SELECT e1.name, 
-               e1.age, 
-               e2.salary 
-          FROM employee e1, employee e2
-         WHERE e1.id = e2.id
-           AND e1.age > 17
-           AND e2.salary > 35000
-    '''
-    test_sql_str(sqlStr)
 
-    # Rule #3 -> right
-    sqlStr = '''
-        SELECT e1.name, 
-               e1.age, 
-               e1.salary 
-          FROM employee e1
-         WHERE e1.age > 17
-           AND e1.salary > 35000
-    '''
-    test_sql_str(sqlStr)
+if __name__ == '__main__':
+    test_rules()
+    test_sql_files()

@@ -2,20 +2,93 @@ CREATE TABLE IF NOT EXISTS rules(
     id INTEGER PRIMARY KEY,
     key VARCHAR(255) UNIQUE,
     name VARCHAR(2048) NOT NULL,
-    formula TEXT,
-    is_hint  BOOLEAN DEFAULT FALSE,
+    pattern TEXT,
+    constraints TEXT,
+    rewrite TEXT,
+    actions TEXT,
     database VARCHAR(255) NOT NULL
 );
 
-INSERT OR IGNORE INTO rules (id, key, name, formula, database) VALUES(1, 'remove_cast', 'Remove Cast', 'CAST(<exp> AS <type>) => <exp>', 'postgresql');
-INSERT OR IGNORE INTO rules (id, key, name, formula, database) VALUES(2, 'replace_strpos', 'Replace Strpos', 'STRPOS(LOWER(<exp>), ''<literal>'') > 0 => <exp> ILIKE ''%<literal>%''', 'postgresql');
-INSERT OR IGNORE INTO rules (id, key, name, formula, is_hint, database) VALUES(3, 'hint_monthly_idx', 'Hint Monthly Index', '<sql> => hint=BitmapScan(<idx_monthly_created_at>) ', 1, 'postgresql');
-INSERT OR IGNORE INTO rules (id, key, name, formula, database) VALUES(4, 'remove_adddate', 'Remove Adddate', 'ADDDATE(<exp>, INTERVAL 0 <unit>) => <exp>', 'mysql');
-INSERT OR IGNORE INTO rules (id, key, name, formula, database) VALUES(5, 'remove_timestamp', 'Remove Timestamp', 'TIMESTAMP(<literal>) => <literal>', 'mysql');
+-- rule 1
+INSERT OR IGNORE INTO rules (
+    id, 
+    key, 
+    name, 
+    pattern, 
+    constraints, 
+    rewrite, 
+    actions, 
+    database) 
+VALUES(
+    1, 
+    'remove_cast', 
+    'Remove Cast', 
+    'CAST(<x> AS DATE)', 
+    'TYPE(x) = DATE',
+    '<x>',
+    '',
+    'postgresql'
+);
+-- rule 2
+INSERT OR IGNORE INTO rules (
+    id, 
+    key, 
+    name, 
+    pattern, 
+    constraints, 
+    rewrite, 
+    actions, 
+    database) 
+VALUES(
+    2, 
+    'replace_strpos', 
+    'Replace Strpos', 
+    'STRPOS(LOWER(<x>), <y>) > 0',
+    'IS(y) = CONSTANT and TYPE(y) = STRING',
+    '<x> ILIKE ''%<y>%''',
+    '', 
+    'postgresql'
+);
+-- rule 101
+INSERT OR IGNORE INTO rules (
+    id, 
+    key, 
+    name, 
+    pattern, 
+    constraints, 
+    rewrite, 
+    actions, 
+    database) 
+VALUES(
+    101, 
+    'remove_adddate', 
+    'Remove Adddate', 
+    'ADDDATE(<x>, INTERVAL 0 SECOND)', 
+    '',
+    '<x>',
+    '',
+    'mysql');
+-- rule 102
+INSERT OR IGNORE INTO rules (
+    id, 
+    key, 
+    name, 
+    pattern, 
+    constraints, 
+    rewrite, 
+    actions, 
+    database) 
+VALUES(
+    102, 
+    'remove_timestamp', 
+    'Remove Timestamp', 
+    '<x> = TIMESTAMP(<y>)', 
+    'TYPE(x) = STRING',
+    '<x> = <y>',
+    '',
+    'mysql');
 
 CREATE TABLE IF NOT EXISTS disable_rules(
     rule_id INTEGER UNIQUE,
     disabled BOOLEAN
 );
-
-INSERT OR IGNORE INTO disable_rules(rule_id, disabled) VALUES(3, 1);

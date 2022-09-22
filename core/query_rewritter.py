@@ -28,14 +28,8 @@ class QueryRewritter:
             # 
             parsed = sqlparse.parse(query)[0]
             for rule in enabled_rules:
-                if not rule['is_hint']:
-                    QueryRewritter.fire_rule_pg(parsed, rule)
+                QueryRewritter.fire_rule_pg(parsed, rule)
             rewritten_query = str(parsed)
-            # fire enabled rules rules (hinting) in order
-            # 
-            for rule in enabled_rules:
-                if rule['is_hint']:
-                    rewritten_query = QueryRewritter.add_hinting_rule_pg(rewritten_query, rule)
             return rewritten_query
         elif database == 'mysql':
             # fire enabled rules (non-hinting) in order
@@ -56,8 +50,7 @@ class QueryRewritter:
                 'id': enabled_rule[0],
                 'key': enabled_rule[1],
                 'name': enabled_rule[2],
-                'formula': enabled_rule[3],
-                'is_hint': True if enabled_rule[4] == 1 else False
+                'formula': enabled_rule[3]
             })
         return res
     
@@ -68,12 +61,6 @@ class QueryRewritter:
         if rule['key'] == 'replace_strpos':
             QueryRewritter.replace_strpos(parsed)
         return
-    
-    @staticmethod
-    def add_hinting_rule_pg(query:str, rule) -> str:
-        if rule['key'] == 'hint_monthly_idx':
-            query = '/*+ BitmapScan(tweets idx_tweets_monthly_created_at) */' + query
-        return query
 
     @staticmethod
     def fire_rule_mysql(parsed, rule) -> Any:
