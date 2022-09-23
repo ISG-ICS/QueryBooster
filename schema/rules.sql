@@ -90,5 +90,13 @@ VALUES(
 
 CREATE TABLE IF NOT EXISTS disable_rules(
     rule_id INTEGER UNIQUE,
-    disabled BOOLEAN
+    disabled BOOLEAN,
+    FOREIGN KEY (rule_id) REFERENCES rules(id)
+);
+
+CREATE TABLE IF NOT EXISTS internal_rules(
+    rule_id INTEGER,
+    pattern_json TEXT,
+    rewrite_json TEXT,
+    FOREIGN KEY (rule_id) REFERENCES rules(id)
 );

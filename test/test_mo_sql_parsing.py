@@ -85,4 +85,4 @@ def test_rules() -> None:
 
 if __name__ == '__main__':
     test_rules()
-    test_sql_files()
+    # test_sql_files()
