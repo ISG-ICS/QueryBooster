@@ -4,17 +4,17 @@ import json
 from pathlib import Path
 
 
-def sql_to_json(sqlStr: str) -> Any:
+def sql_to_ast(sqlStr: str) -> Any:
     return mosql.parse(sqlStr)
 
-def json_to_str(jsonStr: Any) -> str:
-    return json.dumps(jsonStr)
+def ast_to_str(astObj: Any) -> str:
+    return json.dumps(astObj)
 
-def json_to_sql(jsonObj: Any) -> str:
-    return mosql.format(jsonObj)
+def ast_to_sql(astObj: Any) -> str:
+    return mosql.format(astObj)
 
-def test_sql_str(title: str, sqlStr: str) -> None:
-    sqlJson = sql_to_json(sqlStr)
+def print_sql_str(title: str, sqlStr: str) -> None:
+    astJson = sql_to_ast(sqlStr)
     print()
     print("==================================================")
     print("    " + title)
@@ -25,45 +25,45 @@ def test_sql_str(title: str, sqlStr: str) -> None:
     print("--------------------------------------------------")
     print("Parsed JSON: ")
     print("--------------------------------------------------")
-    print(json_to_str(sqlJson))
+    print(ast_to_str(astJson))
     print("--------------------------------------------------")
     print("Formated SQL: ")
     print("--------------------------------------------------")
-    print(json_to_sql(sqlJson))
+    print(ast_to_sql(astJson))
     print()
 
-def test_sql_files() -> None:
+def explore_sql_files() -> None:
     sql_path = Path(__file__).parent / "../sql"
     sql_files = [f for f in sql_path.iterdir() if f.is_file() and f.suffix == '.sql']
     for sql_file in sql_files:
         with sql_file.open() as f:
             sql = sql_file.read_text()
-            test_sql_str(sql_file.name, sql)
+            print_sql_str(sql_file.name, sql)
 
-def test_rules() -> None:
+def explore_rules() -> None:
     # Rule #1 -> pattern
     sqlStr = '''
         SELECT * FROM t0 WHERE CAST(e AS DATE)
     '''
-    test_sql_str('Rule #1 -> pattern', sqlStr)
+    print_sql_str('Rule #1 -> pattern', sqlStr)
 
     # Rule #1 -> rewrite
     sqlStr = '''
         SELECT * FROM t0 WHERE e
     '''
-    test_sql_str('Rule #1 -> rewrite', sqlStr)
+    print_sql_str('Rule #1 -> rewrite', sqlStr)
 
     # Rule #2 -> pattern
     sqlStr = '''
         SELECT * FROM t0 WHERE STRPOS(LOWER(e), s) > 0
     '''
-    test_sql_str('Rule #2 -> pattern', sqlStr)
+    print_sql_str('Rule #2 -> pattern', sqlStr)
 
     # Rule #2 -> rewrite
     sqlStr = '''
         SELECT * FROM t0 WHERE e ILIKE '%s%'
     '''
-    test_sql_str('Rule #2 -> rewrite', sqlStr)
+    print_sql_str('Rule #2 -> rewrite', sqlStr)
 
     # Rule #3 -> pattern
     sqlStr = '''
@@ -72,7 +72,7 @@ def test_rules() -> None:
          WHERE t1.a1 = t2.a2
            AND p1
     '''
-    test_sql_str('Rule #3 -> pattern', sqlStr)
+    print_sql_str('Rule #3 -> pattern', sqlStr)
 
     # Rule #3 -> rewrite
     sqlStr = '''
@@ -80,9 +80,16 @@ def test_rules() -> None:
           FROM tab1 t1
          WHERE 1=1 AND p1
     '''
-    test_sql_str('Rule #3 -> rewrite', sqlStr)
+    print_sql_str('Rule #3 -> rewrite', sqlStr)
 
+def explore_ast():
+    sqlStr = '''
+        SELECT * FROM t0 WHERE CAST(e AS DATE)
+    '''
+    sqlAST = sql_to_ast(sqlStr)
+    print(sqlAST)
 
 if __name__ == '__main__':
-    test_rules()
-    # test_sql_files()
+    explore_rules()
+    explore_sql_files()
+    explore_ast()
