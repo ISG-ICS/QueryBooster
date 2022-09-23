@@ -25,6 +25,12 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+#### Compile and Deploy QueryBooster client
+```bash
+cd client/
+npm run build
+```
+
 #### Run QueryBooster server
 ```bash
 cd server/
@@ -33,3 +39,9 @@ python3 server.py
 
 #### Access QueryBooster web interface
 Go to the link http://localhost:8000 to access the web interface.
+
+
+#### Test
+```bash
+python3 -m pytest
+```

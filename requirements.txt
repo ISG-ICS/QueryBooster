@@ -1,3 +1,4 @@
 sqlparse
 configparser
 mo-sql-parsing
+pytest
