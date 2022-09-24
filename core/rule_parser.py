@@ -134,3 +134,40 @@ class RuleParser:
         pattern, rewrite = replaceVars(pattern, rewrite, VarType.VarList)
         pattern, rewrite = replaceVars(pattern, rewrite, VarType.Var)
         return pattern, rewrite
+
+
+if __name__ == '__main__':
+
+    ruleParser = RuleParser()
+
+    def print_rule(_title, _pattern, _rewrite):
+        _patternASTJson, _rewriteASTJson = ruleParser.parse(_pattern, _rewrite)
+        print()
+        print("==================================================")
+        print("    " + _title)
+        print("--------------------------------------------------")
+        print("pattern |  " + _pattern)
+        print("rewrite |  " + _rewrite)
+        print("--------------------------------------------------")
+        print("pattern AST Json |  " + _patternASTJson)
+        print("rewrite AST Json |  " + _rewriteASTJson)
+
+    # rule 1
+    pattern = 'CAST(<x> AS DATE)'
+    rewrite = '<x>'
+    print_rule('Rule 1', pattern, rewrite)
+    
+    # rule 2
+    pattern = 'STRPOS(LOWER(<x>), <y>) > 0'
+    rewrite = "<x> ILIKE '%<y>%'"
+    print_rule('Rule 2', pattern, rewrite)
+
+    # rule 101
+    pattern = 'ADDDATE(<x>, INTERVAL 0 SECOND)'
+    rewrite = '<x>'
+    print_rule('Rule 101', pattern, rewrite)
+
+    # rule 102
+    pattern = '<x> = TIMESTAMP(<y>)'
+    rewrite = '<x> = <y>'
+    print_rule('Rule 102', pattern, rewrite)

@@ -100,3 +100,44 @@ CREATE TABLE IF NOT EXISTS internal_rules(
     rewrite_json TEXT,
     FOREIGN KEY (rule_id) REFERENCES rules(id)
 );
+
+-- internal rule 1
+INSERT OR IGNORE INTO internal_rules (
+    rule_id, 
+    pattern_json,
+    rewrite_json) 
+VALUES(
+    1, 
+    '{"cast": ["V1", {"date": {}}]}', 
+    '"V1"'
+);
+-- internal rule 2
+INSERT OR IGNORE INTO internal_rules (
+    rule_id, 
+    pattern_json,
+    rewrite_json) 
+VALUES(
+    2, 
+    '{"gt": [{"strpos": [{"lower": "V1"}, "V2"]}, 0]}', 
+    '{"ilike": ["V1", {"literal": "%V2%"}]}'
+);
+-- internal rule 101
+INSERT OR IGNORE INTO internal_rules (
+    rule_id, 
+    pattern_json,
+    rewrite_json) 
+VALUES(
+    101, 
+    '{"adddate": ["V1", {"interval": [0, "second"]}]}', 
+    '"V1"'
+);
+-- internal rule 102
+INSERT OR IGNORE INTO internal_rules (
+    rule_id, 
+    pattern_json,
+    rewrite_json) 
+VALUES(
+    102, 
+    '{"eq": ["V1", {"timestamp": "V2"}]}', 
+    '{"eq": ["V1", "V2"]}'
+);
