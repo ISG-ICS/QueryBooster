@@ -45,8 +45,12 @@ class DataManager:
             cur.execute('''SELECT id, 
                                   key, 
                                   name, 
-                                  pattern || '; ' || constraints ||' --> ' || rewrite || '; ' || actions AS formula
-                           FROM rules LEFT JOIN disable_rules ON rules.id = disable_rules.rule_id 
+                                  pattern_json,
+                                  constraints,
+                                  rewrite_json,
+                                  actions,
+                           FROM rules LEFT JOIN disable_rules ON rules.id = disable_rules.rule_id
+                                      LEFT JOIN internal_rules ON rule.id = internal_rules.rule_id 
                            WHERE disable_rules.disabled IS NULL AND rules.database = ? 
                            ORDER BY rules.id''', [database])
             return cur.fetchall()

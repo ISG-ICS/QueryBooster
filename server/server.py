@@ -5,7 +5,7 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 import json
 import logging
 from io import BytesIO
-from core.query_rewritter import QueryRewritter
+from core.query_rewriter import QueryRewriter
 from core.data_manager import DataManager
 
 PORT = 8000
@@ -38,15 +38,15 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         log_text += "\n=================================================="
         log_text += "\n    Original query"
         log_text += "\n--------------------------------------------------"
-        log_text += "\n" + QueryRewritter.format(original_query)
+        log_text += "\n" + QueryRewriter.format(original_query)
         log_text += "\n--------------------------------------------------"
         logging.info(log_text)
-        rewritten_query = QueryRewritter.rewrite(original_query, self.dm, database)
+        rewritten_query = QueryRewriter.rewrite(original_query, self.dm, database)
         log_text = ""
         log_text += "\n=================================================="
         log_text += "\n    Rewritten query"
         log_text += "\n--------------------------------------------------"
-        log_text += "\n" + QueryRewritter.format(rewritten_query)
+        log_text += "\n" + QueryRewriter.format(rewritten_query)
         log_text += "\n--------------------------------------------------"
         logging.info(log_text)
 

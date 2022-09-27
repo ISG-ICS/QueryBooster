@@ -158,3 +158,6 @@ yarn-error.log*
 
 # database
 *.db
+
+# IDE
+.vscode/*
