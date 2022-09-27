@@ -215,12 +215,12 @@ class QueryRewriter:
     # 
     @staticmethod
     def is_constant(node: Any) -> bool:
-        if type(node) in [str, numbers.Number] and \
-            not QueryRewriter.is_var(node) and \
-            not QueryRewriter.is_varList(node):
+        if type(node) is str:
+            if not QueryRewriter.is_var(node) and not QueryRewriter.is_varList(node):
+                return True
+        if isinstance(node, numbers.Number):
             return True
-        else:
-            return False
+        return False
     
     # Check if a given node in AST is a dict
     # 
