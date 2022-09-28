@@ -138,11 +138,11 @@ def test_parse():
     test_rules.append((rule, internal_rule))
     # Rule 2:
     rule = {
-        'pattern': 'STRPOS(LOWER(<x>), <s>) > 0',
+        'pattern': "STRPOS(LOWER(<x>), '<s>') > 0",
         'rewrite': "<x> ILIKE '%<s>%'"
     }
     internal_rule = {
-        'pattern_json': '{"gt": [{"strpos": [{"lower": "V1"}, "V2"]}, 0]}',
+        'pattern_json': '{"gt": [{"strpos": [{"lower": "V1"}, {"literal": "V2"}]}, 0]}',
         'rewrite_json': '{"ilike": ["V1", {"literal": "%V2%"}]}'
     }
     test_rules.append((rule, internal_rule))

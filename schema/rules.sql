@@ -43,7 +43,7 @@ VALUES(
     2, 
     'replace_strpos', 
     'Replace Strpos', 
-    'STRPOS(LOWER(<x>), <y>) > 0',
+    'STRPOS(LOWER(<x>), ''<y>'') > 0',
     'IS(y) = CONSTANT and TYPE(y) = STRING',
     '<x> ILIKE ''%<y>%''',
     '', 
@@ -118,7 +118,7 @@ INSERT OR IGNORE INTO internal_rules (
     rewrite_json) 
 VALUES(
     2, 
-    '{"gt": [{"strpos": [{"lower": "V1"}, "V2"]}, 0]}', 
+    '{"gt": [{"strpos": [{"lower": "V1"}, {"literal": "V2"}]}, 0]}', 
     '{"ilike": ["V1", {"literal": "%V2%"}]}'
 );
 -- internal rule 101
