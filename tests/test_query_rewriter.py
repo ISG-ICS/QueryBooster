@@ -1,19 +1,13 @@
 from core.query_rewriter import QueryRewriter
-import json
+from data.rules import get_rule
+from data.queries import get_query
 from mo_sql_parsing import parse
 from mo_sql_parsing import format
 
 
 def test_match_rule_1():
-    rule = {
-        'id': 1,
-        'key': 'remove_cast',
-        'name': 'Remove Cast',
-        'pattern': json.loads('{"cast": ["V1", {"date": {}}]}'),
-        'constraints': 'TYPE(x) = DATE',
-        'rewrite': json.loads('"V1"'),
-        'actions': ''
-    }
+    rule = get_rule(1)
+    assert rule is not None
     
     # original query
     query = '''
@@ -67,15 +61,8 @@ def test_match_rule_1():
 
 
 def test_match_rule_2():
-    rule = {
-        'id': 2,
-        'key': 'replace_strpos',
-        'name': 'Replace Strpos',
-        'pattern': json.loads('{"gt": [{"strpos": [{"lower": "V1"}, {"literal": "V2"}]}, 0]}'),
-        'constraints': 'IS(y) = CONSTANT and TYPE(y) = STRING',
-        'rewrite': json.loads('{"ilike": ["V1", {"literal": "%V2%"}]}'),
-        'actions': ''
-    }
+    rule = get_rule(2)
+    assert rule is not None
     
     # original query
     query = '''
@@ -113,15 +100,8 @@ def test_match_rule_2():
 
 
 def test_replace_rule_1():
-    rule = {
-        'id': 1,
-        'key': 'remove_cast',
-        'name': 'Remove Cast',
-        'pattern': json.loads('{"cast": ["V1", {"date": {}}]}'),
-        'constraints': 'TYPE(x) = DATE',
-        'rewrite': json.loads('"V1"'),
-        'actions': ''
-    }
+    rule = get_rule(1)
+    assert rule is not None
     
     # original query
     query = '''
@@ -179,15 +159,8 @@ def test_replace_rule_1():
 
 
 def test_replace_rule_2():
-    rule = {
-        'id': 2,
-        'key': 'replace_strpos',
-        'name': 'Replace Strpos',
-        'pattern': json.loads('{"gt": [{"strpos": [{"lower": "V1"}, {"literal": "V2"}]}, 0]}'),
-        'constraints': 'IS(y) = CONSTANT and TYPE(y) = STRING',
-        'rewrite': json.loads('{"ilike": ["V1", {"literal": "%V2%"}]}'),
-        'actions': ''
-    }
+    rule = get_rule(2)
+    assert rule is not None
     
     # original query
     query = '''
@@ -223,6 +196,39 @@ def test_replace_rule_2():
          GROUP  BY 2;
     '''
     assert format(parse(query)) == format(parsed_rewritten_query)
+
+
+def test_rewrite_query_0():
+    query = get_query(0)
+    original = query['original']
+    true_rewritten = query['rewritten'][-1]
+    rule_ids = set(query['rule_ids'])
+
+    rules = [get_rule(x) for x in rule_ids]
+    test_rewritten = QueryRewriter.rewrite(original, rules)
+    assert format(parse(true_rewritten)) == format(parse(test_rewritten))
+
+
+def test_rewrite_query_1():
+    query = get_query(1)
+    original = query['original']
+    true_rewritten = query['rewritten'][-1]
+    rule_ids = set(query['rule_ids'])
+
+    rules = [get_rule(x) for x in rule_ids]
+    test_rewritten = QueryRewriter.rewrite(original, rules)
+    assert format(parse(true_rewritten)) == format(parse(test_rewritten))
+
+
+def test_rewrite_query_2():
+    query = get_query(2)
+    original = query['original']
+    true_rewritten = query['rewritten'][-1]
+    rule_ids = set(query['rule_ids'])
+
+    rules = [get_rule(x) for x in rule_ids]
+    test_rewritten = QueryRewriter.rewrite(original, rules)
+    assert format(parse(true_rewritten)) == format(parse(test_rewritten))
 
 
 # TODO - TBI

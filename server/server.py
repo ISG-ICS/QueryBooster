@@ -7,6 +7,7 @@ import logging
 from io import BytesIO
 from core.query_rewriter import QueryRewriter
 from core.data_manager import DataManager
+from core.rule_manager import RuleManager
 
 PORT = 8000
 DIRECTORY = "static"
@@ -14,6 +15,7 @@ DIRECTORY = "static"
 class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
 
     dm = DataManager()
+    rm = RuleManager(dm)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=DIRECTORY, **kwargs)
@@ -38,15 +40,16 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         log_text += "\n=================================================="
         log_text += "\n    Original query"
         log_text += "\n--------------------------------------------------"
-        log_text += "\n" + QueryRewriter.format(original_query)
+        log_text += "\n" + QueryRewriter.beautify(original_query)
         log_text += "\n--------------------------------------------------"
         logging.info(log_text)
-        rewritten_query = QueryRewriter.rewrite(original_query, self.dm, database)
+        rules = self.rm.fetch_enabled_rules(database)
+        rewritten_query = QueryRewriter.rewrite(original_query, rules)
         log_text = ""
         log_text += "\n=================================================="
         log_text += "\n    Rewritten query"
         log_text += "\n--------------------------------------------------"
-        log_text += "\n" + QueryRewriter.format(rewritten_query)
+        log_text += "\n" + QueryRewriter.beautify(rewritten_query)
         log_text += "\n--------------------------------------------------"
         logging.info(log_text)
 

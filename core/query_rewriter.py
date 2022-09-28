@@ -1,10 +1,9 @@
-import json
-import numbers
 from mo_sql_parsing import parse
 from mo_sql_parsing import format
+import numbers
+import sqlparse
 from typing import Any
 
-from core.data_manager import DataManager
 from core.rule_parser import VarType, VarTypesInfo
 
 
@@ -14,41 +13,40 @@ VarListStart = VarTypesInfo[VarType.VarList]['internalBase']
 
 class QueryRewriter:
 
+    # Beautify a query string
+    # 
     @staticmethod
-    def rewrite(query: str, dm: DataManager, database: str) -> str:
-        
-        # fetch enabled rules order by id ascending
-        enabled_rules = QueryRewriter.fetch_enabled_rules(dm, database)
+    def beautify(query: str) -> str:
+        return sqlparse.format(query, reindent=True)
+
+    # Rewrite query using the rules iteratively
+    #   An example rule in rules list:
+    #     rule = {
+    #       'id': 1,
+    #       'key': 'remove_cast',
+    #       'name': 'Remove Cast',
+    #       'pattern': json.loads('{"cast": ["V1", {"date": {}}]}'),
+    #       'constraints': 'TYPE(x) = DATE',
+    #       'rewrite': json.loads('"V1"'),
+    #       'actions': ''
+    #     }
+    # 
+    @staticmethod
+    def rewrite(query: str, rules: list) -> str:
         
         query_ast = parse(query)
 
         new_query = True
         while new_query is True:
-            for rule in enabled_rules:
+            new_query = False
+            for rule in rules:
                 memo = {}  # keep track of the matched substrees of the rule, Vars, and VarLists
                 if QueryRewriter.match(query_ast, rule, memo):
                     query_ast = QueryRewriter.replace(query_ast, rule, memo)
                     new_query = True
                     break
-            new_query = False
 
         return format(query_ast)
-    
-    @staticmethod
-    def fetch_enabled_rules(dm: DataManager, database: str) -> list:
-        enabled_rules = dm.enabled_rules(database)
-        res = []
-        for enabled_rule in enabled_rules:
-            res.append({
-                'id': enabled_rule[0],
-                'key': enabled_rule[1],
-                'name': enabled_rule[2],
-                'pattern': json.loads(enabled_rule[3]),
-                'constraints': enabled_rule[4],
-                'rewrite': json.loads(enabled_rule[5]),
-                'actions': enabled_rule[6]
-            })
-        return res
     
     # Traverse query AST tree, and check if rule->pattern matches any node of in query
     # 
@@ -60,7 +58,7 @@ class QueryRewriter:
         queue = [query]
         while len(queue) > 0:
             curr_node = queue.pop(0)
-            if QueryRewriter.match_node(curr_node, rule['pattern'], rule, memo):
+            if QueryRewriter.match_node(curr_node, rule['pattern_json'], rule, memo):
                 memo['rule'] = curr_node
                 return True
             if type(curr_node) is dict:
@@ -255,7 +253,7 @@ class QueryRewriter:
         if query is memo['rule']:
             # replace query by rule's rewrite
             # 
-            query = rule['rewrite']
+            query = rule['rewrite_json']
 
         # find rewrite's Var or VarList
         # 
