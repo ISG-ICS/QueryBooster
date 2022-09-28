@@ -8,9 +8,9 @@ class DataManager:
     def __init__(self) -> None:
         db_path = Path(__file__).parent / "../"
         self.db_conn = sqlite3.connect(db_path / 'querybooster.db')
-        self.__init_rules()
+        self.__init_schema()
     
-    def __init_rules(self) -> None:
+    def __init_schema(self) -> None:
         try:
             cur = self.db_conn.cursor()
             schema_path = Path(__file__).parent / "../schema"
@@ -69,6 +69,20 @@ class DataManager:
         except Error as e:
             print(e)
             return False
+    
+    def update_rule(self, rule: dict) -> None:
+        try:
+            cur = self.db_conn.cursor()
+            cur.execute('''REPLACE INTO rules (id, key, name, pattern, constraints, rewrite, actions, database) 
+                                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', 
+                        [rule['id'], rule['key'], rule['name'], rule['pattern'], 
+                         rule['constraints'], rule['rewrite'], rule['actions'], rule['database']
+                        ])
+            cur.execute('''REPLACE INTO internal_rules (rule_id, pattern_json, rewrite_json) VALUES (?, ?, ?)''', 
+                        [rule['id'], rule['pattern_json'], rule['rewrite_json']])
+            self.db_conn.commit()
+        except Error as e:
+            print(e)
 
 
 if __name__ == '__main__':

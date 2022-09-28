@@ -68,17 +68,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         logging.info("\n[/listRules] request:")
         logging.info(request)
 
-        # list rules from data manager
-        rules = self.dm.list_rules()
-        rules_json = []
-        for rule in rules:
-            rules_json.append({
-                'id': rule[0],
-                'key': rule[1],
-                'name': rule[2],
-                'formula': rule[3],
-                'enabled': True if rule[4] == 1 else False
-            })
+        rules_json = self.rm.list_rules()
 
         self.send_response(200)
         self.end_headers()
