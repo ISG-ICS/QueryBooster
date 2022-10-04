@@ -50,11 +50,11 @@ class RuleParser:
     
     # parse a rule (pattern, rewrite) into a SQL AST json str
     # 
-    def parse(self, pattern: str, rewrite: str) -> Tuple[str, str]:
+    def parse(self, pattern: str, rewrite: str) -> Tuple[str, str, str]:
         # 1. Replace user-faced variables and variable lists 
         #    with internal representations 
         # 
-        pattern, rewrite = self.replaceVars(pattern, rewrite)
+        pattern, rewrite, mapping = self.replaceVars(pattern, rewrite)
 
         # 2. Extend partial SQL statement to full SQL statement
         #    for the sake of sql parser
@@ -71,7 +71,7 @@ class RuleParser:
         rewriteASTJson = self.extractASTSubtree(rewriteASTJson, rewriteScope)
 
         # 5. Return the AST subtree as json string
-        return json.dumps(patternASTJson), json.dumps(rewriteASTJson)
+        return json.dumps(patternASTJson), json.dumps(rewriteASTJson), json.dumps(mapping)
 
     #  Extend pattern/rewrite to full SQL statement
     # 
@@ -110,57 +110,163 @@ class RuleParser:
     # Replace user-faced variables and variable lists with internal representations
     #   e.g., <x> ==> V1, <<y>> ==> VL1
     # 
-    def replaceVars(self, pattern: str, rewrite: str) -> Tuple[str, str]:
+    def replaceVars(self, pattern: str, rewrite: str) -> Tuple[str, str, dict]:
         
         # common function to replace one VarType
         # 
-        def replaceVars(pattern: str, rewrite: str, varType: VarType) -> Tuple[str, str]:
+        def replaceVars(pattern: str, rewrite: str, varType: VarType, mapping: dict) -> Tuple[str, str]:
             regexPattern = VarTypesInfo[varType]['markerStart'] + '(\w+)' + VarTypesInfo[varType]['markerEnd']
             vars = re.findall(regexPattern, pattern)
             varInternalBase = VarTypesInfo[varType]['internalBase']
             varInternalCount = 1
             for var in vars:
-                # var -> varInternal map
-                #   e.g., <x> ==> V1, <<y>> ==> VL1
-                specificRegexPattern = VarTypesInfo[varType]['markerStart'] + var + VarTypesInfo[varType]['markerEnd']
-                varInternal = varInternalBase + str(varInternalCount)
-                varInternalCount += 1
-                # replace var with varInternal in both pattern and rewrite
-                pattern = re.sub(specificRegexPattern, varInternal, pattern)
-                rewrite = re.sub(specificRegexPattern, varInternal, rewrite)
+                if var not in mapping:
+                    # var -> varInternal map
+                    #   e.g., <x> ==> V1, <<y>> ==> VL1
+                    specificRegexPattern = VarTypesInfo[varType]['markerStart'] + var + VarTypesInfo[varType]['markerEnd']
+                    varInternal = varInternalBase + str(varInternalCount)
+                    varInternalCount += 1
+                    # replace var with varInternal in both pattern and rewrite
+                    pattern = re.sub(specificRegexPattern, varInternal, pattern)
+                    rewrite = re.sub(specificRegexPattern, varInternal, rewrite)
+                    # take down the mapping x -> V1
+                    mapping[var] = varInternal
             return pattern, rewrite
         
         # replace VarList first, then Var
-        pattern, rewrite = replaceVars(pattern, rewrite, VarType.VarList)
-        pattern, rewrite = replaceVars(pattern, rewrite, VarType.Var)
-        return pattern, rewrite
+        mapping = {}
+        pattern, rewrite = replaceVars(pattern, rewrite, VarType.VarList, mapping)
+        pattern, rewrite = replaceVars(pattern, rewrite, VarType.Var, mapping)
+        return pattern, rewrite, mapping
+        
+    # parse a rule constraints into a list of conditions
+    #
+    def parse_constraints(self, constraints: str, mapping: str) -> str:
+        mapping = json.loads(mapping)
+        _conditions = constraints.lower().split('and')
+        conditions = []
+        for _condition in _conditions:
+            condition = {}
+            # TODO - we only support = conditions now
+            # 
+            if '=' in _condition:
+                condition['operator'] = '='
+                condition['operands'] = []
+                _operands = _condition.split('=')
+                for _operand in _operands:
+                    if '(' in _operand and ')' in _operand:
+                        operand = {}
+                        func = self.extractFunc(_operand)
+                        vars = self.extractVars(_operand)
+                        operand['function'] = func
+                        operand['variables'] = [mapping[var] if var in mapping else var for var in vars]
+                    else:
+                        operand = mapping[_operand] if _operand in mapping else _operand
+                    condition['operands'].append(operand)
+                conditions.append(condition)
+            # or a boolean function, e.g., UNIQUE(t1, a1)
+            #    we treat it as UNIQUE(t1, a1) = TRUE automatically
+            # 
+            else:
+                condition['operator'] = '='
+                condition['operands'] = []
+                _operand = _condition
+                if '(' in _operand and ')' in _operand:
+                    operand = {}
+                    func = self.extractFunc(_operand)
+                    vars = self.extractVars(_operand)
+                    operand['function'] = func
+                    operand['variables'] = [mapping[var] if var in mapping else var for var in vars]
+                else:
+                    operand = mapping[_operand] if _operand in mapping else _operand
+                condition['operands'].append(operand)
+                condition['operands'].append('true')
+                conditions.append(condition)
+
+        return json.dumps(conditions)
+    
+    # extract function name from an operand in a condition in constraints
+    # 
+    def extractFunc(self, operand: str) -> str:
+        parts = operand.split('(')
+        return parts[0].strip()
+    
+    # extract variables inside a function of an operand in a condition in constraints
+    # 
+    def extractVars(self, operand: str) -> list:
+        parts = operand.split(')')
+        parts = parts[0].split('(')
+        vars = parts[1].split(',')
+        return [var.strip() for var in vars]
+    
+    # parse a rule actions into a list of actions
+    # 
+    def parse_actions(self, actions: str, mapping: str) -> list:
+        mapping = json.loads(mapping)
+        _actions = actions.lower().split('and')
+        actions = []
+        for _action in _actions:
+            # TODO - we only support function in actions now
+            # 
+            if '(' in _action and ')' in _action:
+                action = {}
+                func = self.extractFunc(_action)
+                vars = self.extractVars(_action)
+                action['function'] = func
+                action['variables'] = [mapping[var] if var in mapping else var for var in vars]
+                actions.append(action)
+        return json.dumps(actions)
 
 
 if __name__ == '__main__':
 
     ruleParser = RuleParser()
 
-    def print_rule(_title, _pattern, _rewrite):
-        _patternASTJson, _rewriteASTJson = ruleParser.parse(_pattern, _rewrite)
+    def print_rule(_title, _pattern, _rewrite, _constraints="", _actions=""):
+        _patternASTJson, _rewriteASTJson, _mapping = ruleParser.parse(_pattern, _rewrite)
+        _constraintsJson = ruleParser.parse_constraints(_constraints, _mapping)
+        _actionsJson = ruleParser.parse_actions(_actions, _mapping)
         print()
         print("==================================================")
         print("    " + _title)
         print("--------------------------------------------------")
-        print("pattern |  " + _pattern)
-        print("rewrite |  " + _rewrite)
+        print("pattern     |  " + _pattern)
+        print("constraints |  " + _constraints)
+        print("rewrite     |  " + _rewrite)
+        print("actions     |  " + _actions)
         print("--------------------------------------------------")
         print("pattern AST Json |  " + _patternASTJson)
+        print("constraints Json |  " + _constraintsJson)
         print("rewrite AST Json |  " + _rewriteASTJson)
+        print("actions Json     |  " + _actionsJson)
+        print("vars mapping     |  " + _mapping)
 
     # rule 1
     pattern = 'CAST(<x> AS DATE)'
     rewrite = '<x>'
-    print_rule('Rule 1', pattern, rewrite)
+    constraints = "TYPE(x) = DATE"
+    print_rule('Rule 1', pattern, rewrite, constraints)
     
     # rule 2
     pattern = 'STRPOS(LOWER(<x>), <y>) > 0'
     rewrite = "<x> ILIKE '%<y>%'"
     print_rule('Rule 2', pattern, rewrite)
+
+    # rule 3
+    pattern = '''
+            select <<s1>>
+            from <tb1> <t1>, 
+                 <tb1> <t2>
+            where <t1>.<a1>=<t2>.<a1>
+            and <<p1>>
+        '''
+    rewrite = '''
+            select <<s1>> 
+            from <tb1> <t1>
+            where 1=1 
+            and <<p1>>
+        '''
+    print_rule('Rule 3', pattern, rewrite)
 
     # rule 101
     pattern = 'ADDDATE(<x>, INTERVAL 0 SECOND)'

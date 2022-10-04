@@ -90,6 +90,31 @@ queries = [
             '''
         ],
         'rule_ids': [2]
+    },
+
+    {
+        'id': 3,
+        'original': '''
+            SELECT  e1.name, 
+                    e1.age, 
+                    e2.salary 
+            FROM employee e1, employee e2
+            WHERE e1.id = e2.id
+            AND e1.age > 17
+            AND e2.salary > 35000;
+        ''',
+        'rewritten': [
+            '''
+                SELECT  e1.name, 
+                        e1.age, 
+                        e1.salary 
+                FROM employee e1
+                WHERE 1=1
+                AND e1.age > 17
+                AND e1.salary > 35000;
+            '''
+        ],
+        'rule_ids': [3]
     }
 ]
 

@@ -98,6 +98,35 @@ def test_match_rule_2():
     memo = {}
     assert not QueryRewriter.match(parse(query), rule, memo)
 
+def test_match_rule_3():
+    rule = get_rule(3)
+    assert rule is not None
+    
+    # original query
+    query = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e2.salary 
+        FROM employee e1, employee e2
+        WHERE e1.id = e2.id
+        AND e1.age > 17
+        AND e2.salary > 35000;
+    '''
+    memo = {}
+    assert QueryRewriter.match(parse(query), rule, memo)
+
+    # rewritten query
+    query = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e1.salary 
+        FROM employee e1
+        WHERE e1.age > 17
+        AND e1.salary > 35000;
+    '''
+    memo = {}
+    assert not QueryRewriter.match(parse(query), rule, memo)
+
 
 def test_replace_rule_1():
     rule = get_rule(1)
@@ -198,6 +227,39 @@ def test_replace_rule_2():
     assert format(parse(query)) == format(parsed_rewritten_query)
 
 
+def test_replace_rule_3():
+    rule = get_rule(3)
+    assert rule is not None
+    
+    # original query
+    query = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e2.salary 
+        FROM employee e1, employee e2
+        WHERE e1.id = e2.id
+        AND e1.age > 17
+        AND e2.salary > 35000;
+    '''
+    parsed_original_query = parse(query)
+    memo = {}
+    assert QueryRewriter.match(parsed_original_query, rule, memo)
+    parsed_rewritten_query = QueryRewriter.take_actions(parsed_original_query, rule, memo)
+    parsed_rewritten_query = QueryRewriter.replace(parsed_original_query, rule, memo)
+
+    # rewritten query
+    query = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e1.salary 
+        FROM employee e1
+        WHERE 1=1
+        AND e1.age > 17
+        AND e1.salary > 35000;
+    '''
+    assert format(parse(query)) == format(parsed_rewritten_query)
+
+
 def test_rewrite_query_0():
     query = get_query(0)
     original = query['original']
@@ -222,6 +284,17 @@ def test_rewrite_query_1():
 
 def test_rewrite_query_2():
     query = get_query(2)
+    original = query['original']
+    true_rewritten = query['rewritten'][-1]
+    rule_ids = set(query['rule_ids'])
+
+    rules = [get_rule(x) for x in rule_ids]
+    test_rewritten = QueryRewriter.rewrite(original, rules)
+    assert format(parse(true_rewritten)) == format(parse(test_rewritten))
+
+
+def test_rewrite_query_3():
+    query = get_query(3)
     original = query['original']
     true_rewritten = query['rewritten'][-1]
     rule_ids = set(query['rule_ids'])

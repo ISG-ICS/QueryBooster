@@ -90,7 +90,7 @@ def test_replaceVars():
     # single var case
     pattern = 'CAST(<x> AS DATE)'
     rewrite = '<x>'
-    pattern, rewrite = ruleParser.replaceVars(pattern, rewrite)
+    pattern, rewrite, mapping = ruleParser.replaceVars(pattern, rewrite)
     assert pattern == 'CAST(V1 AS DATE)'
     assert rewrite == 'V1'
 
@@ -107,12 +107,12 @@ def test_replaceVars():
           from <tb1> <t1>
          where <<p1>>
     '''
-    pattern, rewrite = ruleParser.replaceVars(pattern, rewrite)
+    pattern, rewrite, mapping = ruleParser.replaceVars(pattern, rewrite)
     assert pattern == '''
         select VL1
           from V1 V2, 
                V3 V4
-         where V2.V6=V4.V8
+         where V2.V5=V4.V6
            and VL2
     '''
     assert rewrite == '''
@@ -149,6 +149,6 @@ def test_parse():
 
     # Test test_rules
     for rule, internal_rule in test_rules:
-        pattern_json, rewrite_json = ruleParser.parse(rule['pattern'], rule['rewrite'])
+        pattern_json, rewrite_json, mapping = ruleParser.parse(rule['pattern'], rule['rewrite'])
         assert pattern_json == internal_rule['pattern_json']
         assert rewrite_json == internal_rule['rewrite_json']
