@@ -1,5 +1,5 @@
 from core.data_manager import DataManager
-from data.rules import rules
+from data.rules import get_rules
 import json
 
 
@@ -10,9 +10,7 @@ class RuleManager:
         self.__init_rules()
     
     def __init_rules(self) -> None:
-        for rule in rules:
-            rule['pattern_json'] = json.dumps(rule['pattern_json'])
-            rule['rewrite_json'] = json.dumps(rule['rewrite_json'])
+        for rule in get_rules():
             self.dm.update_rule(rule)
     
     def __del__(self):
@@ -26,10 +24,10 @@ class RuleManager:
                 'id': enabled_rule[0],
                 'key': enabled_rule[1],
                 'name': enabled_rule[2],
-                'pattern': json.loads(enabled_rule[3]),
-                'constraints': enabled_rule[4],
-                'rewrite': json.loads(enabled_rule[5]),
-                'actions': enabled_rule[6]
+                'pattern_json': json.loads(enabled_rule[3]),
+                'constraints_json': json.loads(enabled_rule[4]),
+                'rewrite_json': json.loads(enabled_rule[5]),
+                'actions_json': json.loads(enabled_rule[6])
             })
         return res
     

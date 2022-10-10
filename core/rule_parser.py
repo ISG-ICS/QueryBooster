@@ -41,41 +41,37 @@ ScopeExtension = {
 }
 
 class RuleParser:
-
-    def __init__(self) -> None:
-        return
-    
-    def __del__(self):
-       return
     
     # parse a rule (pattern, rewrite) into a SQL AST json str
     # 
-    def parse(self, pattern: str, rewrite: str) -> Tuple[str, str, str]:
+    @staticmethod
+    def parse(pattern: str, rewrite: str) -> Tuple[str, str, str]:
         # 1. Replace user-faced variables and variable lists 
         #    with internal representations 
         # 
-        pattern, rewrite, mapping = self.replaceVars(pattern, rewrite)
+        pattern, rewrite, mapping = RuleParser.replaceVars(pattern, rewrite)
 
         # 2. Extend partial SQL statement to full SQL statement
         #    for the sake of sql parser
         # 
-        pattern, patternScope = self.extendToFullSQL(pattern)
-        rewrite, rewriteScope = self.extendToFullSQL(rewrite)
+        pattern, patternScope = RuleParser.extendToFullSQL(pattern)
+        rewrite, rewriteScope = RuleParser.extendToFullSQL(rewrite)
 
         # 3. Parse extended full SQL statement into AST json
         patternASTJson = mosql.parse(pattern)
         rewriteASTJson = mosql.parse(rewrite)
 
         # 4. Extract subtree from AST json based on scope
-        patternASTJson = self.extractASTSubtree(patternASTJson, patternScope)
-        rewriteASTJson = self.extractASTSubtree(rewriteASTJson, rewriteScope)
+        patternASTJson = RuleParser.extractASTSubtree(patternASTJson, patternScope)
+        rewriteASTJson = RuleParser.extractASTSubtree(rewriteASTJson, rewriteScope)
 
         # 5. Return the AST subtree as json string
         return json.dumps(patternASTJson), json.dumps(rewriteASTJson), json.dumps(mapping)
 
     #  Extend pattern/rewrite to full SQL statement
     # 
-    def extendToFullSQL(self, partialSQL: str) -> Tuple[str, Scope]:
+    @staticmethod
+    def extendToFullSQL(partialSQL: str) -> Tuple[str, Scope]:
         # case-1: no SELECT and no FROM and no WHERE
         if not 'SELECT' in partialSQL.upper() and \
             not 'FROM' in partialSQL.upper() and \
@@ -97,7 +93,8 @@ class RuleParser:
     
     # Extract the AST subtree of pattern/rewrite based on scope
     # 
-    def extractASTSubtree(self, aSTJson: Any, scope: Scope) -> Any:
+    @staticmethod
+    def extractASTSubtree(aSTJson: Any, scope: Scope) -> Any:
         if scope == Scope.CONDITION:
             aSTJson = aSTJson['where']
         elif scope == Scope.WHERE:
@@ -110,7 +107,8 @@ class RuleParser:
     # Replace user-faced variables and variable lists with internal representations
     #   e.g., <x> ==> V1, <<y>> ==> VL1
     # 
-    def replaceVars(self, pattern: str, rewrite: str) -> Tuple[str, str, dict]:
+    @staticmethod
+    def replaceVars(pattern: str, rewrite: str) -> Tuple[str, str, dict]:
         
         # common function to replace one VarType
         # 
@@ -141,7 +139,8 @@ class RuleParser:
         
     # parse a rule constraints into a list of conditions
     #
-    def parse_constraints(self, constraints: str, mapping: str) -> str:
+    @staticmethod
+    def parse_constraints(constraints: str, mapping: str) -> str:
         mapping = json.loads(mapping)
         _conditions = constraints.lower().split('and')
         conditions = []
@@ -156,8 +155,8 @@ class RuleParser:
                 for _operand in _operands:
                     if '(' in _operand and ')' in _operand:
                         operand = {}
-                        func = self.extractFunc(_operand)
-                        vars = self.extractVars(_operand)
+                        func = RuleParser.extractFunc(_operand)
+                        vars = RuleParser.extractVars(_operand)
                         operand['function'] = func
                         operand['variables'] = [mapping[var] if var in mapping else var for var in vars]
                     else:
@@ -173,8 +172,8 @@ class RuleParser:
                 _operand = _condition
                 if '(' in _operand and ')' in _operand:
                     operand = {}
-                    func = self.extractFunc(_operand)
-                    vars = self.extractVars(_operand)
+                    func = RuleParser.extractFunc(_operand)
+                    vars = RuleParser.extractVars(_operand)
                     operand['function'] = func
                     operand['variables'] = [mapping[var] if var in mapping else var for var in vars]
                 else:
@@ -187,13 +186,15 @@ class RuleParser:
     
     # extract function name from an operand in a condition in constraints
     # 
-    def extractFunc(self, operand: str) -> str:
+    @staticmethod
+    def extractFunc(operand: str) -> str:
         parts = operand.split('(')
         return parts[0].strip()
     
     # extract variables inside a function of an operand in a condition in constraints
     # 
-    def extractVars(self, operand: str) -> list:
+    @staticmethod
+    def extractVars(operand: str) -> list:
         parts = operand.split(')')
         parts = parts[0].split('(')
         vars = parts[1].split(',')
@@ -201,7 +202,8 @@ class RuleParser:
     
     # parse a rule actions into a list of actions
     # 
-    def parse_actions(self, actions: str, mapping: str) -> list:
+    @staticmethod
+    def parse_actions(actions: str, mapping: str) -> list:
         mapping = json.loads(mapping)
         _actions = actions.lower().split('and')
         actions = []
@@ -210,8 +212,8 @@ class RuleParser:
             # 
             if '(' in _action and ')' in _action:
                 action = {}
-                func = self.extractFunc(_action)
-                vars = self.extractVars(_action)
+                func = RuleParser.extractFunc(_action)
+                vars = RuleParser.extractVars(_action)
                 action['function'] = func
                 action['variables'] = [mapping[var] if var in mapping else var for var in vars]
                 actions.append(action)
@@ -220,12 +222,10 @@ class RuleParser:
 
 if __name__ == '__main__':
 
-    ruleParser = RuleParser()
-
     def print_rule(_title, _pattern, _rewrite, _constraints="", _actions=""):
-        _patternASTJson, _rewriteASTJson, _mapping = ruleParser.parse(_pattern, _rewrite)
-        _constraintsJson = ruleParser.parse_constraints(_constraints, _mapping)
-        _actionsJson = ruleParser.parse_actions(_actions, _mapping)
+        _patternASTJson, _rewriteASTJson, _mapping = RuleParser.parse(_pattern, _rewrite)
+        _constraintsJson = RuleParser.parse_constraints(_constraints, _mapping)
+        _actionsJson = RuleParser.parse_actions(_actions, _mapping)
         print()
         print("==================================================")
         print("    " + _title)

@@ -46,9 +46,9 @@ class DataManager:
                                   key, 
                                   name, 
                                   pattern_json,
-                                  constraints,
+                                  constraints_json,
                                   rewrite_json,
-                                  actions,
+                                  actions_json,
                            FROM rules LEFT JOIN disable_rules ON rules.id = disable_rules.rule_id
                                       LEFT JOIN internal_rules ON rule.id = internal_rules.rule_id 
                            WHERE disable_rules.disabled IS NULL AND rules.database = ? 
@@ -78,8 +78,8 @@ class DataManager:
                         [rule['id'], rule['key'], rule['name'], rule['pattern'], 
                          rule['constraints'], rule['rewrite'], rule['actions'], rule['database']
                         ])
-            cur.execute('''REPLACE INTO internal_rules (rule_id, pattern_json, rewrite_json) VALUES (?, ?, ?)''', 
-                        [rule['id'], rule['pattern_json'], rule['rewrite_json']])
+            cur.execute('''REPLACE INTO internal_rules (rule_id, pattern_json, constraints_json, rewrite_json, actions_json) VALUES (?, ?, ?, ?, ?)''', 
+                        [rule['id'], rule['pattern_json'], rule['constraints_json'], rule['rewrite_json'], rule['actions_json']])
             self.db_conn.commit()
         except Error as e:
             print(e)
