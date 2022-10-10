@@ -78,7 +78,9 @@ class QueryRewriter:
         # Case-1: rule_node is a Var, it can match a constant or a dict
         # 
         if QueryRewriter.is_var(rule_node):
-            if QueryRewriter.is_constant(query_node) or QueryRewriter.is_dict(query_node):
+            if QueryRewriter.is_constant(query_node) or \
+                QueryRewriter.is_dict(query_node) or \
+                QueryRewriter.is_dot_expression(query_node):
                 # TODO - resolve conflicts if one Var matched more than once
                 # 
                 memo[rule_node] = query_node
