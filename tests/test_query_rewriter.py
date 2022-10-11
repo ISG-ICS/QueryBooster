@@ -353,7 +353,7 @@ def test_rewrite_rule_replace_strpos_lower():
                     ((TIMESTAMP '2016-10-01 00:00:00.000'), 
                     (TIMESTAMP '2017-01-01 00:00:00.000'), 
                     (TIMESTAMP '2017-04-01 00:00:00.000'))
-        AND  ILIKE(text, '%iphone%')
+        AND text ILIKE '%iphone%'
         GROUP  BY 2;
     '''
     rule_keys = ['replace_strpos_lower']
@@ -361,6 +361,16 @@ def test_rewrite_rule_replace_strpos_lower():
     rules = [get_rule(k) for k in rule_keys]
     _q1 = QueryRewriter.rewrite(q0, rules)
     assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_patch_ilike():
+    q0 = "SELECT * FROM tweets WHERE STRPOS(LOWER(text), 'iphone') > 0"
+    q1 = "SELECT * FROM tweets WHERE text ILIKE '%iphone%'"
+    rule_keys = ['replace_strpos_lower']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1 = QueryRewriter.rewrite(q0, rules)
+    assert q1 == _q1
 
 
 def test_rewrite_rule_remove_self_join():
@@ -413,7 +423,7 @@ def test_rewrite_postgresql():
            AND ((("tweets"."longitude" >= -173.80000000000001) AND ("tweets"."longitude" <= 180)) OR ("tweets"."longitude" IS NULL)) 
            AND ((DATE_TRUNC( \'day\', "tweets"."created_at" ) + (-EXTRACT(DOW FROM "tweets"."created_at") * INTERVAL \'1 DAY\')) 
                 = (TIMESTAMP \'2018-04-22 00:00:00.000\')) 
-           AND ILIKE("tweets"."text",\'%microsoft%\'))
+           AND "tweets"."text" ILIKE \'%microsoft%\')
            GROUP BY 1, 2
     '''
     rule_keys = ['remove_cast_date', 'remove_cast_text', 'replace_strpos_lower']
