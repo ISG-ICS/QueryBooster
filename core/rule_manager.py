@@ -42,8 +42,11 @@ class RuleManager:
                 'id': rule[0],
                 'key': rule[1],
                 'name': rule[2],
-                'formula': rule[3],
-                'enabled': True if rule[4] == 1 else False
+                'pattern': rule[3],
+                'constraints': rule[4],
+                'rewrite': rule[5],
+                'actions': rule[6],
+                'enabled': True if rule[7] == 1 else False
             })
         return res
 

@@ -27,7 +27,7 @@ rules = [
         'name': 'Remove Cast Date',
         'pattern': 'CAST(<x> AS DATE)',
         # 'pattern_json': '{"cast": ["V1", {"date": {}}]}',
-        'constraints': 'TYPE(x) = DATE',
+        'constraints': 'TYPE(x)=DATE',
         # 'constraints_json': "[{\"operator\": \"=\", \"operands\": [{\"function\": \"type\", \"variables\": [\"V1\"]}, \" date\"]}]",
         'rewrite': '<x>',
         # 'rewrite_json': '"V1"',
@@ -42,7 +42,7 @@ rules = [
         'key': 'remove_cast_text',
         'name': 'Remove Cast Text',
         'pattern': 'CAST(<x> AS TEXT)',
-        'constraints': 'TYPE(x) = TEXT',
+        'constraints': 'TYPE(x)=TEXT',
         'rewrite': '<x>',
         'actions': '',
         'database': 'postgresql'
@@ -52,9 +52,9 @@ rules = [
         'id': 21,
         'key': 'replace_strpos_lower',
         'name': 'Replace Strpos Lower',
-        'pattern': "STRPOS(LOWER(<x>), '<y>') > 0",
+        'pattern': "STRPOS(LOWER(<x>),'<y>')>0",
         # 'pattern_json': '{"gt": [{"strpos": [{"lower": "V1"}, {"literal": "V2"}]}, 0]}',
-        'constraints': 'IS(y) = CONSTANT and TYPE(y) = STRING',
+        'constraints': 'IS(y)=CONSTANT and\n TYPE(y)=STRING',
         # 'constraints_json': "[{\"operator\": \"=\", \"operands\": [{\"function\": \"is\", \"variables\": [\"V2\"]}, \" constant \"]}, {\"operator\": \"=\", \"operands\": [{\"function\": \" type\", \"variables\": [\"V2\"]}, \" string\"]}]",
         'rewrite': "<x> ILIKE '%<y>%'",
         # 'rewrite_json': '{"ilike": ["V1", {"literal": "%V2%"}]}',
@@ -69,23 +69,23 @@ rules = [
         'key': 'remove_self_join',
         'name': 'Remove Self Join',
         'pattern': '''
-            select <<s1>>
-            from <tb1> <t1>, 
-                 <tb1> <t2>
-            where <t1>.<a1>=<t2>.<a1>
-            and <<p1>>
+select <<s1>>
+from <tb1> <t1>, 
+     <tb1> <t2>
+where <t1>.<a1>=<t2>.<a1>
+and <<p1>>
         ''',
         # 'pattern_json': "{\"select\": {\"value\": \"VL1\"}, \"from\": [{\"value\": \"V1\", \"name\": \"V2\"}, {\"value\": \"V1\", \"name\": \"V3\"}], \"where\": {\"and\": [{\"eq\": [\"V2.V4\", \"V3.V4\"]}, \"VL2\"]}}",
         'constraints': 'UNIQUE(tb1, a1)',
         # 'constraints_json': "[{\"operator\": \"=\", \"operands\": [{\"function\": \"unique\", \"variables\": [\"V1\", \"V4\"]}, \"true\"]}]",
         'rewrite': '''
-            select <<s1>> 
-            from <tb1> <t1>
-            where 1=1 
-            and <<p1>>
+select <<s1>> 
+from <tb1> <t1>
+where 1=1 
+and <<p1>>
         ''',
         # 'rewrite_json': "{\"select\": {\"value\": \"VL1\"}, \"from\": {\"value\": \"V1\", \"name\": \"V2\"}, \"where\": {\"and\": [{\"eq\": [1, 1]}, \"VL2\"]}}",
-        'actions': 'SUBSTITUTE(s1, t2, t1) AND SUBSTITUTE(p1, t2, t1)',
+        'actions': 'SUBSTITUTE(s1, t2, t1) and\n SUBSTITUTE(p1, t2, t1)',
         # 'actions_json': "[{\"function\": \"substitute\", \"variables\": [\"VL1\", \"V3\", \"V2\"]}, {\"function\": \"substitute\", \"variables\": [\"VL2\", \"V3\", \"V2\"]}]",
         # 'mapping': "{\"s1\": \"VL1\", \"p1\": \"VL2\", \"tb1\": \"V1\", \"t1\": \"V2\", \"t2\": \"V3\", \"a1\": \"V4\"}",
         'database': 'postgresql'
@@ -115,7 +115,7 @@ rules = [
         'name': 'Remove Timestamp', 
         'pattern': '<x> = TIMESTAMP(<y>)', 
         # 'pattern_json': '{"eq": ["V1", {"timestamp": "V2"}]}',
-        'constraints': 'TYPE(x) = STRING',
+        'constraints': 'TYPE(x)=STRING',
         # 'constraints_json': "[{\"operator\": \"=\", \"operands\": [{\"function\": \"type\", \"variables\": [\"V1\"]}, \" string\"]}]",
         'rewrite': '<x> = <y>',
         # 'rewrite_json': '{"eq": ["V1", "V2"]}',

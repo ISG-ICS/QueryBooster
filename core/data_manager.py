@@ -30,7 +30,10 @@ class DataManager:
             cur.execute('''SELECT id, 
                                   key, 
                                   name, 
-                                  pattern || '; ' || constraints ||' --> ' || rewrite || '; ' || actions AS formula, 
+                                  pattern,
+                                  constraints,
+                                  rewrite,
+                                  actions, 
                                   CASE WHEN disabled is NULL THEN 1 ELSE 0 END AS enabled,
                                   database
                            FROM rules LEFT OUTER JOIN disable_rules 

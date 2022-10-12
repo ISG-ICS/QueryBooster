@@ -4,10 +4,14 @@ import Link from '@mui/material/Link';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
+import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Switch from '@mui/material/Switch';
 import Title from './Title';
+import defaultRulesData from '../mock-api/listRules';
+import SyntaxHighlighter from 'react-syntax-highlighter';
+import { vs } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 
 
 export default function RewrittingRules() {
@@ -30,6 +34,9 @@ export default function RewrittingRules() {
       .catch(function (error) {
         console.log('[/listRules] -> error:');
         console.log(error);
+        // mock the result
+        console.log(defaultRulesData);
+        setRules(defaultRulesData);
       });
   };
 
@@ -62,32 +69,56 @@ export default function RewrittingRules() {
   return (
     <React.Fragment>
       <Title>Rewriting Rules</Title>
-      <Table>
-        <TableHead>
-          <TableRow>
-            <TableCell>ID</TableCell>
-            <TableCell>Name</TableCell>
-            <TableCell>Formula</TableCell>
-            <TableCell align="right">Enabled</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {rules.map((rule) => (
-            <TableRow key={rule.id}>
-              <TableCell>{rule.id}</TableCell>
-              <TableCell>{rule.name}</TableCell>
-              <TableCell>{rule.formula}</TableCell>
-              <TableCell align="right">
-                <Switch
-                  checked={rule.enabled}
-                  onChange={(event) => handleChange(event, rule)}
-                  inputProps={{ 'aria-label': 'controlled' }}
-                />
-              </TableCell>
+      <TableContainer sx={{ maxHeight: 500, maxWidth: 1400 }}>
+        <Table stickyHeader size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>ID</TableCell>
+              <TableCell>Name</TableCell>
+              <TableCell>Pattern</TableCell>
+              <TableCell>Constraints</TableCell>
+              <TableCell>Rewrite</TableCell>
+              <TableCell>Actions</TableCell>
+              <TableCell align="right">Enabled</TableCell>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHead>
+          <TableBody>
+            {rules.map((rule) => (
+              <TableRow key={rule.id}>
+                <TableCell>{rule.id}</TableCell>
+                <TableCell>{rule.name}</TableCell>
+                <TableCell>
+                  <SyntaxHighlighter language="sql" style={vs} wrapLongLines={true}>
+                    {rule.pattern}
+                  </SyntaxHighlighter>
+                </TableCell>
+                <TableCell>
+                  <SyntaxHighlighter language="sql" style={vs} wrapLongLines={true}>
+                    {rule.constraints}
+                  </SyntaxHighlighter>
+                </TableCell>
+                <TableCell>
+                  <SyntaxHighlighter language="sql" style={vs} wrapLongLines={true}>
+                    {rule.rewrite}
+                  </SyntaxHighlighter>
+                </TableCell>
+                <TableCell>
+                  <SyntaxHighlighter language="sql" style={vs} wrapLongLines={true}>
+                    {rule.actions}
+                  </SyntaxHighlighter>
+                </TableCell>
+                <TableCell align="right">
+                  <Switch
+                    checked={rule.enabled}
+                    onChange={(event) => handleChange(event, rule)}
+                    inputProps={{ 'aria-label': 'controlled' }}
+                  />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
       {/* <Link color="primary" href="#" onClick={preventDefault} sx={{ mt: 3 }}>
         See more orders
       </Link> */}
