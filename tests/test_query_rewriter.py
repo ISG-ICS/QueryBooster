@@ -363,16 +363,6 @@ def test_rewrite_rule_replace_strpos_lower():
     assert format(parse(q1)) == format(parse(_q1))
 
 
-def test_rewrite_patch_ilike():
-    q0 = "SELECT * FROM tweets WHERE STRPOS(LOWER(text), 'iphone') > 0"
-    q1 = "SELECT * FROM tweets WHERE text ILIKE '%iphone%'"
-    rule_keys = ['replace_strpos_lower']
-
-    rules = [get_rule(k) for k in rule_keys]
-    _q1 = QueryRewriter.rewrite(q0, rules)
-    assert q1 == _q1
-
-
 def test_rewrite_rule_remove_self_join():
     q0 = '''
         SELECT  e1.name, 

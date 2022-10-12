@@ -48,9 +48,9 @@ class DataManager:
                                   pattern_json,
                                   constraints_json,
                                   rewrite_json,
-                                  actions_json,
+                                  actions_json
                            FROM rules LEFT JOIN disable_rules ON rules.id = disable_rules.rule_id
-                                      LEFT JOIN internal_rules ON rule.id = internal_rules.rule_id 
+                                      LEFT JOIN internal_rules ON rules.id = internal_rules.rule_id 
                            WHERE disable_rules.disabled IS NULL AND rules.database = ? 
                            ORDER BY rules.id''', [database])
             return cur.fetchall()

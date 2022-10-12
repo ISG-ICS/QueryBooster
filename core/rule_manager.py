@@ -1,3 +1,6 @@
+import sys
+# append the path of the parent directory
+sys.path.append("..")
 from core.data_manager import DataManager
 from data.rules import get_rules
 import json
@@ -43,3 +46,11 @@ class RuleManager:
                 'enabled': True if rule[4] == 1 else False
             })
         return res
+
+
+if __name__ == '__main__':
+    dm = DataManager()
+    rm = RuleManager(dm)
+    print(rm.list_rules())
+    print(rm.fetch_enabled_rules('postgresql'))
+    print(rm.fetch_enabled_rules('mysql'))

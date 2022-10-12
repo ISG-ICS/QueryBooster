@@ -5,6 +5,7 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 import json
 import logging
 from io import BytesIO
+from core.query_patcher import QueryPatcher
 from core.query_rewriter import QueryRewriter
 from core.data_manager import DataManager
 from core.rule_manager import RuleManager
@@ -45,6 +46,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         logging.info(log_text)
         rules = self.rm.fetch_enabled_rules(database)
         rewritten_query = QueryRewriter.rewrite(original_query, rules)
+        rewritten_query = QueryPatcher.patch(rewritten_query, database)
         log_text = ""
         log_text += "\n=================================================="
         log_text += "\n    Rewritten query"

@@ -48,7 +48,7 @@ class QueryRewriter:
                     new_query = True
                     break
 
-        return QueryRewriter.patch_ilike(format(query_ast))
+        return format(query_ast)
     
     # Traverse query AST tree, and check if rule->pattern matches any node of in query
     # 
@@ -407,15 +407,3 @@ class QueryRewriter:
                 if key in query:
                     return query.replace(key, memo[key])
         return query
-    
-    # Patch the rewritten SQL query with a trasnformation for ILIKE
-    #   Note: This is needed only because the SQL Parser (mo_sql_parsing) 
-    #         we use treats ILIKE as a normal function instead of a predicate,
-    #         e.g., ILIKE("tweets"."text",\'%microsoft%\').
-    #         We need to use regex to transform it back to 
-    #           "tweets"."text" ILIKE \'%microsoft%\'.
-    #   Demo: https://regex101.com/r/gkUZb4/2
-    #         
-    @staticmethod
-    def patch_ilike(sql: str) -> str:
-        return re.sub(r"ILIKE\((.*[^\,])\s*,\s*(.*[^\)])\)", r"\1 ILIKE \2", sql)
