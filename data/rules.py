@@ -68,22 +68,18 @@ rules = [
         'id': 30,
         'key': 'remove_self_join',
         'name': 'Remove Self Join',
-        'pattern': '''
-select <<s1>>
+        'pattern': '''select <<s1>>
 from <tb1> <t1>, 
      <tb1> <t2>
 where <t1>.<a1>=<t2>.<a1>
-and <<p1>>
-        ''',
+and <<p1>>''',
         # 'pattern_json': "{\"select\": {\"value\": \"VL1\"}, \"from\": [{\"value\": \"V1\", \"name\": \"V2\"}, {\"value\": \"V1\", \"name\": \"V3\"}], \"where\": {\"and\": [{\"eq\": [\"V2.V4\", \"V3.V4\"]}, \"VL2\"]}}",
         'constraints': 'UNIQUE(tb1, a1)',
         # 'constraints_json': "[{\"operator\": \"=\", \"operands\": [{\"function\": \"unique\", \"variables\": [\"V1\", \"V4\"]}, \"true\"]}]",
-        'rewrite': '''
-select <<s1>> 
+        'rewrite': '''select <<s1>> 
 from <tb1> <t1>
 where 1=1 
-and <<p1>>
-        ''',
+and <<p1>>''',
         # 'rewrite_json': "{\"select\": {\"value\": \"VL1\"}, \"from\": {\"value\": \"V1\", \"name\": \"V2\"}, \"where\": {\"and\": [{\"eq\": [1, 1]}, \"VL2\"]}}",
         'actions': 'SUBSTITUTE(s1, t2, t1) and\n SUBSTITUTE(p1, t2, t1)',
         # 'actions_json': "[{\"function\": \"substitute\", \"variables\": [\"VL1\", \"V3\", \"V2\"]}, {\"function\": \"substitute\", \"variables\": [\"VL2\", \"V3\", \"V2\"]}]",
