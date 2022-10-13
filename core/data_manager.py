@@ -91,8 +91,8 @@ class DataManager:
     def log_query(self, original_query: str, rewritten_query: str, rewriting_path: list) -> None:
         try:
             cur = self.db_conn.cursor()
-            cur.execute('''SELECT MAX(id) + 1 FROM query_logs;''')
-            query_id = cur.fetchall()[0]
+            cur.execute('''SELECT IFNULL(MAX(id), 0) + 1 FROM query_logs;''')
+            query_id = cur.fetchone()[0]
 
             cur.execute('''INSERT INTO query_logs (id, timestamp, latency, original_sql, rewritten_sql) 
                                        VALUES (?, ?, ?, ?, ?)''', 

@@ -47,7 +47,7 @@ class QueryRewriter:
                 if QueryRewriter.match(query_ast, rule, memo):
                     query_ast = QueryRewriter.take_actions(query_ast, rule, memo)
                     query_ast = QueryRewriter.replace(query_ast, rule, memo)
-                    rewriting_path.append((rule['id'], format(query_ast)))
+                    rewriting_path.append([rule['id'], format(query_ast)])
                     new_query = True
                     break
 
