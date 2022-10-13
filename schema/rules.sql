@@ -23,3 +23,21 @@ CREATE TABLE IF NOT EXISTS internal_rules(
     actions_json TEXT,
     FOREIGN KEY (rule_id) REFERENCES rules(id)
 );
+
+CREATE TABLE IF NOT EXISTS query_logs(
+    id INTEGER PRIMARY KEY,
+    timestamp TEXT,
+    latency REAL,
+    original_sql TEXT,
+    rewritten_sql TEXT
+);
+
+CREATE TABLE IF NOT EXISTS rewriting_paths(
+    query_id INTEGER,
+    seq INTEGER,
+    rule_id INTEGER,
+    rewritten_sql TEXT,
+    PRIMARY KEY (query_id, seq),
+    FOREIGN KEY (query_id) REFERENCES query_logs(id),
+    FOREIGN KEY (rule_id) REFERENCES rules(id)
+)

@@ -33,9 +33,11 @@ class QueryRewriter:
     #     }
     # 
     @staticmethod
-    def rewrite(query: str, rules: list) -> str:
+    def rewrite(query: str, rules: list) -> tuple[str, list]:
         
         query_ast = parse(query)
+
+        rewriting_path = []
 
         new_query = True
         while new_query is True:
@@ -45,10 +47,11 @@ class QueryRewriter:
                 if QueryRewriter.match(query_ast, rule, memo):
                     query_ast = QueryRewriter.take_actions(query_ast, rule, memo)
                     query_ast = QueryRewriter.replace(query_ast, rule, memo)
+                    rewriting_path.append((rule['id'], format(query_ast)))
                     new_query = True
                     break
 
-        return format(query_ast)
+        return format(query_ast), rewriting_path
     
     # Traverse query AST tree, and check if rule->pattern matches any node of in query
     # 

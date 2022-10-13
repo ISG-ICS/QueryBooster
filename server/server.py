@@ -9,6 +9,7 @@ from core.query_patcher import QueryPatcher
 from core.query_rewriter import QueryRewriter
 from core.data_manager import DataManager
 from core.rule_manager import RuleManager
+from core.query_logger import QueryLogger
 
 PORT = 8000
 DIRECTORY = "static"
@@ -17,6 +18,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
 
     dm = DataManager()
     rm = RuleManager(dm)
+    ql = QueryLogger(dm)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=DIRECTORY, **kwargs)
@@ -45,8 +47,11 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         log_text += "\n--------------------------------------------------"
         logging.info(log_text)
         rules = self.rm.fetch_enabled_rules(database)
-        rewritten_query = QueryRewriter.rewrite(original_query, rules)
+        rewritten_query, rewriting_path = QueryRewriter.rewrite(original_query, rules)
         rewritten_query = QueryPatcher.patch(rewritten_query, database)
+        for rewriting in rewriting_path:
+            rewriting[1] = QueryPatcher.patch(rewriting[1])
+        self.ql.log_query(original_query, rewritten_query, rewriting_path)
         log_text = ""
         log_text += "\n=================================================="
         log_text += "\n    Rewritten query"
@@ -96,6 +101,42 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         response = BytesIO()
         response.write(str(success).encode('utf-8'))
         self.wfile.write(response.getvalue())
+    
+    def post_list_queries(self):
+        content_length = int(self.headers['Content-Length'])
+        body = self.rfile.read(content_length)
+        request = body.decode('utf-8')
+
+        # logging
+        logging.info("\n[/listQueries] request:")
+        logging.info(request)
+
+        queries_json = self.ql.list_queries()
+
+        self.send_response(200)
+        self.end_headers()
+        response = BytesIO()
+        response.write(json.dumps(queries_json).encode('utf-8'))
+        self.wfile.write(response.getvalue())
+    
+    def post_rewriting_path(self):
+        content_length = int(self.headers['Content-Length'])
+        body = self.rfile.read(content_length)
+        request = body.decode('utf-8')
+
+        # logging
+        logging.info("\n[/rewritingPath] request:")
+        logging.info(request)
+
+        # enable/disable rule to data manager
+        query_id = json.loads(request)["queryId"]
+        rewriting_path_json = self.ql.rewriting_path(query_id)
+
+        self.send_response(200)
+        self.end_headers()
+        response = BytesIO()
+        response.write(json.dumps(rewriting_path_json).encode('utf-8'))
+        self.wfile.write(response.getvalue())
 
     def do_POST(self):
         if self.path == "/":
@@ -104,6 +145,10 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.post_list_rules()
         elif self.path == "/switchRule":
             self.post_switch_rule()
+        elif self.path == "/listQueries":
+            self.post_list_queries()
+        elif self.path == "/rewritingPath":
+            self.post_rewriting_path()
 
 
 if __name__ == '__main__':
