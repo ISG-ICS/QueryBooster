@@ -5,6 +5,7 @@ import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import ListSubheader from '@mui/material/ListSubheader';
 import DashboardIcon from '@mui/icons-material/Dashboard';
+import HistoryIcon from '@mui/icons-material/History';
 import NotesIcon from '@mui/icons-material/Notes';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import AssignmentIcon from '@mui/icons-material/Assignment';
@@ -28,6 +29,12 @@ export const mainListItems = (
         <CloudDownloadIcon fontSize="large" />
       </ListItemIcon>
       <ListItemText primary="JDBC Drivers" />
+    </ListItemButton>
+    <ListItemButton component={Link} to="/queries">
+      <ListItemIcon>
+        <HistoryIcon fontSize="large" />
+      </ListItemIcon>
+      <ListItemText primary="Query Logs" />
     </ListItemButton>
   </React.Fragment>
 );

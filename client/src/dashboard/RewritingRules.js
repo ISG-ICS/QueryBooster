@@ -76,9 +76,7 @@ export default function RewrittingRules() {
               <TableCell>ID</TableCell>
               <TableCell>Name</TableCell>
               <TableCell>Pattern</TableCell>
-              <TableCell>Constraints</TableCell>
               <TableCell>Rewrite</TableCell>
-              <TableCell>Actions</TableCell>
               <TableCell align="right">Enabled</TableCell>
             </TableRow>
           </TableHead>
@@ -94,17 +92,7 @@ export default function RewrittingRules() {
                 </TableCell>
                 <TableCell>
                   <SyntaxHighlighter language="sql" style={vs} wrapLongLines={true}>
-                    {rule.constraints}
-                  </SyntaxHighlighter>
-                </TableCell>
-                <TableCell>
-                  <SyntaxHighlighter language="sql" style={vs} wrapLongLines={true}>
                     {rule.rewrite}
-                  </SyntaxHighlighter>
-                </TableCell>
-                <TableCell>
-                  <SyntaxHighlighter language="sql" style={vs} wrapLongLines={true}>
-                    {rule.actions}
                   </SyntaxHighlighter>
                 </TableCell>
                 <TableCell align="right">

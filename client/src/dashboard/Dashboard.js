@@ -20,6 +20,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import { mainListItems, secondaryListItems } from './listItems';
 import { Routes, Route } from "react-router-dom";
 import RewritingRules from './RewritingRules';
+import QueryLogs from './QueryLogs';
 import JDBCDrivers from './JDBCDrivers';
 
 function Copyright(props) {
@@ -169,6 +170,7 @@ function DashboardContent() {
                     {/* <RewritingRules /> */}
                     <Route exact path="/" element={<RewritingRules />} />
                     <Route path="/jdbc" element={<JDBCDrivers />} />
+                    <Route path="/queries" element={<QueryLogs />} />
                   </Routes>
                 </Paper>
               </Grid>

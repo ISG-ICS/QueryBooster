@@ -3,13 +3,16 @@ import ReactDOM from 'react-dom';
 import { BrowserRouter } from "react-router-dom";
 import './index.css';
 import App from './App';
+import NiceModal from '@ebay/nice-modal-react';
 import reportWebVitals from './reportWebVitals';
 import 'fontsource-roboto'
 
 ReactDOM.render(
   <React.StrictMode>
     <BrowserRouter>
-      <App />
+      <NiceModal.Provider>
+        <App />
+      </NiceModal.Provider>
     </BrowserRouter>
   </React.StrictMode>,
   document.getElementById('root')
