@@ -52,7 +52,7 @@ const QueryRewritingPath = NiceModal.create(({ queryId }) => {
   };
 
   // call rewritePath() only once after initial rendering
-  React.useEffect(() => {getRewritingPath({queryId})}, []);
+  React.useEffect(() => {getRewritingPath(queryId)}, []);
   
   return (
     <Dialog

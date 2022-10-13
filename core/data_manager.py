@@ -1,3 +1,4 @@
+import datetime
 import sqlite3
 from sqlite3 import Error
 from pathlib import Path
@@ -84,6 +85,61 @@ class DataManager:
             cur.execute('''REPLACE INTO internal_rules (rule_id, pattern_json, constraints_json, rewrite_json, actions_json) VALUES (?, ?, ?, ?, ?)''', 
                         [rule['id'], rule['pattern_json'], rule['constraints_json'], rule['rewrite_json'], rule['actions_json']])
             self.db_conn.commit()
+        except Error as e:
+            print(e)
+    
+    def log_query(self, original_query: str, rewritten_query: str, rewriting_path: list) -> None:
+        try:
+            cur = self.db_conn.cursor()
+            cur.execute('''SELECT IFNULL(MAX(id), 0) + 1 FROM query_logs;''')
+            query_id = cur.fetchone()[0]
+
+            cur.execute('''INSERT INTO query_logs (id, timestamp, latency, original_sql, rewritten_sql) 
+                                       VALUES (?, ?, ?, ?, ?)''', 
+                        [query_id, datetime.datetime.now(), -1, original_query, rewritten_query])
+            seq = 1
+            for rewriting in rewriting_path:
+                cur.execute('''INSERT INTO rewriting_paths (query_id, seq, rule_id, rewritten_sql)
+                                           VALUES (?, ?, ?, ?)''', 
+                            [query_id, seq, rewriting[0], rewriting[1]])
+                seq += 1
+            self.db_conn.commit()
+        except Error as e:
+            print(e)
+    
+    def list_queries(self) -> List[Dict]:
+        try:
+            cur = self.db_conn.cursor()
+            cur.execute('''SELECT id, 
+                                  timestamp, 
+                                  latency, 
+                                  original_sql,
+                                  rewritten_sql
+                           FROM query_logs 
+                           ORDER BY id desc''')
+            return cur.fetchall()
+        except Error as e:
+            print(e)
+    
+    def get_original_sql(self, query_id: int) -> str:
+        try:
+            cur = self.db_conn.cursor()
+            cur.execute('''SELECT original_sql
+                           FROM query_logs 
+                           WHERE id = ?''', [query_id])
+            return cur.fetchall()[0]
+        except Error as e:
+            print(e)
+    
+    def list_rewritings(self, query_id: int) -> List[Dict]:
+        try:
+            cur = self.db_conn.cursor()
+            cur.execute('''SELECT seq, 
+                                  name, 
+                                  rewritten_sql
+                           FROM rewriting_paths LEFT JOIN rules ON rules.id = rewriting_paths.rule_id
+                           WHERE query_id = ?''', [query_id])
+            return cur.fetchall()
         except Error as e:
             print(e)
 
