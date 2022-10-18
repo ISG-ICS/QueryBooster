@@ -1,7 +1,6 @@
 from mo_sql_parsing import parse
 from mo_sql_parsing import format
 import numbers
-import re
 import sqlparse
 from typing import Any
 
@@ -257,10 +256,9 @@ class QueryRewriter:
     # 
     @staticmethod
     def is_constant(node: Any) -> bool:
-        if type(node) is str:
-            if not QueryRewriter.is_dot_expression(node) and not QueryRewriter.is_var(node) and not QueryRewriter.is_varList(node):
-                return True
-        if isinstance(node, numbers.Number):
+        if QueryRewriter.is_string(node):
+            return True
+        if QueryRewriter.is_number(node):
             return True
         return False
     
@@ -271,6 +269,14 @@ class QueryRewriter:
         if type(node) is str:
             if not QueryRewriter.is_dot_expression(node) and not QueryRewriter.is_var(node) and not QueryRewriter.is_varList(node):
                 return True
+        return False
+    
+    # Check if a given node in AST is a number
+    # 
+    @staticmethod
+    def is_number(node: Any) -> bool:
+        if isinstance(node, numbers.Number):
+            return True
         return False
     
     # Check if a given node in AST is a dot expression (e.g., 't1.a1')
