@@ -187,9 +187,47 @@ class RuleGenerator:
     
     @staticmethod
     def extendToFullASTJson(node: Any) -> tuple[Any, Scope]:
-        return node
+        # case-1: no SELECT and no FROM and no WHERE
+        if not RuleGenerator.existKeywordInASTJson(node, 'SELECT') and \
+            not RuleGenerator.existKeywordInASTJson(node, 'FROM') and \
+                not RuleGenerator.existKeywordInASTJson(node, 'WHERE'):
+            scope = Scope.CONDITION
+            root = {'select': '*', 'from': 't'}
+            root['where'] = node
+            return root, scope
+        # case-2: no SELECT and no FROM but has WHERE
+        elif not RuleGenerator.existKeywordInASTJson(node, 'SELECT') and \
+            not RuleGenerator.existKeywordInASTJson(node, 'FROM'):
+            scope = Scope.WHERE
+            node['select'] = '*'
+            node['from'] = 't'
+            return node, scope
+        # case-3: no SELECT but has FROM
+        elif not RuleGenerator.existKeywordInASTJson(node, 'SELECT'):
+            scope = Scope.FROM
+            node['select'] = '*'
+            return node, scope
+        # case-4: has SELECT and has FROM
+        else:
+            scope = Scope.SELECT
+            return node, scope
     
     @staticmethod
-    def extractPartialSQL(partialSQL: str, scope: Scope) -> str:
-        return partialSQL
+    def existKeywordInASTJson(node: Any, keyword: str) -> bool:
+        if QueryRewriter.is_dict(node):
+            if keyword.lower() in node.keys():
+                return True
+        return False
+    
+    @staticmethod
+    def extractPartialSQL(fullSQL: str, scope: Scope) -> str:
+        if scope == Scope.SELECT:
+            return fullSQL
+        elif scope == Scope.FROM:
+            return fullSQL.replace('SELECT * ', '')
+        elif scope == Scope.WHERE:
+            return fullSQL.replace('SELECT * FROM t ', '')
+        else:
+            return fullSQL.replace('SELECT * FROM t WHERE ', '')
+
  
