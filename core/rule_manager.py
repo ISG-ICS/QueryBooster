@@ -2,6 +2,7 @@ import sys
 # append the path of the parent directory
 sys.path.append("..")
 from core.data_manager import DataManager
+from core.rule_parser import RuleParser
 from data.rules import get_rules
 import json
 
@@ -18,6 +19,16 @@ class RuleManager:
     
     def __del__(self):
         del self.dm
+
+    def add_rule(self, rule: dict) -> bool:
+        rule['key'] = '_'.join([word.lower() for word in str(rule['name']).split(' ')])
+        rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
+        rule['constraints_json'] = RuleParser.parse_constraints(rule['constraints'], rule['mapping'])
+        rule['actions_json'] = RuleParser.parse_actions(rule['actions'], rule['mapping'])
+        return self.dm.add_rule(rule)
+    
+    def delete_rule(self, rule: dict) -> bool:
+        return self.dm.delete_rule(rule)
     
     def fetch_enabled_rules(self, database: str) -> list:
         enabled_rules = self.dm.enabled_rules(database)

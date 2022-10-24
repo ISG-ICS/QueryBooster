@@ -88,6 +88,37 @@ class DataManager:
         except Error as e:
             print(e)
     
+    def add_rule(self, rule: dict) -> bool:
+        try:
+            cur = self.db_conn.cursor()
+            cur.execute('''SELECT IFNULL(MAX(id), 0) + 1 FROM rules;''')
+            rule['id'] = cur.fetchone()[0]
+            
+            cur.execute('''INSERT INTO rules (id, key, name, pattern, constraints, rewrite, actions, database) 
+                                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', 
+                        [rule['id'], rule['key'], rule['name'], rule['pattern'], 
+                         rule['constraints'], rule['rewrite'], rule['actions'], rule['database']
+                        ])
+            cur.execute('''INSERT INTO internal_rules (rule_id, pattern_json, constraints_json, rewrite_json, actions_json) VALUES (?, ?, ?, ?, ?)''', 
+                        [rule['id'], rule['pattern_json'], rule['constraints_json'], rule['rewrite_json'], rule['actions_json']])
+            self.db_conn.commit()
+            return True
+        except Error as e:
+            print(e)
+            return False
+    
+    def delete_rule(self, rule: dict) -> bool:
+        try:
+            cur = self.db_conn.cursor()
+            cur.execute('''PRAGMA foreign_keys=on;''')
+            cur.execute('''DELETE FROM rules WHERE id = ?''', [rule['id']])
+            cur.execute('''PRAGMA foreign_keys=off;''')
+            self.db_conn.commit()
+            return True
+        except Error as e:
+            print(e)
+            return False
+    
     def log_query(self, original_query: str, rewritten_query: str, rewriting_path: list) -> None:
         try:
             cur = self.db_conn.cursor()

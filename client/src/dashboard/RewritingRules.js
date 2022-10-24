@@ -1,6 +1,9 @@
 import * as React from 'react';
 import axios from 'axios';
-import Link from '@mui/material/Link';
+import AddIcon from '@mui/icons-material/Add';
+import Button from '@mui/material/Button';
+import Fab from '@mui/material/Fab';
+import NiceModal from '@ebay/nice-modal-react';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
@@ -12,6 +15,8 @@ import Title from './Title';
 import defaultRulesData from '../mock-api/listRules';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { vs } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import { Box } from '@mui/material';
+import AddRewritingRule from './AddRewritingRule';
 
 
 export default function RewrittingRules() {
@@ -30,6 +35,7 @@ export default function RewrittingRules() {
         console.log(response);
         // update the state for list of rules
         setRules(response.data);
+        forceUpdate();
       })
       .catch(function (error) {
         console.log('[/listRules] -> error:');
@@ -37,6 +43,7 @@ export default function RewrittingRules() {
         // mock the result
         console.log(defaultRulesData);
         setRules(defaultRulesData);
+        forceUpdate();
       });
   };
 
@@ -66,6 +73,41 @@ export default function RewrittingRules() {
     });
   };
 
+  // handle click on the delete of a rule
+  const handleDelete = (rule) => {
+
+    // post deleteRule request to server
+    axios.post('/deleteRule', {id: rule.id, key: rule.key})
+    .then(function (response) {
+      console.log('[/deleteRule] -> response:');
+      console.log(response);
+      listRules();
+    })
+    .catch(function (error) {
+      console.log('[/deleteRule] -> error:');
+      console.log(error);
+      // mock delete rule from defaultRulesData
+      const delIndex = defaultRulesData.findIndex(obj => {
+        return obj.id === rule.id;
+      });
+      if (delIndex !== -1) {
+        const removed = defaultRulesData.splice(delIndex, 1);
+        console.log('removed successfully:');
+        console.log(removed);
+      }
+      listRules();
+    });
+  };
+
+  // handle click on add rewriting rule button
+  const addRewritingRule = () => {
+    NiceModal.show(AddRewritingRule)
+    .then((res) => {
+      console.log(res);
+      listRules();
+    });
+  };
+
   return (
     <React.Fragment>
       <Title>Rewriting Rules</Title>
@@ -78,6 +120,7 @@ export default function RewrittingRules() {
               <TableCell>Pattern</TableCell>
               <TableCell>Rewrite</TableCell>
               <TableCell align="right">Enabled</TableCell>
+              <TableCell align="center">Delete</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -99,8 +142,10 @@ export default function RewrittingRules() {
                   <Switch
                     checked={rule.enabled}
                     onChange={(event) => handleChange(event, rule)}
-                    inputProps={{ 'aria-label': 'controlled' }}
-                  />
+                    inputProps={{ 'aria-label': 'controlled' }} />
+                </TableCell>
+                <TableCell align="center">
+                  <Button variant="outlined" color="error" onClick={() => handleDelete(rule)} >Delete</Button>
                 </TableCell>
               </TableRow>
             ))}
@@ -108,8 +153,13 @@ export default function RewrittingRules() {
         </Table>
       </TableContainer>
       {/* <Link color="primary" href="#" onClick={preventDefault} sx={{ mt: 3 }}>
-        See more orders
-      </Link> */}
+          See more orders
+         </Link> */}
+      <Box>
+        <Fab size="small" color="primary" aria-label="add" onClick={() => addRewritingRule()}>
+          <AddIcon />
+        </Fab>
+      </Box>
     </React.Fragment>
   );
 }

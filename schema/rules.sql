@@ -12,7 +12,10 @@ CREATE TABLE IF NOT EXISTS rules(
 CREATE TABLE IF NOT EXISTS disable_rules(
     rule_id INTEGER UNIQUE,
     disabled BOOLEAN,
-    FOREIGN KEY (rule_id) REFERENCES rules(id)
+    CONSTRAINT fk_rules
+        FOREIGN KEY (rule_id) 
+        REFERENCES rules(id) 
+        ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS internal_rules(
@@ -21,7 +24,10 @@ CREATE TABLE IF NOT EXISTS internal_rules(
     constraints_json TEXT,
     rewrite_json TEXT,
     actions_json TEXT,
-    FOREIGN KEY (rule_id) REFERENCES rules(id)
+    CONSTRAINT fk_rules 
+        FOREIGN KEY (rule_id) 
+        REFERENCES rules(id) 
+        ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS query_logs(
@@ -38,6 +44,12 @@ CREATE TABLE IF NOT EXISTS rewriting_paths(
     rule_id INTEGER,
     rewritten_sql TEXT,
     PRIMARY KEY (query_id, seq),
-    FOREIGN KEY (query_id) REFERENCES query_logs(id),
-    FOREIGN KEY (rule_id) REFERENCES rules(id)
-)
+    CONSTRAINT fk_queries 
+        FOREIGN KEY (query_id) 
+        REFERENCES query_logs(id) 
+        ON DELETE CASCADE,
+    CONSTRAINT fk_rules 
+        FOREIGN KEY (rule_id) 
+        REFERENCES rules(id) 
+        ON DELETE CASCADE
+);
