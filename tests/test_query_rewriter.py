@@ -292,7 +292,7 @@ def test_rewrite_rule_remove_max_distinct():
     rule_keys = ['remove_max_distinct']
 
     rules = [get_rule(k) for k in rule_keys]
-    _q1 = QueryRewriter.rewrite(q0, rules)
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
     assert format(parse(q1)) == format(parse(_q1))
 
 
@@ -325,7 +325,7 @@ def test_rewrite_rule_remove_cast_date():
     rule_keys = ['remove_cast_date']
 
     rules = [get_rule(k) for k in rule_keys]
-    _q1 = QueryRewriter.rewrite(q0, rules)
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
     assert format(parse(q1)) == format(parse(_q1))
 
 
@@ -359,7 +359,7 @@ def test_rewrite_rule_replace_strpos_lower():
     rule_keys = ['replace_strpos_lower']
 
     rules = [get_rule(k) for k in rule_keys]
-    _q1 = QueryRewriter.rewrite(q0, rules)
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
     assert format(parse(q1)) == format(parse(_q1))
 
 
@@ -385,7 +385,7 @@ def test_rewrite_rule_remove_self_join():
     rule_keys = ['remove_self_join']
 
     rules = [get_rule(k) for k in rule_keys]
-    _q1 = QueryRewriter.rewrite(q0, rules)
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
     assert format(parse(q1)) == format(parse(_q1))
 
 
@@ -419,7 +419,7 @@ def test_rewrite_postgresql():
     rule_keys = ['remove_cast_date', 'remove_cast_text', 'replace_strpos_lower']
 
     rules = [get_rule(k) for k in rule_keys]
-    _q1 = QueryRewriter.rewrite(q0, rules)
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
     assert format(parse(q1)) == format(parse(_q1))
 
 

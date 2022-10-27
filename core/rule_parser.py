@@ -16,12 +16,14 @@ VarTypesInfo = {
     VarType.Var: {
         'markerStart': '<',
         'markerEnd': '>',
-        'internalBase': 'V'
+        'internalBase': 'V',
+        'externalBase': 'x',
     },
     VarType.VarList: {
         'markerStart': '<<',
         'markerEnd': '>>',
-        'internalBase': 'VL'
+        'internalBase': 'VL',
+        'exteranlBase': 'y'
     }
 }
 

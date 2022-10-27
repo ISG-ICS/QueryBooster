@@ -1,8 +1,11 @@
 from typing import Any
+import copy
 from core.query_rewriter import QueryRewriter
-from core.rule_parser import RuleParser, Scope
+from core.rule_parser import RuleParser, Scope, VarType, VarTypesInfo
+import json
 import mo_sql_parsing as mosql
 import numbers
+import re
 
 
 class RuleGenerator:
@@ -26,22 +29,46 @@ class RuleGenerator:
         #
         patternASTJson, rewriteASTJson = RuleGenerator.minDiffSubtree(q0ASTJson, q1ASTJson)
 
-        # Extend subtree to full AST Json
+        return {'pattern': RuleGenerator.deparse(patternASTJson), 'rewrite': RuleGenerator.deparse(rewriteASTJson)}
+    
+    @staticmethod
+    def deparse(astJson: Any) -> str:
+        # Extend given AST Json to a full AST Json
         # 
-        patternASTJson, patternScope = RuleGenerator.extendToFullASTJson(patternASTJson)
-        rewriteASTJson, rewriteScope = RuleGenerator.extendToFullASTJson(rewriteASTJson)
+        fullASTJson, scope = RuleGenerator.extendToFullASTJson(astJson)
 
         # Format full AST Json into SQL statement
         # 
-        pattern = mosql.format(patternASTJson)
-        rewrite = mosql.format(rewriteASTJson)
+        fullSQL = mosql.format(fullASTJson)
 
         # Extract partial SQL statement based on scope
         #
-        pattern = RuleGenerator.extractPartialSQL(pattern, patternScope)
-        rewrite = RuleGenerator.extractPartialSQL(rewrite, rewriteScope)
+        partialSQL = RuleGenerator.extractPartialSQL(fullSQL, scope)
 
-        return {'pattern': pattern, 'rewrite': rewrite}
+        return partialSQL
+
+    # Dereplace internal representations with user-faced variables and variable lists 
+    #   e.g., V1 ==> <x>, VL1 ==> <<y>>
+    # 
+    @staticmethod
+    def dereplaceVars(pattern: str, mapping: dict) -> str:
+        
+        for varExternal, varInternal in mapping.items():
+            varType = RuleGenerator.varType(varInternal)
+            var = VarTypesInfo[varType]['markerStart'] + varExternal + VarTypesInfo[varType]['markerEnd']
+            # replace varInternal with var
+            pattern = re.sub(varInternal, var, pattern)
+        
+        return pattern
+    
+    @staticmethod
+    def varType(var: str) -> VarType:
+        if var.startswith(VarTypesInfo[VarType.VarList]['internalBase']):
+            return VarType.VarList
+        elif var.startswith(VarTypesInfo[VarType.Var]['internalBase']):
+            return VarType.Var
+        else:
+            return None
     
     @staticmethod
     def minDiffSubtree(leftNode: Any, rightNode: Any) -> tuple[Any, Any]:
@@ -229,5 +256,245 @@ class RuleGenerator:
             return fullSQL.replace('SELECT * FROM t ', '')
         else:
             return fullSQL.replace('SELECT * FROM t WHERE ', '')
+    
 
- 
+    # Generate the candidate rule graph for a given seed rule
+    #   e.g., a seed rule = {'pattern': "STRPOS(LOWER(text), 'iphone') > 0", 
+    #                        'rewrite': "ILIKE(text, '%iphone%')"}
+    #
+    @staticmethod
+    def generate_candidate_rule_graph(seedRule: dict) -> dict:
+        # Parse seedRule's pattern and rewrite into SQL AST json
+        #
+        seedRule['pattern_json'], seedRule['rewrite_json'], seedRule['mapping'] = RuleParser.parse(seedRule['pattern'], seedRule['rewrite'])
+        
+        # Initially, seedRule has no constraints and actions
+        #
+        seedRule['constraints'], seedRule['constraints_json'], seedRule['actions'], seedRule['actions_json'] = '', '[]', '', '[]'
+
+        # Generate the candidate rule graph starting from seedRule
+        #   Breadth First Search
+        #
+        seedRuleFingerPrint = RuleGenerator.fingerPrint(seedRule)
+        visited = {seedRuleFingerPrint: seedRule}
+        queue = [seedRule]
+        graphRoot = seedRule
+        while len(queue) > 0:
+            baseRule = queue.pop(0)
+            baseRule['children'] = []
+            # generate children from the baseRule
+            # by applying each transformation on baseRule
+            for transform in RuleGenerator.RuleTransformations.keys():
+                childrenRules = getattr(RuleGenerator, transform)(baseRule)
+                for childRule in childrenRules:
+                    childRuleFingerPrint = RuleGenerator.fingerPrint(childRule)
+                    # if childRule has not been visited
+                    if childRuleFingerPrint not in visited.keys():
+                        visited[childRuleFingerPrint] = childRule
+                        queue.append(childRule)
+                        baseRule['children'].append(childRule)
+                    # else childRule has been visited (generated from an ealier baseRule)
+                    else:
+                        baseRule['children'].append(visited[childRuleFingerPrint])
+        return graphRoot
+    
+    @staticmethod
+    def fingerPrint(rule: dict) -> str:
+        # use rule['pattern'] string as finger-print
+        #   and get rid of the numbers inside each var/varList
+        #   e.g., we want to treat these two generated rules as the same rule:
+        #         rule 1: SELECT e1.<x1>, e1.<x2> FROM employee e1 WHERE e1.<x1> > 17 AND e1.<x2> > 35000
+        #         rule 2: SELECT e1.<x2>, e1.<x1> FROM employee e1 WHERE e1.<x2> > 17 AND e1.<x1> > 35000
+        fingerPrint = rule['pattern']
+        fingerPrint = re.sub(r"<x(\d+)>", "<x>", fingerPrint)
+        fingerPrint = re.sub(r"<<y(\d+)>>", "<<y>>", fingerPrint)
+        return fingerPrint
+
+    # transformation function - variablize columns in a rule
+    #   generate a list of child rules 
+    #
+    @staticmethod
+    def variablize_columns(rule: dict) -> list:
+
+        res = []
+
+        # 1. Get candidate columns from rule
+        #
+        columns = RuleGenerator.columns(rule['pattern_json'], rule['rewrite_json'])
+
+        # 2. Traverse candidate columns, make one of them variable, and generate a new rule
+        #
+        for column in columns:
+            res.append(RuleGenerator.variablize_column(rule, column))
+
+        return res
+    
+    # get list of common columns in a seed rule's pattern_json and rewrite_json
+    #
+    @staticmethod
+    def columns(pattern_json: str, rewrite_json: str) -> list:
+        
+        patternASTJson = json.loads(pattern_json)
+        rewriteASTJson = json.loads(rewrite_json)
+
+        # traverse the AST jsons to get all columns
+        patternColumns = RuleGenerator.columnsOfASTJson(patternASTJson, [])
+        rewriteColumns = RuleGenerator.columnsOfASTJson(rewriteASTJson, [])
+
+        # TODO - patternColumns should be superset of rewriteColumns
+        #
+        return list(patternColumns)
+    
+    # recursively get set of columns in a rule pattern's AST Json
+    #
+    @staticmethod
+    def columnsOfASTJson(patternASTJson: Any, path: list) -> set:
+        res = set()
+
+        # Case-1: dict
+        #
+        if QueryRewriter.is_dict(patternASTJson):
+            for key, value in patternASTJson.items():
+                # skip value of 'literal' as key
+                if type(key) is str and key.lower() == 'literal':
+                    continue
+                # note: key can not be column, only traverse each value
+                res.update(RuleGenerator.columnsOfASTJson(value, path + [key]))
+
+        # Case-2: list
+        # 
+        if QueryRewriter.is_list(patternASTJson):
+            for child in patternASTJson:
+                res.update(RuleGenerator.columnsOfASTJson(child, path))
+
+        # Case-3: string
+        if QueryRewriter.is_string(patternASTJson):
+            # skip case: {'from': [{'value': 'employee', 'name': 'e1'}]}
+            #            path = ['from', 'value'], patternASTJson = 'employee'
+            #            path = ['from', 'name'], patternASTJson = 'e1'
+            #
+            if not (len(path) >=2 and path[-2] == 'from' and path[-1] == 'value') and \
+               not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name'):
+                res.add(patternASTJson)
+        
+        # Case-4: dot expression
+        if QueryRewriter.is_dot_expression(patternASTJson):
+            # skip case: {'from': [{'value': 'employee', 'name': 'e1'}]}
+            #            path = ['from', 'value'], patternASTJson = 'employee'
+            #            path = ['from', 'name'], patternASTJson = 'e1'
+            #
+            if not (len(path) >=2 and path[-2] == 'from' and path[-1] == 'value') and \
+               not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name'):
+                candidate = patternASTJson.split('.')[-1]
+                # skip case: e1.<a1>
+                #
+                if not QueryRewriter.is_var(candidate) and not QueryRewriter.is_varList(candidate):
+                    res.add(candidate)
+        
+        return res
+    
+    
+    # variablize the given column in given rule and generate a new rule
+    #
+    @staticmethod
+    def variablize_column(rule: dict, column: str) -> dict:
+
+        # create a new rule based on rule
+        new_rule = copy.deepcopy(rule)
+
+        # Find a variable name for the given column
+        #   Traverse all var/varList mappings in rule
+        #     Count the max number of var
+        #
+        new_rule_mapping = json.loads(new_rule['mapping'])
+        maxVarNum = 0
+        for varInternal in new_rule_mapping.values():
+            if VarTypesInfo[VarType.VarList]['internalBase'] not in varInternal and VarTypesInfo[VarType.Var]['internalBase'] in varInternal:
+                num = int(varInternal.split(VarTypesInfo[VarType.Var]['internalBase'], 1)[1])
+                if num > maxVarNum:
+                    maxVarNum = num
+        newVarNum = maxVarNum + 1
+        newVarInternal = VarTypesInfo[VarType.Var]['internalBase'] + str(newVarNum)
+        newVarExternal = VarTypesInfo[VarType.Var]['externalBase'] + str(newVarNum)
+        # add new map into mapping
+        new_rule_mapping[newVarExternal] = newVarInternal
+        new_rule['mapping'] = json.dumps(new_rule_mapping)
+
+        # Replace given column into newVarInternal in new rule
+        #
+        new_rule_pattern_json = json.loads(new_rule['pattern_json'])
+        new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
+        new_rule_pattern_json = RuleGenerator.replaceColumnsOfASTJson(new_rule_pattern_json, [], column, newVarInternal)
+        new_rule_rewrite_json = RuleGenerator.replaceColumnsOfASTJson(new_rule_rewrite_json, [], column, newVarInternal)
+        new_rule['pattern_json'] = json.dumps(new_rule_pattern_json)
+        new_rule['rewrite_json'] = json.dumps(new_rule_rewrite_json)
+
+        # TODO - add newVarInternal is a column constraint into new rule's constraints
+
+        # Deparse new rule's pattern_json/rewrite_json into pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.deparse(new_rule_pattern_json)
+        new_rule['rewrite'] = RuleGenerator.deparse(new_rule_rewrite_json)
+
+        # Dereplace vars from new rule's pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.dereplaceVars(new_rule['pattern'], new_rule_mapping)
+        new_rule['rewrite'] = RuleGenerator.dereplaceVars(new_rule['rewrite'], new_rule_mapping)
+
+        return new_rule
+    
+    # recursively replace given column into given var in a rule's pattern/rewrite AST Json
+    #
+    @staticmethod
+    def replaceColumnsOfASTJson(astJson: Any, path: list, column: str, var: str) -> Any:
+        
+        # Case-1: dict
+        #
+        if QueryRewriter.is_dict(astJson):
+            for key, value in astJson.items():
+                # skip value of 'literal' as key
+                if type(key) is str and key.lower() == 'literal':
+                    continue
+                # note: key can not be column, only traverse each value
+                astJson[key] = RuleGenerator.replaceColumnsOfASTJson(value, path + [key], column, var)
+            return astJson
+
+        # Case-2: list
+        # 
+        if QueryRewriter.is_list(astJson):
+            res = []
+            for child in astJson:
+                res.append(RuleGenerator.replaceColumnsOfASTJson(child, path, column, var))
+            return res
+
+        # Case-3: string
+        if QueryRewriter.is_string(astJson):
+            # skip case: {'from': [{'value': 'employee', 'name': 'e1'}]}
+            #            path = ['from', 'value'], patternASTJson = 'employee'
+            #            path = ['from', 'name'], patternASTJson = 'e1'
+            #
+            if not (len(path) >=2 and path[-2] == 'from' and path[-1] == 'value') and \
+               not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name'):
+                if astJson == column:
+                    return var
+        
+        # Case-4: dot expression
+        if QueryRewriter.is_dot_expression(astJson):
+            # skip case: {'from': [{'value': 'employee', 'name': 'e1'}]}
+            #            path = ['from', 'value'], patternASTJson = 'employee'
+            #            path = ['from', 'name'], patternASTJson = 'e1'
+            #
+            if not (len(path) >=2 and path[-2] == 'from' and path[-1] == 'value') and \
+               not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name'):
+                candidate = astJson.split('.')[-1]
+                # skip case: e1.<a1>
+                #
+                if not QueryRewriter.is_var(candidate) and not QueryRewriter.is_varList(candidate):
+                    if candidate == column:
+                        return '.'.join(astJson.split('.')[0:-1] + [var])
+        
+        return astJson
+
+    RuleTransformations = {
+        'variablize_columns' : variablize_columns
+    }
