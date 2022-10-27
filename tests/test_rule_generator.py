@@ -437,6 +437,31 @@ def test_variablize_column_3():
         ''')
 
 
+def test_literals_1():
+    pattern = "STRPOS(LOWER(text), 'iphone') > 0"
+    rewrite = "ILIKE(text, '%iphone%')"
+    literals = ["iphone"]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_literals = RuleGenerator.literals(pattern_json, rewrite_json)
+    assert set(test_literals) == set(literals)
+
+
+def test_variablize_literal_1():
+
+    rule = {
+        'pattern': "STRPOS(LOWER(text), 'iphone') > 0",
+        'rewrite': "ILIKE(text, '%iphone%')"
+    }
+    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
+    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
+    
+    rule = RuleGenerator.variablize_literal(rule, 'iphone')
+    assert rule['pattern'] == "STRPOS(LOWER(text), '<x1>') > 0"
+    assert rule['rewrite'] == "ILIKE(text, '%<x1>%')"
+
+
 def test_generate_candidate_rule_graph_1():
     seedRule = {
         'pattern': 'CAST(created_at AS DATE)',
@@ -487,3 +512,19 @@ def test_generate_candidate_rule_graph_2():
 
     assert len(children) == 4
 
+
+def test_generate_candidate_rule_graph_3():
+    seedRule = {
+        'pattern': "STRPOS(LOWER(text), 'iphone') > 0",
+        'rewrite': "ILIKE(text, '%iphone%')"
+    }
+
+    rootRule = RuleGenerator.generate_candidate_rule_graph(seedRule)
+
+    assert type(rootRule) is dict
+    assert rootRule['pattern'] == seedRule['pattern']
+    assert rootRule['rewrite'] == seedRule['rewrite']
+
+    children = rootRule['children']
+
+    assert len(children) == 2

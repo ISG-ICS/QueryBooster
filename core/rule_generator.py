@@ -328,7 +328,7 @@ class RuleGenerator:
             res.append(RuleGenerator.variablize_column(rule, column))
 
         return res
-    
+
     # get list of common columns in a seed rule's pattern_json and rewrite_json
     #
     @staticmethod
@@ -345,16 +345,16 @@ class RuleGenerator:
         #
         return list(patternColumns)
     
-    # recursively get set of columns in a rule pattern's AST Json
+    # recursively get set of columns in a rule pattern/rewrite's AST Json
     #
     @staticmethod
-    def columnsOfASTJson(patternASTJson: Any, path: list) -> set:
+    def columnsOfASTJson(astJson: Any, path: list) -> set:
         res = set()
 
         # Case-1: dict
         #
-        if QueryRewriter.is_dict(patternASTJson):
-            for key, value in patternASTJson.items():
+        if QueryRewriter.is_dict(astJson):
+            for key, value in astJson.items():
                 # skip value of 'literal' as key
                 if type(key) is str and key.lower() == 'literal':
                     continue
@@ -363,29 +363,29 @@ class RuleGenerator:
 
         # Case-2: list
         # 
-        if QueryRewriter.is_list(patternASTJson):
-            for child in patternASTJson:
+        if QueryRewriter.is_list(astJson):
+            for child in astJson:
                 res.update(RuleGenerator.columnsOfASTJson(child, path))
 
         # Case-3: string
-        if QueryRewriter.is_string(patternASTJson):
+        if QueryRewriter.is_string(astJson):
             # skip case: {'from': [{'value': 'employee', 'name': 'e1'}]}
             #            path = ['from', 'value'], patternASTJson = 'employee'
             #            path = ['from', 'name'], patternASTJson = 'e1'
             #
-            if not (len(path) >=2 and path[-2] == 'from' and path[-1] == 'value') and \
+            if not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value') and \
                not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name'):
-                res.add(patternASTJson)
+                res.add(astJson)
         
         # Case-4: dot expression
-        if QueryRewriter.is_dot_expression(patternASTJson):
+        if QueryRewriter.is_dot_expression(astJson):
             # skip case: {'from': [{'value': 'employee', 'name': 'e1'}]}
             #            path = ['from', 'value'], patternASTJson = 'employee'
             #            path = ['from', 'name'], patternASTJson = 'e1'
             #
-            if not (len(path) >=2 and path[-2] == 'from' and path[-1] == 'value') and \
+            if not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value') and \
                not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name'):
-                candidate = patternASTJson.split('.')[-1]
+                candidate = astJson.split('.')[-1]
                 # skip case: e1.<a1>
                 #
                 if not QueryRewriter.is_var(candidate) and not QueryRewriter.is_varList(candidate):
@@ -403,21 +403,9 @@ class RuleGenerator:
         new_rule = copy.deepcopy(rule)
 
         # Find a variable name for the given column
-        #   Traverse all var/varList mappings in rule
-        #     Count the max number of var
         #
         new_rule_mapping = json.loads(new_rule['mapping'])
-        maxVarNum = 0
-        for varInternal in new_rule_mapping.values():
-            if VarTypesInfo[VarType.VarList]['internalBase'] not in varInternal and VarTypesInfo[VarType.Var]['internalBase'] in varInternal:
-                num = int(varInternal.split(VarTypesInfo[VarType.Var]['internalBase'], 1)[1])
-                if num > maxVarNum:
-                    maxVarNum = num
-        newVarNum = maxVarNum + 1
-        newVarInternal = VarTypesInfo[VarType.Var]['internalBase'] + str(newVarNum)
-        newVarExternal = VarTypesInfo[VarType.Var]['externalBase'] + str(newVarNum)
-        # add new map into mapping
-        new_rule_mapping[newVarExternal] = newVarInternal
+        new_rule_mapping, newVarInternal = RuleGenerator.findNextVarInternal(new_rule_mapping)
         new_rule['mapping'] = json.dumps(new_rule_mapping)
 
         # Replace given column into newVarInternal in new rule
@@ -473,7 +461,7 @@ class RuleGenerator:
             #            path = ['from', 'value'], patternASTJson = 'employee'
             #            path = ['from', 'name'], patternASTJson = 'e1'
             #
-            if not (len(path) >=2 and path[-2] == 'from' and path[-1] == 'value') and \
+            if not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value') and \
                not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name'):
                 if astJson == column:
                     return var
@@ -484,7 +472,7 @@ class RuleGenerator:
             #            path = ['from', 'value'], patternASTJson = 'employee'
             #            path = ['from', 'name'], patternASTJson = 'e1'
             #
-            if not (len(path) >=2 and path[-2] == 'from' and path[-1] == 'value') and \
+            if not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value') and \
                not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name'):
                 candidate = astJson.split('.')[-1]
                 # skip case: e1.<a1>
@@ -494,7 +482,184 @@ class RuleGenerator:
                         return '.'.join(astJson.split('.')[0:-1] + [var])
         
         return astJson
+    
+    # Find the next Var internal name given the current mapping
+    #   Traverse all var/varList mappings in rule
+    #     Count the max number of var
+    # Return the new mapping with the new Var map (e.g., <x3> -> VL3) and the new VarInternal (e.g., VL3)
+    #
+    @staticmethod
+    def findNextVarInternal(mapping: dict) -> tuple[dict, str]:
+        maxVarNum = 0
+        for varInternal in mapping.values():
+            if VarTypesInfo[VarType.VarList]['internalBase'] not in varInternal and VarTypesInfo[VarType.Var]['internalBase'] in varInternal:
+                num = int(varInternal.split(VarTypesInfo[VarType.Var]['internalBase'], 1)[1])
+                if num > maxVarNum:
+                    maxVarNum = num
+        newVarNum = maxVarNum + 1
+        newVarInternal = VarTypesInfo[VarType.Var]['internalBase'] + str(newVarNum)
+        newVarExternal = VarTypesInfo[VarType.Var]['externalBase'] + str(newVarNum)
+        # add new map into mapping
+        mapping[newVarExternal] = newVarInternal
+        return mapping, newVarInternal
+
+    # transformation function - variablize literals in a rule
+    #   generate a list of child rules 
+    #
+    @staticmethod
+    def variablize_literals(rule: dict) -> list:
+
+        res = []
+
+        # 1. Get candidate literals from rule
+        #
+        literals = RuleGenerator.literals(rule['pattern_json'], rule['rewrite_json'])
+
+        # 2. Traverse candidate literals, make one of them variable, and generate a new rule
+        #
+        for literal in literals:
+            res.append(RuleGenerator.variablize_literal(rule, literal))
+        
+        return res
+    
+    # get list of common literals in a seed rule's pattern_json and rewrite_json
+    #
+    @staticmethod
+    def literals(pattern_json: str, rewrite_json: str) -> list:
+        
+        patternASTJson = json.loads(pattern_json)
+        rewriteASTJson = json.loads(rewrite_json)
+
+        # traverse the AST jsons to get all literals
+        patternLiterals = RuleGenerator.literalsOfASTJson(patternASTJson, [])
+        rewriteLiterals = RuleGenerator.literalsOfASTJson(rewriteASTJson, [])
+
+        # TODO - patternLiterals should be superset of rewriteLiterals
+        #
+        return list(patternLiterals)
+    
+    # recursively get set of literals in a rule pattern/rewrite's AST Json
+    #
+    @staticmethod
+    def literalsOfASTJson(astJson: Any, path: list) -> set:
+        res = set()
+
+        # Case-1: dict
+        #
+        if QueryRewriter.is_dict(astJson):
+            for key, value in astJson.items():
+                # note: key can not be literal, only traverse each value
+                res.update(RuleGenerator.literalsOfASTJson(value, path + [key]))
+
+        # Case-2: list
+        # 
+        if QueryRewriter.is_list(astJson):
+            for child in astJson:
+                res.update(RuleGenerator.literalsOfASTJson(child, path))
+
+        # Case-3: string
+        if QueryRewriter.is_string(astJson):
+            # literal is the value of 'literal' key
+            if len(path) >= 1 and type(path[-1]) is str and path[-1].lower() == 'literal':
+                # special case for {'literal': '%iphone%'}
+                #   get rid of wildcard chars in a literal
+                #
+                res.add(str(astJson).replace('%', ''))
+        
+        # Case-4: dot expression (false postive, if it is value of 'literal' key)
+        if QueryRewriter.is_dot_expression(astJson):
+            # literal is the value of 'literal' key
+            if len(path) >= 1 and type(path[-1]) is str and path[-1].lower() == 'literal':
+                # special case for {'literal': '%iphone.14%'}
+                #   get rid of wildcard chars in a literal
+                #
+                res.add(str(astJson).replace('%', ''))
+        
+        return res
+    
+    # variablize the given literal in given rule and generate a new rule
+    #
+    @staticmethod
+    def variablize_literal(rule: dict, literal: str) -> dict:
+
+        # create a new rule based on rule
+        new_rule = copy.deepcopy(rule)
+
+        # Find a variable name for the given literal
+        #
+        new_rule_mapping = json.loads(new_rule['mapping'])
+        new_rule_mapping, newVarInternal = RuleGenerator.findNextVarInternal(new_rule_mapping)
+        new_rule['mapping'] = json.dumps(new_rule_mapping)
+
+        # Replace given literal into newVarInternal in new rule
+        #
+        new_rule_pattern_json = json.loads(new_rule['pattern_json'])
+        new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
+        new_rule_pattern_json = RuleGenerator.replaceLiteralsOfASTJson(new_rule_pattern_json, [], literal, newVarInternal)
+        new_rule_rewrite_json = RuleGenerator.replaceLiteralsOfASTJson(new_rule_rewrite_json, [], literal, newVarInternal)
+        new_rule['pattern_json'] = json.dumps(new_rule_pattern_json)
+        new_rule['rewrite_json'] = json.dumps(new_rule_rewrite_json)
+
+        # TODO - add newVarInternal is a literal constraint into new rule's constraints
+
+        # Deparse new rule's pattern_json/rewrite_json into pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.deparse(new_rule_pattern_json)
+        new_rule['rewrite'] = RuleGenerator.deparse(new_rule_rewrite_json)
+
+        # Dereplace vars from new rule's pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.dereplaceVars(new_rule['pattern'], new_rule_mapping)
+        new_rule['rewrite'] = RuleGenerator.dereplaceVars(new_rule['rewrite'], new_rule_mapping)
+
+        return new_rule
+    
+    # recursively replace given literal into given var in a rule's pattern/rewrite AST Json
+    #
+    @staticmethod
+    def replaceLiteralsOfASTJson(astJson: Any, path: list, literal: str, var: str) -> Any:
+        
+        # Case-1: dict
+        #
+        if QueryRewriter.is_dict(astJson):
+            for key, value in astJson.items():
+                # note: key can not be literal, only traverse each value
+                astJson[key] = RuleGenerator.replaceLiteralsOfASTJson(value, path + [key], literal, var)
+            return astJson
+
+        # Case-2: list
+        # 
+        if QueryRewriter.is_list(astJson):
+            res = []
+            for child in astJson:
+                res.append(RuleGenerator.replaceLiteralsOfASTJson(child, path, literal, var))
+            return res
+
+        # Case-3: string
+        if QueryRewriter.is_string(astJson):
+            # literal is the value of 'literal' key
+            if len(path) >= 1 and type(path[-1]) is str and path[-1].lower() == 'literal':
+                if astJson == literal:
+                    return var
+                # note: handle special case with wildcard chars, e.g., {'literal': '%iphone%'}
+                #
+                if str(astJson).replace('%', '') == literal:
+                    return str(astJson).replace(literal, var)
+        
+        # Case-4: dot expression (false postive, if it is value of 'literal' key)
+        if QueryRewriter.is_dot_expression(astJson):
+            # literal is the value of 'literal' key
+            if len(path) >= 1 and type(path[-1]) is str and path[-1].lower() == 'literal':
+                if astJson == literal:
+                    return var
+                # note: handle special case with wildcard chars, e.g., {'literal': '%iphone%'}
+                #
+                if str(astJson).replace('%', '') == literal:
+                    return str(astJson).replace(literal, var)
+        
+        return astJson
 
     RuleTransformations = {
-        'variablize_columns' : variablize_columns
+        'variablize_columns' : variablize_columns,
+        'variablize_literals' : variablize_literals,
     }
