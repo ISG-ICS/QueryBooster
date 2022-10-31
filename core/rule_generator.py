@@ -263,7 +263,7 @@ class RuleGenerator:
     #                        'rewrite': "ILIKE(text, '%iphone%')"}
     #
     @staticmethod
-    def generate_candidate_rule_graph(seedRule: dict) -> dict:
+    def generate_rule_graph(seedRule: dict) -> dict:
         # Parse seedRule's pattern and rewrite into SQL AST json
         #
         seedRule['pattern_json'], seedRule['rewrite_json'], seedRule['mapping'] = RuleParser.parse(seedRule['pattern'], seedRule['rewrite'])
@@ -663,3 +663,25 @@ class RuleGenerator:
         'variablize_columns' : variablize_columns,
         'variablize_literals' : variablize_literals,
     }
+
+    # Recommend a rule given a rule graph (pointed by rootRule)
+    #   TODO - currently, recommend the most general rule
+    #          (the farthest child in the given rule graph)
+    #
+    @staticmethod
+    def recommend_rule(rootRule: dict) -> dict:
+        ans = rootRule
+        maxLevel = 0
+        # breadth-first-search, find the farthest child
+        queue = [(rootRule, 0)]
+        while len(queue) > 0:
+            rule, level = queue.pop(0)
+            if 'visited' not in rule.keys():
+                rule['visited'] = True
+                if level > maxLevel:
+                    ans = rule
+                    maxLevel = level
+                # enqueue children
+                for child in rule['children']:
+                    queue.append((child, level + 1))
+        return ans

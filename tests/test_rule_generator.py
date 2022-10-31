@@ -462,13 +462,13 @@ def test_variablize_literal_1():
     assert rule['rewrite'] == "ILIKE(text, '%<x1>%')"
 
 
-def test_generate_candidate_rule_graph_1():
+def test_generate_rule_graph_1():
     seedRule = {
         'pattern': 'CAST(created_at AS DATE)',
         'rewrite': 'created_at'
     }
 
-    rootRule = RuleGenerator.generate_candidate_rule_graph(seedRule)
+    rootRule = RuleGenerator.generate_rule_graph(seedRule)
 
     assert type(rootRule) is dict
     assert rootRule['pattern'] == seedRule['pattern']
@@ -484,7 +484,7 @@ def test_generate_candidate_rule_graph_1():
     assert childRule['rewrite'] == '<x1>'
 
 
-def test_generate_candidate_rule_graph_2():
+def test_generate_rule_graph_2():
     seedRule = {
         'pattern': '''
             select e1.name, e1.age, e2.salary
@@ -502,7 +502,7 @@ def test_generate_candidate_rule_graph_2():
         '''
     }
 
-    rootRule = RuleGenerator.generate_candidate_rule_graph(seedRule)
+    rootRule = RuleGenerator.generate_rule_graph(seedRule)
 
     assert type(rootRule) is dict
     assert rootRule['pattern'] == seedRule['pattern']
@@ -513,13 +513,13 @@ def test_generate_candidate_rule_graph_2():
     assert len(children) == 4
 
 
-def test_generate_candidate_rule_graph_3():
+def test_generate_rule_graph_3():
     seedRule = {
         'pattern': "STRPOS(LOWER(text), 'iphone') > 0",
         'rewrite': "ILIKE(text, '%iphone%')"
     }
 
-    rootRule = RuleGenerator.generate_candidate_rule_graph(seedRule)
+    rootRule = RuleGenerator.generate_rule_graph(seedRule)
 
     assert type(rootRule) is dict
     assert rootRule['pattern'] == seedRule['pattern']

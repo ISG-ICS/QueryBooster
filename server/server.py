@@ -203,6 +203,67 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         response = BytesIO()
         response.write(json.dumps(seed_rule_json).encode('utf-8'))
         self.wfile.write(response.getvalue())
+    
+    def post_generate_rule_graph(self):
+        content_length = int(self.headers['Content-Length'])
+        body = self.rfile.read(content_length)
+        request = body.decode('utf-8')
+
+        # logging
+        logging.info("\n[/generateRuleGraph] request:")
+        logging.info(request)
+
+        # generate rule graph from rule generator
+        request_json = json.loads(request)
+        q0 = request_json["q0"]
+        q1 = request_json["q1"]
+        seed_rule_json = RuleGenerator.generate_seed_rule(q0, q1)
+        root_rule_json = RuleGenerator.generate_rule_graph(seed_rule_json)
+
+        # transform the rule graph to the UI required format
+        rule_graph_json = self.rm.transform_rule_graph(root_rule_json)
+
+        # patch pattern and rewrite in rules of the rule_graph_json
+        # TODO - get database from frontend request
+        #
+        for rule in rule_graph_json['rules']:
+            rule['pattern'] = QueryPatcher.patch(rule['pattern'], 'postgresql')
+            rule['rewrite'] = QueryPatcher.patch(rule['rewrite'], 'postgresql')
+
+        self.send_response(200)
+        self.end_headers()
+        response = BytesIO()
+        response.write(json.dumps(rule_graph_json).encode('utf-8'))
+        self.wfile.write(response.getvalue())
+    
+    def post_recommend_rule(self):
+        content_length = int(self.headers['Content-Length'])
+        body = self.rfile.read(content_length)
+        request = body.decode('utf-8')
+
+        # logging
+        logging.info("\n[/recommendRule] request:")
+        logging.info(request)
+
+        # generate rule graph from rule generator
+        request_json = json.loads(request)
+        q0 = request_json["q0"]
+        q1 = request_json["q1"]
+        seed_rule_json = RuleGenerator.generate_seed_rule(q0, q1)
+        root_rule_json = RuleGenerator.generate_rule_graph(seed_rule_json)
+        recommend_rule_json = RuleGenerator.recommend_rule(root_rule_json)
+
+        # patch pattern and rewrite in recommend rule
+        # TODO - get database from frontend request
+        #
+        recommend_rule_json['pattern'] = QueryPatcher.patch(recommend_rule_json['pattern'], 'postgresql')
+        recommend_rule_json['rewrite'] = QueryPatcher.patch(recommend_rule_json['rewrite'], 'postgresql')
+
+        self.send_response(200)
+        self.end_headers()
+        response = BytesIO()
+        response.write(json.dumps(recommend_rule_json).encode('utf-8'))
+        self.wfile.write(response.getvalue())
 
     def do_POST(self):
         if self.path == "/":
@@ -217,6 +278,10 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.post_rewriting_path()
         elif self.path == "/generateSeedRule":
             self.post_generate_seed_rule()
+        elif self.path == "/generateRuleGraph":
+            self.post_generate_rule_graph()
+        elif self.path == "/recommendRule":
+            self.post_recommend_rule()
         elif self.path == "/addRule":
             self.post_add_rule()
         elif self.path == "/deleteRule":

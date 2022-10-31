@@ -60,6 +60,44 @@ class RuleManager:
                 'enabled': True if rule[7] == 1 else False
             })
         return res
+        
+    def transform_rule_graph(self, root_rule: dict) -> dict:
+        rules = []
+        relations = []
+
+        # breadth-first-search
+        queue = [(root_rule, None)]
+        id = 1
+        while len(queue) > 0:
+            rule, parent = queue.pop(0)
+            if 'visited' not in rule.keys():
+                rule['visited'] = True
+                rule['id'] = str(id)
+                id += 1
+                if parent is None:
+                    rule['level'] = 1
+                else:
+                    rule['level'] = parent['level'] + 1
+                # append rule
+                rules.append({
+                    'id': rule['id'],
+                    'pattern': rule['pattern'],
+                    'rewrite': rule['rewrite'],
+                    'constraints': rule['constraints'],
+                    'actions': rule['actions'],
+                    'level': rule['level']
+                })
+                # enqueue children
+                for child in rule['children']:
+                    queue.append((child, rule))
+            # append relation
+            if parent is not None:
+                relations.append({
+                    'parentRuleId': parent['id'], 
+                    'childRuleId': rule['id']
+                })
+        
+        return {'rules': rules, 'relations': relations}
 
 
 if __name__ == '__main__':
