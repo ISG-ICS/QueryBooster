@@ -525,6 +525,192 @@ def test_variablize_literal_2():
         ''')
 
 
+def test_aliases_1():
+    pattern = "STRPOS(LOWER(tweets.text), 'iphone') > 0"
+    rewrite = "ILIKE(tweets.text, '%iphone%')"
+    columns = ["tweets"]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_columns = RuleGenerator.aliases(pattern_json, rewrite_json)
+    assert set(test_columns) == set(columns)
+
+
+def test_aliases_2():
+    pattern = '''
+        select e1.name, e1.age, e2.salary
+        from employee e1,
+            employee e2
+        where e1.id = e2.id
+        and e1.age > 17
+        and e2.salary  > 35000;
+    '''
+    rewrite = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e1.salary 
+        FROM employee e1
+        WHERE e1.age > 17
+        AND e1.salary > 35000;
+    '''
+    columns = ["e1", "e2"]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_columns = RuleGenerator.aliases(pattern_json, rewrite_json)
+    assert set(test_columns) == set(columns)
+
+
+def test_aliases_3():
+    pattern = '''
+        select e1.name, e1.age, <x1>.salary
+        from employee e1,
+            employee <x1>
+        where e1.id = <x1>.id
+        and e1.age > 17
+        and <x1>.salary > 35000;
+    '''
+    rewrite = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e1.salary 
+        FROM employee e1
+        WHERE e1.age > 17
+        AND e1.salary > 35000;
+    '''
+    columns = ["e1"]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_columns = RuleGenerator.aliases(pattern_json, rewrite_json)
+    assert set(test_columns) == set(columns)
+
+
+def test_aliases_4():
+    pattern = '''
+        select *
+        from employee e1
+        where age > 17
+        and salary > 35000;
+    '''
+    rewrite = '''
+        SELECT * 
+        FROM employee
+        WHERE age > 17
+        AND salary > 35000;
+    '''
+    columns = ["e1"]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_columns = RuleGenerator.aliases(pattern_json, rewrite_json)
+    assert set(test_columns) == set(columns)
+
+
+def test_variablize_alias_1():
+
+    rule = {
+        'pattern': "STRPOS(LOWER(tweets.text), 'iphone') > 0",
+        'rewrite': "ILIKE(tweets.text, '%iphone%')"
+    }
+    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
+    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
+    
+    rule = RuleGenerator.variablize_alias(rule, 'tweets')
+    assert rule['pattern'] == "STRPOS(LOWER(<x1>.text), 'iphone') > 0"
+    assert rule['rewrite'] == "ILIKE(<x1>.text, '%iphone%')"
+
+
+def test_variablize_alias_2():
+
+    rule = {
+        'pattern': "STRPOS(LOWER(tweets.<x1>), 'iphone') > 0",
+        'rewrite': "ILIKE(tweets.<x1>, '%iphone%')"
+    }
+    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
+    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
+    
+    rule = RuleGenerator.variablize_alias(rule, 'tweets')
+    assert rule['pattern'] == "STRPOS(LOWER(<x2>.<x1>), 'iphone') > 0"
+    assert rule['rewrite'] == "ILIKE(<x2>.<x1>, '%iphone%')"
+
+
+def test_variablize_alias_3():
+
+    rule = {
+        'pattern': '''
+            select e1.name, e1.age, e2.salary
+            from employee e1,
+                employee e2
+            where e1.id = e2.id
+            and e1.age > 17
+            and e2.salary > 35000
+        ''',
+        'rewrite': '''
+            SELECT e1.name, e1.age, e1.salary 
+            FROM employee e1
+            WHERE e1.age > 17
+            AND e1.salary > 35000
+        '''
+    }
+    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
+    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
+    
+    rule = RuleGenerator.variablize_alias(rule, 'e1')
+    assert StringUtil.strim(rule['pattern']) == StringUtil.strim('''
+            SELECT <x1>.name, <x1>.age, e2.salary
+            FROM employee AS <x1>,
+                employee AS e2
+            WHERE <x1>.id = e2.id
+            AND <x1>.age > 17
+            AND e2.salary > 35000
+        ''')
+    assert StringUtil.strim(rule['rewrite']) == StringUtil.strim('''
+            SELECT <x1>.name, <x1>.age, <x1>.salary 
+            FROM employee AS <x1>
+            WHERE <x1>.age > 17
+            AND <x1>.salary > 35000
+        ''')
+
+
+def test_variablize_alias_4():
+
+    rule = {
+        'pattern': '''
+            select <x1>.name, <x1>.age, e2.salary
+            from employee <x1>,
+                employee e2
+            where <x1>.id = e2.id
+            and <x1>.age > 17
+            and e2.salary > 35000
+        ''',
+        'rewrite': '''
+            SELECT <x1>.name, <x1>.age, <x1>.salary 
+            FROM employee <x1>
+            WHERE <x1>.age > 17
+            AND <x1>.salary > 35000
+        '''
+    }
+    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
+    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
+    
+    rule = RuleGenerator.variablize_alias(rule, 'e2')
+    assert StringUtil.strim(rule['pattern']) == StringUtil.strim('''
+            SELECT <x1>.name, <x1>.age, <x2>.salary
+            FROM employee AS <x1>,
+                employee AS <x2>
+            WHERE <x1>.id = <x2>.id
+            AND <x1>.age > 17
+            AND <x2>.salary > 35000
+        ''')
+    assert StringUtil.strim(rule['rewrite']) == StringUtil.strim('''
+            SELECT <x1>.name, <x1>.age, <x1>.salary 
+            FROM employee AS <x1>
+            WHERE <x1>.age > 17
+            AND <x1>.salary > 35000
+        ''')
+
+
 def test_generate_rule_graph_1():
     seedRule = {
         'pattern': 'CAST(created_at AS DATE)',
@@ -573,7 +759,7 @@ def test_generate_rule_graph_2():
 
     children = rootRule['children']
 
-    assert len(children) == 6
+    assert len(children) == 8
 
 
 def test_generate_rule_graph_3():
