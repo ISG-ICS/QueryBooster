@@ -161,7 +161,7 @@ const RuleGraph = NiceModal.create(({ rewriteExample }) => {
     >
         <DialogTitle>Rule Graph</DialogTitle>
         <DialogContent style={{height:'600px'}}>
-        <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} fitView onNodeClick={onNodeClick}>
+        <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} fitView onNodeClick={onNodeClick} minZoom={0.05} >
           <Controls />
           <MiniMap/>
           <Popover

@@ -8,6 +8,7 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import Grid from '@mui/material/Grid';
 import NiceModal, { useModal } from '@ebay/nice-modal-react';
+import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import defaultRecommendRuleData from '../mock-api/recommendRule';
 import defaultRulesData from '../mock-api/listRules';
@@ -55,15 +56,13 @@ const AddRewritingRule = NiceModal.create(() => {
 
   const onQ0Change = (event) => {
     setQ0(event.target.value);
-    onExampleChange();
   };
 
   const onQ1Change = (event) => {
     setQ1(event.target.value);
-    onExampleChange();
   };
 
-  const onExampleChange = () => {
+  const onFormulate = () => {
     if (q0 != "" && q1 != "") {
       // post recommendRule request to server
       axios.post('/recommendRule', {'q0': q0, 'q1': q1})
@@ -209,7 +208,10 @@ const AddRewritingRule = NiceModal.create(() => {
                   <TextField id="q1" label="Rewritten SQL" multiline fullWidth onChange={onQ1Change} value={q1} />
                 </Grid>
                 <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
-                  <Button variant="outlined" color="primary" onClick={showRuleGraph}>Rule Graph</Button>
+                  <Stack direction="row" spacing={2}>
+                    <Button variant="contained" color="primary" onClick={onFormulate}>Formulate</Button>
+                    <Button variant="outlined" color="primary" onClick={showRuleGraph}>Rule Graph</Button>
+                  </Stack>
                 </Grid>
               </Grid>
             </Grid>
