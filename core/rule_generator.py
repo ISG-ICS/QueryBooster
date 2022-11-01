@@ -375,7 +375,9 @@ class RuleGenerator:
             #
             if not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value') and \
                not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name'):
-                res.add(astJson)
+               # ignore * in SELECT clause
+                if astJson != '*':
+                    res.add(astJson)
         
         # Case-4: dot expression
         if QueryRewriter.is_dot_expression(astJson):
@@ -534,9 +536,7 @@ class RuleGenerator:
         patternLiterals = RuleGenerator.literalsOfASTJson(patternASTJson, [])
         rewriteLiterals = RuleGenerator.literalsOfASTJson(rewriteASTJson, [])
 
-        # TODO - patternLiterals should be superset of rewriteLiterals
-        #
-        return list(patternLiterals)
+        return list(patternLiterals.intersection(rewriteLiterals))
     
     # recursively get set of literals in a rule pattern/rewrite's AST Json
     #
