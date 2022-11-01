@@ -148,6 +148,21 @@ def test_match_rule_remove_self_join_2():
     assert not QueryRewriter.match(parse(query), rule, memo)
 
 
+def test_match_rule_remove_self_join_3():
+    rule = get_rule('remove_self_join')
+    assert rule is not None
+    
+    # match
+    query = '''
+        SELECT  e1.age 
+        FROM employee e1, employee e2
+        WHERE e1.id = e2.id
+        AND e1.age > 17;
+    '''
+    memo = {}
+    assert QueryRewriter.match(parse(query), rule, memo)
+
+
 def test_replace_rule_remove_cast_date():
     rule = get_rule('remove_cast_date')
     assert rule is not None
@@ -381,6 +396,26 @@ def test_rewrite_rule_remove_self_join():
         WHERE 1=1
         AND e1.age > 17
         AND e1.salary > 35000;
+    '''
+    rule_keys = ['remove_self_join']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_remove_self_join_2():
+    q0 = '''
+        SELECT e1.* 
+        FROM employee e1, employee e2
+        WHERE e1.id = e2.id
+        AND e1.age > 17;
+    '''
+    q1 = '''
+        SELECT e1.* 
+        FROM employee e1
+        WHERE 1=1
+        AND e1.age > 17;
     '''
     rule_keys = ['remove_self_join']
 

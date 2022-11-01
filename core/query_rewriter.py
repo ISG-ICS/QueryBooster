@@ -89,14 +89,13 @@ class QueryRewriter:
                 memo[rule_node] = query_node
                 return True
         
-        # Case-2: rule_node is a VarList, it can match a list
+        # Case-2: rule_node is a VarList, it can match anything
         # 
         if QueryRewriter.is_varList(rule_node):
-            if QueryRewriter.is_list(query_node):
-                # TODO - resolve conflicts if one VarList matched more than once
-                # 
-                memo[rule_node] = query_node
-                return True
+            # TODO - resolve conflicts if one VarList matched more than once
+            # 
+            memo[rule_node] = query_node
+            return True
         
         # Case-3: rule_node is a constant, it can match a constant
         if QueryRewriter.is_constant(rule_node):
