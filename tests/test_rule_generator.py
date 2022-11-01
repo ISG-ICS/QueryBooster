@@ -448,6 +448,31 @@ def test_literals_1():
     assert set(test_literals) == set(literals)
 
 
+def test_literals_2():
+    pattern = '''
+        select e1.name, e1.age, e2.salary
+        from employee e1,
+            employee e2
+        where e1.id = e2.id
+        and e1.age > 17
+        and e2.salary > 35000;
+    '''
+    rewrite = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e1.salary 
+        FROM employee e1
+        WHERE e1.age > 17
+        AND e1.salary > 35000;
+    '''
+    literals = [17, 35000]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_literals = RuleGenerator.literals(pattern_json, rewrite_json)
+    assert set(test_literals) == set(literals)
+
+
 def test_variablize_literal_1():
 
     rule = {
@@ -460,6 +485,44 @@ def test_variablize_literal_1():
     rule = RuleGenerator.variablize_literal(rule, 'iphone')
     assert rule['pattern'] == "STRPOS(LOWER(text), '<x1>') > 0"
     assert rule['rewrite'] == "ILIKE(text, '%<x1>%')"
+
+
+def test_variablize_literal_2():
+
+    rule = {
+        'pattern': '''
+            select e1.name, e1.age, e2.salary
+            from employee e1,
+                employee e2
+            where e1.id = e2.id
+            and e1.age > 17
+            and e2.salary > 35000
+        ''',
+        'rewrite': '''
+            SELECT e1.name, e1.age, e1.salary 
+            FROM employee e1
+            WHERE e1.age > 17
+            AND e1.salary > 35000
+        '''
+    }
+    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
+    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
+    
+    rule = RuleGenerator.variablize_literal(rule, 17)
+    assert StringUtil.strim(rule['pattern']) == StringUtil.strim('''
+            SELECT e1.name, e1.age, e2.salary
+            FROM employee AS e1,
+                employee AS e2
+            WHERE e1.id = e2.id
+            AND e1.age > <x1>
+            AND e2.salary > 35000
+        ''')
+    assert StringUtil.strim(rule['rewrite']) == StringUtil.strim('''
+            SELECT e1.name, e1.age, e1.salary 
+            FROM employee AS e1
+            WHERE e1.age > <x1>
+            AND e1.salary > 35000
+        ''')
 
 
 def test_generate_rule_graph_1():
@@ -510,7 +573,7 @@ def test_generate_rule_graph_2():
 
     children = rootRule['children']
 
-    assert len(children) == 4
+    assert len(children) == 6
 
 
 def test_generate_rule_graph_3():

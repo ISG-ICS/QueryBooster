@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Union
 import copy
 from core.query_rewriter import QueryRewriter
 from core.rule_parser import RuleParser, Scope, VarType, VarTypesInfo
@@ -575,12 +575,16 @@ class RuleGenerator:
                 #
                 res.add(str(astJson).replace('%', ''))
         
+        # Case-5: number
+        if QueryRewriter.is_number(astJson):
+            res.add(astJson)
+        
         return res
     
     # variablize the given literal in given rule and generate a new rule
     #
     @staticmethod
-    def variablize_literal(rule: dict, literal: str) -> dict:
+    def variablize_literal(rule: dict, literal: Union[str, numbers.Number]) -> dict:
 
         # create a new rule based on rule
         new_rule = copy.deepcopy(rule)
@@ -617,7 +621,7 @@ class RuleGenerator:
     # recursively replace given literal into given var in a rule's pattern/rewrite AST Json
     #
     @staticmethod
-    def replaceLiteralsOfASTJson(astJson: Any, path: list, literal: str, var: str) -> Any:
+    def replaceLiteralsOfASTJson(astJson: Any, path: list, literal: Union[str, numbers.Number], var: str) -> Any:
         
         # Case-1: dict
         #
@@ -656,6 +660,11 @@ class RuleGenerator:
                 #
                 if str(astJson).replace('%', '') == literal:
                     return str(astJson).replace(literal, var)
+        
+        # Case-5: number
+        if QueryRewriter.is_number(astJson):
+            if astJson == literal:
+                return var
         
         return astJson
 
