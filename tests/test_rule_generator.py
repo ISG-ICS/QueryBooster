@@ -279,7 +279,7 @@ def test_columns_4():
             employee e2
         where e1.<a1> = e2.<a1>
         and e1.age > 17
-        and e2.salary  > 35000;
+        and e2.salary > 35000;
     '''
     rewrite = '''
         SELECT  e1.name, 
@@ -290,6 +290,52 @@ def test_columns_4():
         AND e1.salary > 35000;
     '''
     columns = ["name", "age", "salary"]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_columns = RuleGenerator.columns(pattern_json, rewrite_json)
+    assert set(test_columns) == set(columns)
+
+
+def test_columns_5():
+    pattern = '''
+        select e1.*
+        from employee e1,
+            employee e2
+        where e1.id = e2.id
+        and e1.age > 17
+        and e2.salary > 35000;
+    '''
+    rewrite = '''
+        SELECT e1.*
+        FROM employee e1
+        WHERE e1.age > 17
+        AND e1.salary > 35000;
+    '''
+    columns = ["id", "age", "salary"]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_columns = RuleGenerator.columns(pattern_json, rewrite_json)
+    assert set(test_columns) == set(columns)
+
+
+def test_columns_6():
+    pattern = '''
+        select *
+        from employee
+        where workdept in
+            (select deptno
+                from department
+                where deptname = 'OPERATIONS');
+    '''
+    rewrite = '''
+        select distinct *
+        from employee emp, department dept
+        where emp.workdept = dept.deptno 
+        and dept.deptname = 'OPERATIONS';
+    '''
+    columns = ["workdept", "deptno", "deptname"]
 
     pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
 

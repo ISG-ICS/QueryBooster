@@ -369,29 +369,39 @@ class RuleGenerator:
 
         # Case-3: string
         if QueryRewriter.is_string(astJson):
-            # skip case: {'from': [{'value': 'employee', 'name': 'e1'}]}
+            # skip case-1: {'from': [{'value': 'employee', 'name': 'e1'}]}
             #            path = ['from', 'value'], patternASTJson = 'employee'
             #            path = ['from', 'name'], patternASTJson = 'e1'
+            #      case-2: {'from': 'employee'}
+            #            path = ['from']
             #
             if not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value') and \
-               not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name'):
-               # ignore * in SELECT clause
+               not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name') and \
+               not (len(path) >=1 and path[-1] == 'from'):
+                # ignore * in SELECT clause
+                #
                 if astJson != '*':
                     res.add(astJson)
         
         # Case-4: dot expression
         if QueryRewriter.is_dot_expression(astJson):
-            # skip case: {'from': [{'value': 'employee', 'name': 'e1'}]}
+            # skip case-1: {'from': [{'value': 'employee', 'name': 'e1'}]}
             #            path = ['from', 'value'], patternASTJson = 'employee'
             #            path = ['from', 'name'], patternASTJson = 'e1'
+            #      case-2: {'from': 'employee'}
+            #            path = ['from']
             #
             if not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value') and \
-               not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name'):
+               not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name') and \
+               not (len(path) >=1 and path[-1] == 'from'):
                 candidate = astJson.split('.')[-1]
                 # skip case: e1.<a1>
                 #
                 if not QueryRewriter.is_var(candidate) and not QueryRewriter.is_varList(candidate):
-                    res.add(candidate)
+                    # ignore e1.* in SELECT clause
+                    #
+                    if candidate != '*':
+                        res.add(candidate)
         
         return res
     
@@ -459,23 +469,29 @@ class RuleGenerator:
 
         # Case-3: string
         if QueryRewriter.is_string(astJson):
-            # skip case: {'from': [{'value': 'employee', 'name': 'e1'}]}
+            # skip case-1: {'from': [{'value': 'employee', 'name': 'e1'}]}
             #            path = ['from', 'value'], patternASTJson = 'employee'
             #            path = ['from', 'name'], patternASTJson = 'e1'
+            #      case-2: {'from': 'employee'}
+            #            path = ['from']
             #
             if not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value') and \
-               not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name'):
+               not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name') and \
+               not (len(path) >=1 and path[-1] == 'from'):
                 if astJson == column:
                     return var
         
         # Case-4: dot expression
         if QueryRewriter.is_dot_expression(astJson):
-            # skip case: {'from': [{'value': 'employee', 'name': 'e1'}]}
+            # skip case-1: {'from': [{'value': 'employee', 'name': 'e1'}]}
             #            path = ['from', 'value'], patternASTJson = 'employee'
             #            path = ['from', 'name'], patternASTJson = 'e1'
+            #      case-2: {'from': 'employee'}
+            #            path = ['from']
             #
             if not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value') and \
-               not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name'):
+               not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name') and \
+               not (len(path) >=1 and path[-1] == 'from'):
                 candidate = astJson.split('.')[-1]
                 # skip case: e1.<a1>
                 #
