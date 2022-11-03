@@ -5,6 +5,7 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 import json
 import logging
 from io import BytesIO
+from core.profiler import Profiler
 from core.query_patcher import QueryPatcher
 from core.query_rewriter import QueryRewriter
 from core.data_manager import DataManager
@@ -229,6 +230,10 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         for rule in rule_graph_json['rules']:
             rule['pattern'] = QueryPatcher.patch(rule['pattern'], 'postgresql')
             rule['rewrite'] = QueryPatcher.patch(rule['rewrite'], 'postgresql')
+
+        # logging
+        logging.info("\n[/generateRuleGraph] profiles:")
+        logging.info(Profiler.show())
 
         self.send_response(200)
         self.end_headers()

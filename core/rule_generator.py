@@ -1,5 +1,6 @@
 from typing import Any, Union
 import copy
+from core.profiler import Profiler
 from core.query_rewriter import QueryRewriter
 from core.rule_parser import RuleParser, Scope, VarType, VarTypesInfo
 import json
@@ -316,6 +317,8 @@ class RuleGenerator:
     @staticmethod
     def variablize_columns(rule: dict) -> list:
 
+        Profiler.onFunctionStart('varialize_columns')
+
         res = []
 
         # 1. Get candidate columns from rule
@@ -326,6 +329,8 @@ class RuleGenerator:
         #
         for column in columns:
             res.append(RuleGenerator.variablize_column(rule, column))
+        
+        Profiler.onFunctionEnd('varialize_columns')
 
         return res
 
@@ -527,6 +532,8 @@ class RuleGenerator:
     @staticmethod
     def variablize_literals(rule: dict) -> list:
 
+        Profiler.onFunctionStart('variablize_literals')
+
         res = []
 
         # 1. Get candidate literals from rule
@@ -537,6 +544,8 @@ class RuleGenerator:
         #
         for literal in literals:
             res.append(RuleGenerator.variablize_literal(rule, literal))
+        
+        Profiler.onFunctionEnd('variablize_literals')
         
         return res
     
@@ -690,6 +699,8 @@ class RuleGenerator:
     @staticmethod
     def variablize_aliases(rule: dict) -> list:
 
+        Profiler.onFunctionStart('variablize_aliases')
+
         res = []
 
         # 1. Get candidate aliases from rule
@@ -700,6 +711,8 @@ class RuleGenerator:
         #
         for alias in aliases:
             res.append(RuleGenerator.variablize_alias(rule, alias))
+        
+        Profiler.onFunctionEnd('variablize_aliases')
 
         return res
     
