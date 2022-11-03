@@ -163,6 +163,42 @@ def test_match_rule_remove_self_join_3():
     assert QueryRewriter.match(parse(query), rule, memo)
 
 
+def test_match_rule_subquery_to_join_1():
+    rule = get_rule('subquery_to_join')
+    assert rule is not None
+    
+    # match
+    query = '''
+        select empno, firstnme, lastname, phoneno
+        from employee
+        where workdept in
+            (select deptno
+                from department
+                where deptname = 'OPERATIONS')
+        and 1=1;
+    '''
+    memo = {}
+    assert QueryRewriter.match(parse(query), rule, memo)
+
+
+def test_match_rule_subquery_to_join_2():
+    rule = get_rule('subquery_to_join')
+    assert rule is not None
+    
+    # match
+    query = '''
+        select empno, firstnme, lastname, phoneno
+        from employee
+        where workdept in
+            (select deptno
+                from department
+                where deptname = 'OPERATIONS')
+        and age > 17;
+    '''
+    memo = {}
+    assert QueryRewriter.match(parse(query), rule, memo)
+
+
 def test_replace_rule_remove_cast_date():
     rule = get_rule('remove_cast_date')
     assert rule is not None
@@ -418,6 +454,30 @@ def test_rewrite_rule_remove_self_join_2():
         AND e1.age > 17;
     '''
     rule_keys = ['remove_self_join']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_subquery_to_join_1():
+    q0 = '''
+        select empno, firstnme, lastname, phoneno
+        from employee
+        where workdept in
+            (select deptno
+                from department
+                where deptname = 'OPERATIONS')
+        and 1=1;
+    '''
+    q1 = '''
+        select distinct empno, firstnme, lastname, phoneno
+        from employee, department
+        where employee.workdept = department.deptno 
+        and 1=1
+        and deptname = 'OPERATIONS';
+    '''
+    rule_keys = ['subquery_to_join']
 
     rules = [get_rule(k) for k in rule_keys]
     _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)

@@ -10,7 +10,27 @@ from core.rule_parser import VarType, VarTypesInfo
 VarStart = VarTypesInfo[VarType.Var]['internalBase']
 VarListStart = VarTypesInfo[VarType.VarList]['internalBase']
 
-
+# TODO - Help users to handle special cases' by-default behaviors:
+#        (1) A rule's pattern is always a partial-matching behavior:
+#            Example1, pattern p1:  where <tb1>.<a1> = <tb2>.<a2>  
+#                        should by-default means
+#                      pattern p1': where <tb1>.<a1> = <tb2>.<a2> and <<p1>>
+#               Reason:
+#                 p1 should match query: ... where employee.dept_id = department.id
+#                 p1 should also match query: ... where employee.dept_id = department.id and employee.age > 17
+#            Example2, pattern p2:  select <a1>
+#                        should by-default means
+#                      pattern p2': select <a1>, <<s1>>
+#               Reason:
+#                  p2 should match query: select id from ...
+#                  p2 should also match query: select id, age from ...
+#            Essentially, it means, a variable declared in a rule's pattern is mainly for reference purpose 
+#                                   when the rule needs to manipulate the variable in rewrite,
+#                                   if not declared explicitly in a rule's pattern, everything else should be kept unchanged.
+#            TODO - to implement the case (1), we need to add <<VarList>> variables to rules's select and where clause,
+#                                              we also need add a constant predicate (1=1) to the where clause of a given query
+#                                                to handle the coner case of only one predicate under where clause if not a 'and'-list. 
+#
 class QueryRewriter:
 
     # Beautify a query string
@@ -402,6 +422,12 @@ class QueryRewriter:
             for child in query:
                 ans.append(QueryRewriter.replace(child, rule, memo))
             query = ans
+        if QueryRewriter.is_dot_expression(query):
+            children = query.split('.')
+            ans = []
+            for child in children:
+                ans.append(QueryRewriter.replace(child, rule, memo))
+            query = '.'.join(ans)
         
         return query
     

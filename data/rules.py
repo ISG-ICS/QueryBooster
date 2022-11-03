@@ -87,6 +87,26 @@ and <<p1>>''',
         'database': 'postgresql'
     },
 
+    {
+        'id': 40,
+        'key': 'subquery_to_join',
+        'name': 'Subquery To Join',
+        'pattern': '''
+select <<s1>>
+from <tb1>
+where <a1> in (select <a2> from <tb2> where <<p2>>)
+and <<p1>>''',
+        'constraints': '',
+        'rewrite': '''
+select distinct <<s1>>
+from <tb1>, <tb2>
+where <tb1>.<a1> = <tb2>.<a2>
+and <<p1>>
+and <<p2>>''',
+        'actions': '',
+        'database': 'postgresql'
+    },
+
     # MySQL Rules
     # 
     {
