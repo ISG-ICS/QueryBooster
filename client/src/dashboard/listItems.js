@@ -4,7 +4,7 @@ import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import ListSubheader from '@mui/material/ListSubheader';
-import DashboardIcon from '@mui/icons-material/Dashboard';
+import BorderColorIcon from '@mui/icons-material/BorderColor';
 import HistoryIcon from '@mui/icons-material/History';
 import NotesIcon from '@mui/icons-material/Notes';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
@@ -23,6 +23,12 @@ export const mainListItems = (
         <NotesIcon fontSize="large" />
       </ListItemIcon>
       <ListItemText primary="Rewriting Rules" />
+    </ListItemButton>
+    <ListItemButton component={Link} to="/formulator">
+      <ListItemIcon>
+        <BorderColorIcon fontSize="large" />
+      </ListItemIcon>
+      <ListItemText primary="Rule Formulator" />
     </ListItemButton>
     <ListItemButton component={Link} to="/jdbc">
       <ListItemIcon>

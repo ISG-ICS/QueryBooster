@@ -20,6 +20,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import { mainListItems, secondaryListItems } from './listItems';
 import { Routes, Route } from "react-router-dom";
 import RewritingRules from './RewritingRules';
+import RuleFormulator from './RuleFormulator';
 import QueryLogs from './QueryLogs';
 import JDBCDrivers from './JDBCDrivers';
 
@@ -161,7 +162,7 @@ function DashboardContent() {
           }}
         >
           <Toolbar />
-          <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+          <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
             <Grid container spacing={3}>
               {/* Rewriting Rules */}
               <Grid item xs={12}>
@@ -169,6 +170,7 @@ function DashboardContent() {
                   <Routes>
                     {/* <RewritingRules /> */}
                     <Route exact path="/" element={<RewritingRules />} />
+                    <Route path="/formulator" element={<RuleFormulator />} />
                     <Route path="/jdbc" element={<JDBCDrivers />} />
                     <Route path="/queries" element={<QueryLogs />} />
                   </Routes>
