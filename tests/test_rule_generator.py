@@ -758,68 +758,138 @@ def test_variablize_alias_4():
 
 
 def test_generate_rule_graph_1():
-    seedRule = {
-        'pattern': 'CAST(created_at AS DATE)',
-        'rewrite': 'created_at'
-    }
+    q0 = "SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'"
+    q1 = "SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
 
-    rootRule = RuleGenerator.generate_rule_graph(seedRule)
-
+    rootRule = RuleGenerator.generate_rule_graph(q0, q1)
     assert type(rootRule) is dict
-    assert rootRule['pattern'] == seedRule['pattern']
-    assert rootRule['rewrite'] == seedRule['rewrite']
 
     children = rootRule['children']
-
     assert len(children) == 1
 
     childRule = children[0]
-
     assert childRule['pattern'] == 'CAST(<x1> AS DATE)'
     assert childRule['rewrite'] == '<x1>'
 
 
 def test_generate_rule_graph_2():
-    seedRule = {
-        'pattern': '''
-            select e1.name, e1.age, e2.salary
-            from employee e1,
-                employee e2
-            where e1.id = e2.id
-            and e1.age > 17
-            and e2.salary > 35000
-        ''',
-        'rewrite': '''
-            SELECT e1.name, e1.age, e1.salary 
-            FROM employee e1
-            WHERE e1.age > 17
-            AND e1.salary > 35000
-        '''
-    }
+    q0 = '''
+        select e1.name, e1.age, e2.salary
+        from employee e1,
+            employee e2
+        where e1.id = e2.id
+        and e1.age > 17
+        and e2.salary > 35000
+    '''
+    q1 = '''
+        SELECT e1.name, e1.age, e1.salary 
+        FROM employee e1
+        WHERE e1.age > 17
+        AND e1.salary > 35000
+    '''
 
-    rootRule = RuleGenerator.generate_rule_graph(seedRule)
-
-    assert type(rootRule) is dict
-    assert rootRule['pattern'] == seedRule['pattern']
-    assert rootRule['rewrite'] == seedRule['rewrite']
-
+    rootRule = RuleGenerator.generate_rule_graph(q0, q1)
     children = rootRule['children']
-
     assert len(children) == 8
 
 
 def test_generate_rule_graph_3():
-    seedRule = {
-        'pattern': "STRPOS(LOWER(text), 'iphone') > 0",
-        'rewrite': "ILIKE(text, '%iphone%')"
-    }
+    q0 = "SELECT * FROM t WHERE STRPOS(LOWER(text), 'iphone') > 0"
+    q1 = "SELECT * FROM t WHERE ILIKE(text, '%iphone%')"
 
-    rootRule = RuleGenerator.generate_rule_graph(seedRule)
-
+    rootRule = RuleGenerator.generate_rule_graph(q0, q1)
     assert type(rootRule) is dict
-    assert rootRule['pattern'] == seedRule['pattern']
-    assert rootRule['rewrite'] == seedRule['rewrite']
 
     children = rootRule['children']
-
     assert len(children) == 2
+
+
+def test_generate_rules_graph_1():
+    examples = [
+        {
+            "q0":"SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
+            "q1":"SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+        },
+        {
+            "q0":"SELECT * FROM t WHERE CAST(deleted_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
+            "q1":"SELECT * FROM t WHERE deleted_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+        }
+    ]
+
+    rootRules = RuleGenerator.generate_rules_graph(examples)
+    assert type(rootRules) is list
+    assert len(rootRules) == 2
+
+
+def test_recommend_rules_1():
+    examples = [
+        {
+            "q0":"SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
+            "q1":"SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+        },
+        {
+            "q0":"SELECT * FROM t WHERE CAST(deleted_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
+            "q1":"SELECT * FROM t WHERE deleted_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+        }
+    ]
+
+    rootRules = RuleGenerator.generate_rules_graph(examples)
+    assert type(rootRules) is list
+    assert len(rootRules) == 2
+
+    recommendRules = RuleGenerator.recommend_rules(rootRules, len(examples))
+    assert type(recommendRules) is list
+    assert len(recommendRules) == 1
+
+
+def test_recommend_rules_2():
+    examples = [
+        {
+            "q0":'''
+                    SELECT  SUM(1),
+                            CAST(state_name AS TEXT)
+                    FROM  tweets 
+                    WHERE  CAST(DATE_TRUNC('QUARTER', 
+                                            CAST(created_at AS DATE)) 
+                                AS DATE) IN 
+                                ((TIMESTAMP '2016-10-01 00:00:00.000'), 
+                                (TIMESTAMP '2017-01-01 00:00:00.000'), 
+                                (TIMESTAMP '2017-04-01 00:00:00.000'))
+                    AND  (STRPOS(UPPER(text), 'iphone') > 0)
+                    GROUP  BY 2;
+            ''',
+            "q1":'''
+                    SELECT  SUM(1),
+                            CAST(state_name AS TEXT)
+                    FROM  tweets 
+                    WHERE  CAST(DATE_TRUNC('QUARTER', 
+                                            CAST(created_at AS DATE)) 
+                            AS DATE) IN 
+                                ((TIMESTAMP '2016-10-01 00:00:00.000'), 
+                                (TIMESTAMP '2017-01-01 00:00:00.000'), 
+                                (TIMESTAMP '2017-04-01 00:00:00.000'))
+                    AND  text ILIKE '%iphone%'
+                    GROUP  BY 2;
+            '''
+        },
+        {
+            "q0":'''
+                    SELECT  *
+                    FROM  tweets 
+                    WHERE  (STRPOS(UPPER(state_name), 'iphone') > 0);
+            ''',
+            "q1":'''
+                    SELECT  *
+                    FROM  tweets 
+                    WHERE  state_name ILIKE '%iphone%';
+            '''
+        }
+    ]
+
+    rootRules = RuleGenerator.generate_rules_graph(examples)
+    assert type(rootRules) is list
+    assert len(rootRules) == 2
+
+    recommendRules = RuleGenerator.recommend_rules(rootRules, len(examples))
+    assert type(recommendRules) is list
+    assert len(recommendRules) == 1

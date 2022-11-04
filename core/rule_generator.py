@@ -259,12 +259,15 @@ class RuleGenerator:
             return fullSQL.replace('SELECT * FROM t WHERE ', '')
     
 
-    # Generate the candidate rule graph for a given seed rule
-    #   e.g., a seed rule = {'pattern': "STRPOS(LOWER(text), 'iphone') > 0", 
-    #                        'rewrite': "ILIKE(text, '%iphone%')"}
+    # Generate the candidate rule graph for a given rewriting pair q0 -> q1
     #
     @staticmethod
-    def generate_rule_graph(seedRule: dict) -> dict:
+    def generate_rule_graph(q0: str, q1: str) -> dict:
+        
+        # Generate seedRule from the given rewriting pair
+        #
+        seedRule = RuleGenerator.generate_seed_rule(q0, q1)
+
         # Parse seedRule's pattern and rewrite into SQL AST json
         #
         seedRule['pattern_json'], seedRule['rewrite_json'], seedRule['mapping'] = RuleParser.parse(seedRule['pattern'], seedRule['rewrite'])
@@ -889,3 +892,130 @@ class RuleGenerator:
                 for child in rule['children']:
                     queue.append((child, level + 1))
         return ans
+    
+    # Generate the candidate rules graph for a given set of examples
+    #   e.g., a example set = [
+    #                            {'q0': "SELECT * FROM tweets WHERE STRPOS(UPPER(text), 'iphone') > 0", 
+    #                             'q1': "SELECT * FROM tweets WHERE text ILIKE '%iphone%'"
+    #                            },
+    #                            {'q0': "SELECT * FROM tweets WHERE STRPOS(UPPER(state_name), 'iphone') > 0", 
+    #                             'q1': "SELECT * FROM tweets WHERE state_name ILIKE '%iphone%'"
+    #                            }
+    #                         ]
+    #
+    @staticmethod
+    def generate_rules_graph(examples: list) -> list:
+        graphRoots = []
+
+        # Generate a rule graph for each example
+        #
+        for example in examples:
+            graphRoot = RuleGenerator.generate_rule_graph(example['q0'], example['q1'])
+            graphRoots.append(graphRoot)
+        
+        # Traverse all rules in the graph:
+        #   (1) merge duplicate rules in the graph
+        #   (2) compute covered examples list for each rule
+        #
+        visited = {}
+        for graphRoot in graphRoots:
+            graphRootFingerPrint = RuleGenerator.fingerPrint(graphRoot)
+            visited[graphRootFingerPrint] = graphRoot
+            queue = [graphRoot]
+            while len(queue) > 0:
+                currentRule = queue.pop(0)
+                # compute covered examples for currentRule
+                currentRule['coveredExamples'] = RuleGenerator.coveredExamples(currentRule, examples)
+                # update pointers if any child rule is visited
+                newChildren = []
+                for childRule in currentRule['children']:
+                    childRuleFingerPrint = RuleGenerator.fingerPrint(childRule)
+                    if childRuleFingerPrint in visited.keys():
+                        newChildren.append(visited[childRuleFingerPrint])
+                    else:
+                        newChildren.append(childRule)
+                        queue.append(childRule)
+                        visited[childRuleFingerPrint] = childRule
+                currentRule['children'] = newChildren
+        
+        return graphRoots
+
+    # Compute covered examples' indexes for a given rule
+    #
+    @staticmethod
+    def coveredExamples(rule: dict, examples: list) -> list:
+        ans = []
+
+        # preprocess rule
+        parsed_rule = {
+            'id': -1,
+            'pattern': rule['pattern'],
+            'constraints': rule['constraints'],
+            'rewrite': rule['rewrite'],
+            'actions': rule['actions']
+        }
+        parsed_rule['pattern_json'], parsed_rule['rewrite_json'], parsed_rule['mapping'] = RuleParser.parse(parsed_rule['pattern'], parsed_rule['rewrite'])
+        parsed_rule['constraints_json'] = RuleParser.parse_constraints(parsed_rule['constraints'], parsed_rule['mapping'])
+        parsed_rule['actions_json'] = RuleParser.parse_actions(parsed_rule['actions'], parsed_rule['mapping'])
+        parsed_rule['pattern_json'] = json.loads(parsed_rule['pattern_json'])
+        parsed_rule['constraints_json'] = json.loads(parsed_rule['constraints_json'])
+        parsed_rule['rewrite_json'] = json.loads(parsed_rule['rewrite_json'])
+        parsed_rule['actions_json'] = json.loads(parsed_rule['actions_json'])
+        parsed_rule['mapping'] = json.loads(parsed_rule['mapping'])
+
+        for index, example in enumerate(examples):
+            q0 = example['q0']
+            q1 = example['q1']
+            q1_test, _ = QueryRewriter.rewrite(q0, [parsed_rule])
+            if mosql.format(mosql.parse(q1)) == q1_test:
+                ans.append(index)
+        
+        return ans
+    
+    # Recommend rules given a rules graph (a list of roots pointed by rootRules)
+    #   TODO - currently, recommend the least general rules that cover all examples
+    #
+    @staticmethod
+    def recommend_rules(rootRules: dict, numberOfExamples: int) -> dict:
+        ans = []
+        
+        # Traverse all rules and put them in a set with the fingerprint as the key
+        #
+        rulesSet = {}
+        for rootRule in rootRules:
+            # breadth-first-search
+            queue = [rootRule]
+            while len(queue) > 0:
+                rule = queue.pop(0)
+                fingerPrint = RuleGenerator.fingerPrint(rule)
+                if fingerPrint not in rulesSet.keys():
+                    priority1 = - len(rule['coveredExamples'])
+                    priority2 = RuleGenerator.numberOfVariables(rule)
+                    rulesSet[fingerPrint] = ((priority1, priority2), rule)
+                    # enqueue children
+                    for child in rule['children']:
+                        queue.append(child)
+        
+        # Sort the rules by its priority in ascending order:
+        #    The priority is defined as a tuple (- # of examples covered, # of variables)
+        #
+        rules = rulesSet.values()
+        sortedRules = sorted(rules, key=lambda k: k[0])
+
+        # Greedily put rules into the result set with the smallest priority first,
+        #   until all examples are covered by the result set
+        uncoveredExamples = set(range(0, numberOfExamples))
+        for priority, rule in sortedRules:
+            coveredExamples = set(rule['coveredExamples'])
+            if len(uncoveredExamples.intersection(coveredExamples)) > 0:
+                ans.append(rule)
+                uncoveredExamples = uncoveredExamples - coveredExamples
+            if len(uncoveredExamples) == 0:
+                break
+
+        return ans
+    
+    @staticmethod
+    def numberOfVariables(rule: dict) -> int:
+        return len(json.loads(rule['mapping']).keys())
+

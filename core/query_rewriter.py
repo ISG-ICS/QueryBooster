@@ -1,5 +1,6 @@
 from mo_sql_parsing import parse
 from mo_sql_parsing import format
+import copy
 import numbers
 import sqlparse
 from typing import Any
@@ -404,7 +405,7 @@ class QueryRewriter:
         if query is memo['rule']:
             # replace query by rule's rewrite
             # 
-            query = rule['rewrite_json']
+            query = copy.deepcopy(rule['rewrite_json'])
 
         # 2nd case, find rewrite's Var or VarList
         # 

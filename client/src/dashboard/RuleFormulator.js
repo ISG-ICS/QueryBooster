@@ -16,6 +16,9 @@ import databaseOptions from '../constants/databaseOptions';
 import defaultRulesData from '../mock-api/listRules';
 import defaultRecommendRulesData from '../mock-api/recommendRules';
 
+import NiceModal from '@ebay/nice-modal-react';
+import RulesGraph from './RulesGraph';
+
 
 export default function RuleFormulator() {
 
@@ -83,6 +86,10 @@ export default function RuleFormulator() {
   };
 
   const showRuleGraph = () => {
+    NiceModal.show(RulesGraph, {rewriteExamples: examples, database: database})
+    .then((res) => {
+      console.log(res);
+    });
   };
 
   // Set up states for rewriting rules

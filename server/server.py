@@ -218,8 +218,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         request_json = json.loads(request)
         q0 = request_json["q0"]
         q1 = request_json["q1"]
-        seed_rule_json = RuleGenerator.generate_seed_rule(q0, q1)
-        root_rule_json = RuleGenerator.generate_rule_graph(seed_rule_json)
+        root_rule_json = RuleGenerator.generate_rule_graph(q0, q1)
 
         # transform the rule graph to the UI required format
         rule_graph_json = self.rm.transform_rule_graph(root_rule_json)
@@ -241,6 +240,40 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         response.write(json.dumps(rule_graph_json).encode('utf-8'))
         self.wfile.write(response.getvalue())
     
+    def post_generate_rules_graph(self):
+        content_length = int(self.headers['Content-Length'])
+        body = self.rfile.read(content_length)
+        request = body.decode('utf-8')
+
+        # logging
+        logging.info("\n[/generateRulesGraph] request:")
+        logging.info(request)
+
+        # generate rules graph from rule generator
+        request_json = json.loads(request)
+        database = request_json['database']
+        examples = request_json['examples']
+        root_rules_json = RuleGenerator.generate_rules_graph(examples)
+
+        # transform the rules graph to the UI required format
+        rule_graph_json = self.rm.transform_rules_graph(root_rules_json)
+
+        # patch pattern and rewrite in rules of the rule_graph_json
+        #
+        for rule in rule_graph_json['rules']:
+            rule['pattern'] = QueryPatcher.patch(rule['pattern'], database)
+            rule['rewrite'] = QueryPatcher.patch(rule['rewrite'], database)
+
+        # logging
+        logging.info("\n[/generateRulesGraph] profiles:")
+        logging.info(Profiler.show())
+
+        self.send_response(200)
+        self.end_headers()
+        response = BytesIO()
+        response.write(json.dumps(rule_graph_json).encode('utf-8'))
+        self.wfile.write(response.getvalue())
+    
     def post_recommend_rule(self):
         content_length = int(self.headers['Content-Length'])
         body = self.rfile.read(content_length)
@@ -254,8 +287,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         request_json = json.loads(request)
         q0 = request_json["q0"]
         q1 = request_json["q1"]
-        seed_rule_json = RuleGenerator.generate_seed_rule(q0, q1)
-        root_rule_json = RuleGenerator.generate_rule_graph(seed_rule_json)
+        root_rule_json = RuleGenerator.generate_rule_graph(q0, q1)
         recommend_rule_json = RuleGenerator.recommend_rule(root_rule_json)
 
         # patch pattern and rewrite in recommend rule
@@ -268,6 +300,34 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         response = BytesIO()
         response.write(json.dumps(recommend_rule_json).encode('utf-8'))
+        self.wfile.write(response.getvalue())
+    
+    def post_recommend_rules(self):
+        content_length = int(self.headers['Content-Length'])
+        body = self.rfile.read(content_length)
+        request = body.decode('utf-8')
+
+        # logging
+        logging.info("\n[/recommendRules] request:")
+        logging.info(request)
+
+        # generate rules graph from rule generator
+        request_json = json.loads(request)
+        database = request_json['database']
+        examples = request_json['examples']
+        root_rules_json = RuleGenerator.generate_rules_graph(examples)
+        recommend_rules_json = RuleGenerator.recommend_rules(root_rules_json, len(examples))
+
+        # patch pattern and rewrite in recommend rules
+        #
+        for rule in recommend_rules_json:
+            rule['pattern'] = QueryPatcher.patch(rule['pattern'], database)
+            rule['rewrite'] = QueryPatcher.patch(rule['rewrite'], database)
+
+        self.send_response(200)
+        self.end_headers()
+        response = BytesIO()
+        response.write(json.dumps(recommend_rules_json).encode('utf-8'))
         self.wfile.write(response.getvalue())
 
     def do_POST(self):
@@ -285,8 +345,12 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.post_generate_seed_rule()
         elif self.path == "/generateRuleGraph":
             self.post_generate_rule_graph()
+        elif self.path == "/generateRulesGraph":
+            self.post_generate_rules_graph()
         elif self.path == "/recommendRule":
             self.post_recommend_rule()
+        elif self.path == "/recommendRules":
+            self.post_recommend_rules()
         elif self.path == "/addRule":
             self.post_add_rule()
         elif self.path == "/deleteRule":
