@@ -7,7 +7,9 @@ import Dialog from '@mui/material/Dialog';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import Grid from '@mui/material/Grid';
+import Link from '@mui/material/Link';
 import NiceModal, { useModal } from '@ebay/nice-modal-react';
+import { Link as RouterLink} from "react-router-dom";
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import defaultRecommendRuleData from '../mock-api/recommendRule';
@@ -211,6 +213,7 @@ const AddRewritingRule = NiceModal.create(() => {
                   <Stack direction="row" spacing={2}>
                     <Button variant="contained" color="primary" onClick={onFormulate}>Formulate</Button>
                     <Button variant="outlined" color="primary" onClick={showRuleGraph}>Rule Graph</Button>
+                    <Link component={RouterLink} to="/formulator" onClick={()=>{modal.hide()}}>Use more examples</Link>
                   </Stack>
                 </Grid>
               </Grid>
