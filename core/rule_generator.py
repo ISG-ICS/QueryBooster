@@ -382,10 +382,13 @@ class RuleGenerator:
             #            path = ['from', 'name'], patternASTJson = 'e1'
             #      case-2: {'from': 'employee'}
             #            path = ['from']
+            #      case-3: {'from': [..., {'inner join': {'value': 'employee', 'name': 'e1'}}]}
             #
             if not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value') and \
                not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name') and \
-               not (len(path) >=1 and path[-1] == 'from'):
+               not (len(path) >=1 and path[-1] == 'from') and \
+               not (len(path) >= 2 and path[-2] == 'inner join' and path[-1] == 'value') and \
+               not (len(path) >= 2 and path[-2] == 'inner join' and path[-1] == 'name'):
                 # ignore * in SELECT clause
                 #
                 if astJson != '*':
@@ -398,10 +401,13 @@ class RuleGenerator:
             #            path = ['from', 'name'], patternASTJson = 'e1'
             #      case-2: {'from': 'employee'}
             #            path = ['from']
+            #      case-3: {'from': [..., {'inner join': {'value': 'employee', 'name': 'e1'}}]}
             #
             if not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value') and \
                not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name') and \
-               not (len(path) >=1 and path[-1] == 'from'):
+               not (len(path) >=1 and path[-1] == 'from') and \
+               not (len(path) >= 2 and path[-2] == 'inner join' and path[-1] == 'value') and \
+               not (len(path) >= 2 and path[-2] == 'inner join' and path[-1] == 'name'):
                 candidate = astJson.split('.')[-1]
                 # skip case: e1.<a1>
                 #
@@ -760,17 +766,22 @@ class RuleGenerator:
         # Case-3: string
         if QueryRewriter.is_string(astJson):
             # alias is the value of "name" if:
-            #   path = ['from', 'name'], patternASTJson is string
+            #   case-1: path = ['from', 'name'], patternASTJson is string
+            #   case-2: path = ['inner join', 'name'], patternASTJson is string
             #
             if len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name':
+                res.add(astJson)
+            if len(path) >= 2 and path[-2] == 'inner join' and path[-1] == 'name':
                 res.add(astJson)
         
         # Case-4: dot expression
         if QueryRewriter.is_dot_expression(astJson):
-            # skip case: {'from': [{'value': 'schema.table', 'name': 't1'}]}
-            #            path = ['from', 'value'], patternASTJson = 'schema.table'
+            # skip case-1: {'from': [{'value': 'schema.table', 'name': 't1'}]}
+            #              path = ['from', 'value'], patternASTJson = 'schema.table'
+            #      case-2: {'inner join': {'value': 'schema.table', 'name': 't1'}}
             #
-            if not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value'):
+            if not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value') and \
+               not (len(path) >= 2 and path[-2] == 'inner join' and path[-1] == 'value'):
                 # TODO - assert only one '.' exist in dot expression
                 if len(astJson.split('.')) == 2:
                     candidate = astJson.split('.')[0]

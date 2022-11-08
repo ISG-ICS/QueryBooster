@@ -343,6 +343,33 @@ def test_columns_6():
     assert set(test_columns) == set(columns)
 
 
+def test_columns_7():
+    pattern = '''
+        SELECT *
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminrolei2_.admin_role_id = 1 
+    '''
+    rewrite = '''
+        SELECT *
+        FROM   blc_admin_permission AS adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  allroles1_.admin_role_id = 1
+    '''
+    columns = ["admin_permission_id", "admin_role_id"]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_columns = RuleGenerator.columns(pattern_json, rewrite_json)
+    assert set(test_columns) == set(columns)
+
+
 def test_deparse_1():
 
     rule = {
@@ -519,6 +546,33 @@ def test_literals_2():
     assert set(test_literals) == set(literals)
 
 
+def test_literals_3():
+    pattern = '''
+        SELECT *
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminrolei2_.admin_role_id = 1 
+    '''
+    rewrite = '''
+        SELECT *
+        FROM   blc_admin_permission AS adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  allroles1_.admin_role_id = 1
+    '''
+    literals = [1]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_literals = RuleGenerator.literals(pattern_json, rewrite_json)
+    assert set(test_literals) == set(literals)
+
+
 def test_variablize_literal_1():
 
     rule = {
@@ -574,12 +628,12 @@ def test_variablize_literal_2():
 def test_aliases_1():
     pattern = "STRPOS(LOWER(tweets.text), 'iphone') > 0"
     rewrite = "ILIKE(tweets.text, '%iphone%')"
-    columns = ["tweets"]
+    aliases = ["tweets"]
 
     pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
 
-    test_columns = RuleGenerator.aliases(pattern_json, rewrite_json)
-    assert set(test_columns) == set(columns)
+    test_aliases = RuleGenerator.aliases(pattern_json, rewrite_json)
+    assert set(test_aliases) == set(aliases)
 
 
 def test_aliases_2():
@@ -599,12 +653,12 @@ def test_aliases_2():
         WHERE e1.age > 17
         AND e1.salary > 35000;
     '''
-    columns = ["e1", "e2"]
+    aliases = ["e1", "e2"]
 
     pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
 
-    test_columns = RuleGenerator.aliases(pattern_json, rewrite_json)
-    assert set(test_columns) == set(columns)
+    test_aliases = RuleGenerator.aliases(pattern_json, rewrite_json)
+    assert set(test_aliases) == set(aliases)
 
 
 def test_aliases_3():
@@ -624,12 +678,12 @@ def test_aliases_3():
         WHERE e1.age > 17
         AND e1.salary > 35000;
     '''
-    columns = ["e1"]
+    aliases = ["e1"]
 
     pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
 
-    test_columns = RuleGenerator.aliases(pattern_json, rewrite_json)
-    assert set(test_columns) == set(columns)
+    test_aliases = RuleGenerator.aliases(pattern_json, rewrite_json)
+    assert set(test_aliases) == set(aliases)
 
 
 def test_aliases_4():
@@ -645,12 +699,39 @@ def test_aliases_4():
         WHERE age > 17
         AND salary > 35000;
     '''
-    columns = ["e1"]
+    aliases = ["e1"]
 
     pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
 
-    test_columns = RuleGenerator.aliases(pattern_json, rewrite_json)
-    assert set(test_columns) == set(columns)
+    test_aliases = RuleGenerator.aliases(pattern_json, rewrite_json)
+    assert set(test_aliases) == set(aliases)
+
+
+def test_aliases_5():
+    pattern = '''
+        SELECT *
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminrolei2_.admin_role_id = 1 
+    '''
+    rewrite = '''
+        SELECT *
+        FROM   blc_admin_permission AS adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  allroles1_.admin_role_id = 1
+    '''
+    aliases = ["adminpermi0_", "allroles1_", "adminrolei2_"]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_aliases = RuleGenerator.aliases(pattern_json, rewrite_json)
+    assert set(test_aliases) == set(aliases)
 
 
 def test_variablize_alias_1():
@@ -802,6 +883,31 @@ def test_generate_rule_graph_3():
 
     children = rootRule['children']
     assert len(children) == 2
+
+
+def test_generate_rule_graph_4():
+    q0 = '''
+        SELECT *
+        FROM   blc_admin_permission admipermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminrolei2_.admin_role_id = 1 
+    '''
+    q1 = '''
+        SELECT *
+        FROM   blc_admin_permission AS adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  allroles1_.admin_role_id = 1
+    '''
+
+    rootRule = RuleGenerator.generate_rule_graph(q0, q1)
+    children = rootRule['children']
+    assert len(children) == 7
 
 
 def test_generate_rules_graph_1():

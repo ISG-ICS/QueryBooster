@@ -224,7 +224,7 @@ def test_match_rule_join_to_filter_1():
     # match
     query = '''
         SELECT *
-        FROM   blc_admin_permission admipermi0_
+        FROM   blc_admin_permission adminpermi0_
             INNER JOIN blc_admin_role_permission_xref allroles1_
                     ON adminpermi0_.admin_permission_id =
                         allroles1_.admin_permission_id
@@ -244,7 +244,7 @@ def test_match_rule_join_to_filter_2():
     # match
     query = '''
         SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
-        FROM   blc_admin_permission admipermi0_
+        FROM   blc_admin_permission adminpermi0_
             INNER JOIN blc_admin_role_permission_xref allroles1_
                     ON adminpermi0_.admin_permission_id =
                         allroles1_.admin_permission_id
@@ -619,7 +619,7 @@ def test_rewrite_rule_subquery_to_join_2():
 def test_rewrite_rule_join_to_filter_1():
     q0 = '''
         SELECT *
-        FROM   blc_admin_permission admipermi0_
+        FROM   blc_admin_permission adminpermi0_
             INNER JOIN blc_admin_role_permission_xref allroles1_
                     ON adminpermi0_.admin_permission_id =
                         allroles1_.admin_permission_id
@@ -647,7 +647,7 @@ def test_rewrite_rule_join_to_filter_1():
 def test_rewrite_rule_join_to_filter_2():
     q0 = '''
         SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
-        FROM   blc_admin_permission admipermi0_
+        FROM   blc_admin_permission adminpermi0_
             INNER JOIN blc_admin_role_permission_xref allroles1_
                     ON adminpermi0_.admin_permission_id =
                         allroles1_.admin_permission_id
@@ -677,7 +677,7 @@ def test_rewrite_rule_join_to_filter_2():
 # def test_rewrite_rule_join_to_filter_3():
 #     q0 = '''
 #         SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
-#         FROM   blc_admin_permission admipermi0_
+#         FROM   blc_admin_permission adminpermi0_
 #             INNER JOIN blc_admin_role_permission_xref allroles1_
 #                     ON adminpermi0_.admin_permission_id =
 #                         allroles1_.admin_permission_id
