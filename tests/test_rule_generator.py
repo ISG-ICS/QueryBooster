@@ -838,6 +838,117 @@ def test_variablize_alias_4():
         ''')
 
 
+def test_tables_1():
+    pattern = "STRPOS(LOWER(text), 'iphone') > 0"
+    rewrite = "ILIKE(text, '%iphone%')"
+    tables = []
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_tables = RuleGenerator.tables(pattern_json, rewrite_json)
+    assert set(test_tables) == set(tables)
+
+
+def test_tables_2():
+    pattern = '''
+        select e1.name, e1.age, e2.salary
+        from employee e1,
+            employee e2
+        where e1.id = e2.id
+        and e1.age > 17
+        and e2.salary  > 35000;
+    '''
+    rewrite = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e1.salary 
+        FROM employee e1
+        WHERE e1.age > 17
+        AND e1.salary > 35000;
+    '''
+    tables = ["employee"]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_tables = RuleGenerator.tables(pattern_json, rewrite_json)
+    assert set(test_tables) == set(tables)
+
+
+def test_tables_3():
+    pattern = '''
+        select e1.name, e1.age, e2.salary
+        from <tb1> e1,
+             <tb1> e2
+        where e1.<a1> = e2.<a1>
+        and e1.age > 17
+        and e2.salary > 35000;
+    '''
+    rewrite = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e1.salary 
+        FROM <tb1> e1
+        WHERE e1.age > 17
+        AND e1.salary > 35000;
+    '''
+    tables = []
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_tables = RuleGenerator.tables(pattern_json, rewrite_json)
+    assert set(test_tables) == set(tables)
+
+
+def test_tables_4():
+    pattern = '''
+        select *
+        from employee
+        where workdept in
+            (select deptno
+                from department
+                where deptname = 'OPERATIONS');
+    '''
+    rewrite = '''
+        select distinct *
+        from employee emp, department dept
+        where emp.workdept = dept.deptno 
+        and dept.deptname = 'OPERATIONS';
+    '''
+    tables = ["employee", "department"]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_tables = RuleGenerator.tables(pattern_json, rewrite_json)
+    assert set(test_tables) == set(tables)
+
+
+def test_tables_5():
+    pattern = '''
+        SELECT *
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminrolei2_.admin_role_id = 1 
+    '''
+    rewrite = '''
+        SELECT *
+        FROM   blc_admin_permission AS adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  allroles1_.admin_role_id = 1
+    '''
+    tables = ["blc_admin_permission", "blc_admin_role_permission_xref", "blc_admin_role"]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_tables = RuleGenerator.tables(pattern_json, rewrite_json)
+    assert set(test_tables) == set(tables)
+
+
 def test_generate_rule_graph_1():
     q0 = "SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'"
     q1 = "SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
@@ -871,7 +982,7 @@ def test_generate_rule_graph_2():
 
     rootRule = RuleGenerator.generate_rule_graph(q0, q1)
     children = rootRule['children']
-    assert len(children) == 8
+    assert len(children) == 9
 
 
 def test_generate_rule_graph_3():
@@ -907,7 +1018,7 @@ def test_generate_rule_graph_4():
 
     rootRule = RuleGenerator.generate_rule_graph(q0, q1)
     children = rootRule['children']
-    assert len(children) == 7
+    assert len(children) == 10
 
 
 def test_generate_rules_graph_1():

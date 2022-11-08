@@ -875,11 +875,190 @@ class RuleGenerator:
                             return var + '.' + astJson.split('.')[1]
         
         return astJson
+    
+    # transformation function - variablize tables in a rule
+    #   generate a list of child rules 
+    #
+    @staticmethod
+    def variablize_tables(rule: dict) -> list:
+
+        Profiler.onFunctionStart('varialize_tables')
+
+        res = []
+
+        # 1. Get candidate tables from rule
+        #
+        tables = RuleGenerator.tables(rule['pattern_json'], rule['rewrite_json'])
+
+        # 2. Traverse candidate tables, make one of them variable, and generate a new rule
+        #
+        for table in tables:
+            res.append(RuleGenerator.variablize_table(rule, table))
+        
+        Profiler.onFunctionEnd('varialize_tables')
+
+        return res
+
+    # get list of common tables in a seed rule's pattern_json and rewrite_json
+    #
+    @staticmethod
+    def tables(pattern_json: str, rewrite_json: str) -> list:
+        
+        patternASTJson = json.loads(pattern_json)
+        rewriteASTJson = json.loads(rewrite_json)
+
+        # traverse the AST jsons to get all tables
+        patternTables = RuleGenerator.tablesOfASTJson(patternASTJson, [])
+        rewriteTables = RuleGenerator.tablesOfASTJson(rewriteASTJson, [])
+
+        # TODO - patternTables should be superset of rewriteTables
+        #
+        return list(patternTables)
+    
+    # recursively get set of tables in a rule pattern/rewrite's AST Json
+    #
+    @staticmethod
+    def tablesOfASTJson(astJson: Any, path: list) -> set:
+        res = set()
+
+        # Case-1: dict
+        #
+        if QueryRewriter.is_dict(astJson):
+            for key, value in astJson.items():
+                # note: key can not be table, only traverse each value
+                res.update(RuleGenerator.tablesOfASTJson(value, path + [key]))
+
+        # Case-2: list
+        # 
+        if QueryRewriter.is_list(astJson):
+            for child in astJson:
+                res.update(RuleGenerator.tablesOfASTJson(child, path))
+
+        # Case-3: string
+        if QueryRewriter.is_string(astJson):
+            # case-1: {'from': 'employee'}
+            #         path = ['from'], patternASTJson = 'employee'
+            # case-2: {'from': [{'value': 'employee', 'name': 'e1'}]}
+            #         path = ['from', 'value'], patternASTJson = 'employee'
+            # case-3: {'from': [..., {'inner join': {'value': 'employee', 'name': 'e1'}}]}
+            #         path = ['from', 'inner join', 'value'], patternASTJson = 'employee'
+            #
+            if len(path) >=1 and path[-1] == 'from' or \
+               len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value' or \
+               len(path) >= 2 and path[-2] == 'inner join' and path[-1] == 'value':
+                res.add(astJson)
+        
+        # Case-4: dot expression
+        if QueryRewriter.is_dot_expression(astJson):
+            # case-1: {'from': 'employee'}
+            #         path = ['from'], patternASTJson = 'employee'
+            # case-2: {'from': [{'value': 'employee', 'name': 'e1'}]}
+            #         path = ['from', 'value'], patternASTJson = 'employee'
+            # case-3: {'from': [..., {'inner join': {'value': 'employee', 'name': 'e1'}}]}
+            #         path = ['from', 'inner join', 'value'], patternASTJson = 'employee'
+            #
+            if len(path) >=1 and path[-1] == 'from' or \
+               len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value' or \
+               len(path) >= 2 and path[-2] == 'inner join' and path[-1] == 'value':
+                res.add(astJson)
+        
+        return res
+    
+    # variablize the given table in given rule and generate a new rule
+    #
+    @staticmethod
+    def variablize_table(rule: dict, table: str) -> dict:
+
+        # create a new rule based on rule
+        new_rule = copy.deepcopy(rule)
+
+        # Find a variable name for the given table
+        #
+        new_rule_mapping = json.loads(new_rule['mapping'])
+        new_rule_mapping, newVarInternal = RuleGenerator.findNextVarInternal(new_rule_mapping)
+        new_rule['mapping'] = json.dumps(new_rule_mapping)
+
+        # Replace given table into newVarInternal in new rule
+        #
+        new_rule_pattern_json = json.loads(new_rule['pattern_json'])
+        new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
+        new_rule_pattern_json = RuleGenerator.replaceTablesOfASTJson(new_rule_pattern_json, [], table, newVarInternal)
+        new_rule_rewrite_json = RuleGenerator.replaceTablesOfASTJson(new_rule_rewrite_json, [], table, newVarInternal)
+        new_rule['pattern_json'] = json.dumps(new_rule_pattern_json)
+        new_rule['rewrite_json'] = json.dumps(new_rule_rewrite_json)
+
+        # TODO - add newVarInternal is a table constraint into new rule's constraints
+
+        # Deparse new rule's pattern_json/rewrite_json into pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.deparse(new_rule_pattern_json)
+        new_rule['rewrite'] = RuleGenerator.deparse(new_rule_rewrite_json)
+
+        # Dereplace vars from new rule's pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.dereplaceVars(new_rule['pattern'], new_rule_mapping)
+        new_rule['rewrite'] = RuleGenerator.dereplaceVars(new_rule['rewrite'], new_rule_mapping)
+
+        return new_rule
+    
+    # recursively replace given table into given var in a rule's pattern/rewrite AST Json
+    #
+    @staticmethod
+    def replaceTablesOfASTJson(astJson: Any, path: list, table: str, var: str) -> Any:
+        
+        # Case-1: dict
+        #
+        if QueryRewriter.is_dict(astJson):
+            for key, value in astJson.items():
+                # note: key can not be table, only traverse each value
+                astJson[key] = RuleGenerator.replaceTablesOfASTJson(value, path + [key], table, var)
+            return astJson
+
+        # Case-2: list
+        # 
+        if QueryRewriter.is_list(astJson):
+            res = []
+            for child in astJson:
+                res.append(RuleGenerator.replaceTablesOfASTJson(child, path, table, var))
+            return res
+
+        # Case-3: string
+        if QueryRewriter.is_string(astJson):
+            # case-1: {'from': 'employee'}
+            #         path = ['from'], patternASTJson = 'employee'
+            # case-2: {'from': [{'value': 'employee', 'name': 'e1'}]}
+            #         path = ['from', 'value'], patternASTJson = 'employee'
+            # case-3: {'from': [..., {'inner join': {'value': 'employee', 'name': 'e1'}}]}
+            #         path = ['from', 'inner join', 'value'], patternASTJson = 'employee'
+            #
+            if len(path) >=1 and path[-1] == 'from' or \
+               len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value' or \
+               len(path) >= 2 and path[-2] == 'inner join' and path[-1] == 'value':
+                if astJson == table:
+                    return var
+        
+        # Case-4: dot expression
+        if QueryRewriter.is_dot_expression(astJson):
+            # case-1: {'from': 'employee'}
+            #         path = ['from'], patternASTJson = 'employee'
+            # case-2: {'from': [{'value': 'employee', 'name': 'e1'}]}
+            #         path = ['from', 'value'], patternASTJson = 'employee'
+            # case-3: {'from': [..., {'inner join': {'value': 'employee', 'name': 'e1'}}]}
+            #         path = ['from', 'inner join', 'value'], patternASTJson = 'employee'
+            #
+            if len(path) >=1 and path[-1] == 'from' or \
+               len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value' or \
+               len(path) >= 2 and path[-2] == 'inner join' and path[-1] == 'value':
+                if astJson == table:
+                    return var
+        
+        return astJson
 
     RuleTransformations = {
         'variablize_columns' : variablize_columns,
         'variablize_literals' : variablize_literals,
-        'variablize_aliases': variablize_aliases
+        'variablize_aliases': variablize_aliases,
+        'variablize_tables': variablize_tables
     }
 
     # Recommend a rule given a rule graph (pointed by rootRule)
