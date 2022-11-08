@@ -98,6 +98,15 @@ class QueryRewriter:
     # 
     @staticmethod
     def match_node(query_node: Any, rule_node: Any, rule: dict, memo: dict) -> bool:
+
+        # Special case for value of 'select' and 'from':
+        #   e.g., query_node = [{"value": "e1.name"}, {"value": "e1.age"}, {"value": "e2.salary"}]
+        #         rule_node = {"value": "VL1"}
+        #   The idea is escalate the "VL1" from inside {"value": "VL1"} to outside
+        # 
+        if QueryRewriter.is_dict(rule_node) and 'value' in rule_node.keys() and QueryRewriter.is_varList(rule_node['value']):
+            memo[rule_node['value']] = query_node
+            return True
         
         # Case-1: rule_node is a Var, it can match a constant or a dict
         # 
@@ -139,15 +148,6 @@ class QueryRewriter:
         if QueryRewriter.is_dot_expression(rule_node):
             if QueryRewriter.is_dot_expression(query_node):
                 return QueryRewriter.match_dot_expression(query_node, rule_node, rule, memo)
-        
-        # Special case for value of 'select' and 'from':
-        #   e.g., query_node = [{"value": "e1.name"}, {"value": "e1.age"}, {"value": "e2.salary"}]
-        #         rule_node = {"value": "VL1"}
-        #   The idea is escalate the "VL1" from inside {"value": "VL1"} to outside
-        # 
-        if QueryRewriter.is_dict(rule_node) and 'value' in rule_node.keys() and QueryRewriter.is_varList(rule_node['value']):
-            memo[rule_node['value']] = query_node
-            return True
 
         return False
 

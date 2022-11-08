@@ -107,6 +107,30 @@ and <<p2>>''',
         'database': 'postgresql'
     },
 
+    {
+        'id': 50,
+        'key': 'join_to_filter',
+        'name': 'Join To Filter',
+        'pattern': '''
+select <<s1>>
+from <tb1> <t1>
+inner join <tb2> <t2> on <t1>.<a1> = <t2>.<a2>
+inner join <tb3> <t3> on <t2>.<a3> = <t3>.<a4>
+where <t3>.<a4> = <c1>
+and <<p1>>
+        ''',
+        'constraints': '',
+        'rewrite': '''
+select <<s1>>
+from <tb1> <t1>
+inner join <tb2> <t2> on <t1>.<a1> = <t2>.<a2>
+where <t2>.<a3> = <c1>
+and <<p1>>
+        ''',
+        'actions': '',
+        'database': 'postgresql'
+    },
+
     # MySQL Rules
     # 
     {
