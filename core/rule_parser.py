@@ -124,7 +124,7 @@ class RuleParser:
                     # var -> varInternal map
                     #   e.g., <x> ==> V1, <<y>> ==> VL1
                     specificRegexPattern = VarTypesInfo[varType]['markerStart'] + var + VarTypesInfo[varType]['markerEnd']
-                    varInternal = varInternalBase + str(varInternalCount)
+                    varInternal = varInternalBase + str(varInternalCount).zfill(3)
                     varInternalCount += 1
                     # replace var with varInternal in both pattern and rewrite
                     pattern = re.sub(specificRegexPattern, varInternal, pattern)

@@ -89,8 +89,8 @@ def test_replaceVars():
     pattern = 'CAST(<x> AS DATE)'
     rewrite = '<x>'
     pattern, rewrite, mapping = RuleParser.replaceVars(pattern, rewrite)
-    assert pattern == 'CAST(V1 AS DATE)'
-    assert rewrite == 'V1'
+    assert pattern == 'CAST(V001 AS DATE)'
+    assert rewrite == 'V001'
 
     # multiple var and varList case
     pattern = '''
@@ -107,16 +107,16 @@ def test_replaceVars():
     '''
     pattern, rewrite, mapping = RuleParser.replaceVars(pattern, rewrite)
     assert pattern == '''
-        select VL1
-          from V1 V2, 
-               V3 V4
-         where V2.V5=V4.V6
-           and VL2
+        select VL001
+          from V001 V002, 
+               V003 V004
+         where V002.V005=V004.V006
+           and VL002
     '''
     assert rewrite == '''
-        select VL1 
-          from V1 V2
-         where VL2
+        select VL001 
+          from V001 V002
+         where VL002
     '''
 
 def test_parse():
@@ -129,8 +129,8 @@ def test_parse():
         'rewrite': '<x>'
     }
     internal_rule = {
-        'pattern_json': '{"cast": ["V1", {"date": {}}]}',
-        'rewrite_json': '"V1"'
+        'pattern_json': '{"cast": ["V001", {"date": {}}]}',
+        'rewrite_json': '"V001"'
     }
     test_rules.append((rule, internal_rule))
     # Rule 2:
@@ -139,8 +139,8 @@ def test_parse():
         'rewrite': "<x> ILIKE '%<s>%'"
     }
     internal_rule = {
-        'pattern_json': '{"gt": [{"strpos": [{"lower": "V1"}, {"literal": "V2"}]}, 0]}',
-        'rewrite_json': '{"ilike": ["V1", {"literal": "%V2%"}]}'
+        'pattern_json': '{"gt": [{"strpos": [{"lower": "V001"}, {"literal": "V002"}]}, 0]}',
+        'rewrite_json': '{"ilike": ["V001", {"literal": "%V002%"}]}'
     }
     test_rules.append((rule, internal_rule))
 

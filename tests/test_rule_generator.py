@@ -370,6 +370,47 @@ def test_columns_7():
     assert set(test_columns) == set(columns)
 
 
+def test_columns_8():
+    pattern = '''
+        SELECT  adminpermi0_.admin_permission_id AS admin_pe1_4_,
+                adminpermi0_.description         AS descript2_4_,
+                adminpermi0_.is_friendly         AS is_frien3_4_,
+                adminpermi0_.name                AS name4_4_,
+                adminpermi0_.permission_type     AS permissi5_4_
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminpermi0_.is_friendly = 1
+            AND adminrolei2_.admin_role_id = 1
+        ORDER  BY adminpermi0_.description ASC
+        LIMIT  50 
+    '''
+    rewrite = '''
+        SELECT  adminpermi0_.admin_permission_id AS admin_pe1_4_,
+                adminpermi0_.description         AS descript2_4_,
+                adminpermi0_.is_friendly         AS is_frien3_4_,
+                adminpermi0_.name                AS name4_4_,
+                adminpermi0_.permission_type     AS permissi5_4_
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  adminpermi0_.is_friendly = 1
+            AND allroles1_.admin_role_id = 1
+        ORDER  BY adminpermi0_.description ASC
+        LIMIT  50 
+    '''
+    columns = ["admin_permission_id", "description", "is_friendly", "name", "permission_type", "admin_role_id"]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_columns = RuleGenerator.columns(pattern_json, rewrite_json)
+    assert set(test_columns) == set(columns)
+
+
 def test_deparse_1():
 
     rule = {
@@ -727,6 +768,47 @@ def test_aliases_5():
         WHERE  allroles1_.admin_role_id = 1
     '''
     aliases = ["adminpermi0_", "allroles1_", "adminrolei2_"]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_aliases = RuleGenerator.aliases(pattern_json, rewrite_json)
+    assert set(test_aliases) == set(aliases)
+
+
+def test_aliases_6():
+    pattern = '''
+        SELECT  adminpermi0_.admin_permission_id AS admin_pe1_4_,
+                adminpermi0_.description         AS descript2_4_,
+                adminpermi0_.is_friendly         AS is_frien3_4_,
+                adminpermi0_.name                AS name4_4_,
+                adminpermi0_.permission_type     AS permissi5_4_
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminpermi0_.is_friendly = 1
+            AND adminrolei2_.admin_role_id = 1
+        ORDER  BY adminpermi0_.description ASC
+        LIMIT  50 
+    '''
+    rewrite = '''
+        SELECT  adminpermi0_.admin_permission_id AS admin_pe1_4_,
+                adminpermi0_.description         AS descript2_4_,
+                adminpermi0_.is_friendly         AS is_frien3_4_,
+                adminpermi0_.name                AS name4_4_,
+                adminpermi0_.permission_type     AS permissi5_4_
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  adminpermi0_.is_friendly = 1
+            AND allroles1_.admin_role_id = 1
+        ORDER  BY adminpermi0_.description ASC
+        LIMIT  50 
+    '''
+    aliases = ["admin_pe1_4_", "descript2_4_", "is_frien3_4_", "name4_4_", "permissi5_4_", "adminpermi0_", "allroles1_", "adminrolei2_"]
 
     pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
 
@@ -1172,6 +1254,44 @@ def test_generate_general_rule_4():
                     ON adminpermi0_.admin_permission_id =
                         allroles1_.admin_permission_id
         WHERE  allroles1_.admin_role_id = 1
+    '''
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+
+def test_generate_general_rule_5():
+    q0 = '''
+        SELECT  adminpermi0_.admin_permission_id AS admin_pe1_4_,
+                adminpermi0_.description         AS descript2_4_,
+                adminpermi0_.is_friendly         AS is_frien3_4_,
+                adminpermi0_.name                AS name4_4_,
+                adminpermi0_.permission_type     AS permissi5_4_
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminpermi0_.is_friendly = 1
+            AND adminrolei2_.admin_role_id = 1
+        ORDER  BY adminpermi0_.description ASC
+        LIMIT  50 
+    '''
+    q1 = '''
+        SELECT  adminpermi0_.admin_permission_id AS admin_pe1_4_,
+                adminpermi0_.description         AS descript2_4_,
+                adminpermi0_.is_friendly         AS is_frien3_4_,
+                adminpermi0_.name                AS name4_4_,
+                adminpermi0_.permission_type     AS permissi5_4_
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  adminpermi0_.is_friendly = 1
+            AND allroles1_.admin_role_id = 1
+        ORDER  BY adminpermi0_.description ASC
+        LIMIT  50 
     '''
 
     rule = RuleGenerator.generate_general_rule(q0, q1)
