@@ -258,50 +258,6 @@ class RuleGenerator:
         else:
             return fullSQL.replace('SELECT * FROM t WHERE ', '')
     
-
-    # Generate the candidate rule graph for a given rewriting pair q0 -> q1
-    #
-    @staticmethod
-    def generate_rule_graph(q0: str, q1: str) -> dict:
-        
-        # Generate seedRule from the given rewriting pair
-        #
-        seedRule = RuleGenerator.generate_seed_rule(q0, q1)
-
-        # Parse seedRule's pattern and rewrite into SQL AST json
-        #
-        seedRule['pattern_json'], seedRule['rewrite_json'], seedRule['mapping'] = RuleParser.parse(seedRule['pattern'], seedRule['rewrite'])
-        
-        # Initially, seedRule has no constraints and actions
-        #
-        seedRule['constraints'], seedRule['constraints_json'], seedRule['actions'], seedRule['actions_json'] = '', '[]', '', '[]'
-
-        # Generate the candidate rule graph starting from seedRule
-        #   Breadth First Search
-        #
-        seedRuleFingerPrint = RuleGenerator.fingerPrint(seedRule)
-        visited = {seedRuleFingerPrint: seedRule}
-        queue = [seedRule]
-        graphRoot = seedRule
-        while len(queue) > 0:
-            baseRule = queue.pop(0)
-            baseRule['children'] = []
-            # generate children from the baseRule
-            # by applying each transformation on baseRule
-            for transform in RuleGenerator.RuleTransformations.keys():
-                childrenRules = getattr(RuleGenerator, transform)(baseRule)
-                for childRule in childrenRules:
-                    childRuleFingerPrint = RuleGenerator.fingerPrint(childRule)
-                    # if childRule has not been visited
-                    if childRuleFingerPrint not in visited.keys():
-                        visited[childRuleFingerPrint] = childRule
-                        queue.append(childRule)
-                        baseRule['children'].append(childRule)
-                    # else childRule has been visited (generated from an ealier baseRule)
-                    else:
-                        baseRule['children'].append(visited[childRuleFingerPrint])
-        return graphRoot
-    
     @staticmethod
     def fingerPrint(rule: dict) -> str:
         # use rule['pattern'] string as finger-print
@@ -853,18 +809,24 @@ class RuleGenerator:
         # Case-3: string
         if QueryRewriter.is_string(astJson):
             # alias is the value of "name" if:
-            #   path = ['from', 'name'], patternASTJson is string
+            #   case-1: path = ['from', 'name'], patternASTJson is string
+            #   case-2: path = ['inner join', 'name'], patternASTJson is string
             #
             if len(path) >= 2 and path[-2] == 'from' and path[-1] == 'name':
+                if astJson == alias:
+                    return var
+            if len(path) >= 2 and path[-2] == 'inner join' and path[-1] == 'name':
                 if astJson == alias:
                     return var
         
         # Case-4: dot expression
         if QueryRewriter.is_dot_expression(astJson):
-            # skip case: {'from': [{'value': 'schema.table', 'name': 't1'}]}
-            #            path = ['from', 'value'], patternASTJson = 'schema.table'
+            # skip case-1: {'from': [{'value': 'schema.table', 'name': 't1'}]}
+            #              path = ['from', 'value'], patternASTJson = 'schema.table'
+            #      case-2: {'inner join': {'value': 'schema.table', 'name': 't1'}}
             #
-            if not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value'):
+            if not (len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value') and \
+               not (len(path) >= 2 and path[-2] == 'inner join' and path[-1] == 'value'):
                 # TODO - assert only one '.' exist in dot expression
                 if len(astJson.split('.')) == 2:
                     candidate = astJson.split('.')[0]
@@ -1061,6 +1023,49 @@ class RuleGenerator:
         'variablize_tables': variablize_tables
     }
 
+    # Generate the candidate rule graph for a given rewriting pair q0 -> q1
+    #
+    @staticmethod
+    def generate_rule_graph(q0: str, q1: str) -> dict:
+        
+        # Generate seedRule from the given rewriting pair
+        #
+        seedRule = RuleGenerator.generate_seed_rule(q0, q1)
+
+        # Parse seedRule's pattern and rewrite into SQL AST json
+        #
+        seedRule['pattern_json'], seedRule['rewrite_json'], seedRule['mapping'] = RuleParser.parse(seedRule['pattern'], seedRule['rewrite'])
+        
+        # Initially, seedRule has no constraints and actions
+        #
+        seedRule['constraints'], seedRule['constraints_json'], seedRule['actions'], seedRule['actions_json'] = '', '[]', '', '[]'
+
+        # Generate the candidate rule graph starting from seedRule
+        #   Breadth First Search
+        #
+        seedRuleFingerPrint = RuleGenerator.fingerPrint(seedRule)
+        visited = {seedRuleFingerPrint: seedRule}
+        queue = [seedRule]
+        graphRoot = seedRule
+        while len(queue) > 0:
+            baseRule = queue.pop(0)
+            baseRule['children'] = []
+            # generate children from the baseRule
+            # by applying each transformation on baseRule
+            for transform in RuleGenerator.RuleTransformations.keys():
+                childrenRules = getattr(RuleGenerator, transform)(baseRule)
+                for childRule in childrenRules:
+                    childRuleFingerPrint = RuleGenerator.fingerPrint(childRule)
+                    # if childRule has not been visited
+                    if childRuleFingerPrint not in visited.keys():
+                        visited[childRuleFingerPrint] = childRule
+                        queue.append(childRule)
+                        baseRule['children'].append(childRule)
+                    # else childRule has been visited (generated from an ealier baseRule)
+                    else:
+                        baseRule['children'].append(visited[childRuleFingerPrint])
+        return graphRoot
+
     # Recommend a rule given a rule graph (pointed by rootRule)
     #   TODO - currently, recommend the most general rule
     #          (the farthest child in the given rule graph)
@@ -1208,4 +1213,250 @@ class RuleGenerator:
     @staticmethod
     def numberOfVariables(rule: dict) -> int:
         return len(json.loads(rule['mapping']).keys())
+    
+    # generalization function - generalize columns in a rule
+    #
+    @staticmethod
+    def generalize_columns(rule: dict) -> dict:
+
+        # 1. Get candidate columns from rule
+        #
+        columns = RuleGenerator.columns(rule['pattern_json'], rule['rewrite_json'])
+
+        # 2. Make all candidate columns variables, and generate a new rule
+        #
+        return RuleGenerator.variablize_all_columns(rule, columns)
+    
+    # variablize all the given columns in given rule and generate a new rule
+    #
+    @staticmethod
+    def variablize_all_columns(rule: dict, columns: list) -> dict:
+
+        # create a new rule based on rule
+        new_rule = copy.deepcopy(rule)
+        new_rule_mapping = json.loads(new_rule['mapping'])
+        new_rule_pattern_json = json.loads(new_rule['pattern_json'])
+        new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
+
+        # Traverse all columns
+        for column in columns:
+
+            # Find a variable name for the column
+            #
+            new_rule_mapping, newVarInternal = RuleGenerator.findNextVarInternal(new_rule_mapping)
+            
+            # Replace given column into newVarInternal in new rule
+            #
+            new_rule_pattern_json = RuleGenerator.replaceColumnsOfASTJson(new_rule_pattern_json, [], column, newVarInternal)
+            new_rule_rewrite_json = RuleGenerator.replaceColumnsOfASTJson(new_rule_rewrite_json, [], column, newVarInternal)
+            
+            # TODO - add newVarInternal is a column constraint into new rule's constraints
+        
+        new_rule['mapping'] = json.dumps(new_rule_mapping)
+        new_rule['pattern_json'] = json.dumps(new_rule_pattern_json)
+        new_rule['rewrite_json'] = json.dumps(new_rule_rewrite_json)
+        
+        # Deparse new rule's pattern_json/rewrite_json into pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.deparse(new_rule_pattern_json)
+        new_rule['rewrite'] = RuleGenerator.deparse(new_rule_rewrite_json)
+
+        # Dereplace vars from new rule's pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.dereplaceVars(new_rule['pattern'], new_rule_mapping)
+        new_rule['rewrite'] = RuleGenerator.dereplaceVars(new_rule['rewrite'], new_rule_mapping)
+
+        return new_rule
+    
+    # generalization function - generalize literals in a rule
+    #
+    @staticmethod
+    def generalize_literals(rule: dict) -> dict:
+
+        # 1. Get candidate literals from rule
+        #
+        literals = RuleGenerator.literals(rule['pattern_json'], rule['rewrite_json'])
+
+        # 2. Make all candidate literals variables, and generate a new rule
+        #
+        return RuleGenerator.variablize_all_literals(rule, literals)
+    
+    # variablize all the given literals in given rule and generate a new rule
+    #
+    @staticmethod
+    def variablize_all_literals(rule: dict, literals: list) -> dict:
+
+        # create a new rule based on rule
+        new_rule = copy.deepcopy(rule)
+        new_rule_mapping = json.loads(new_rule['mapping'])
+        new_rule_pattern_json = json.loads(new_rule['pattern_json'])
+        new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
+
+        # Traverse all literals
+        for literal in literals:
+
+            # Find a variable name for the literal
+            #
+            new_rule_mapping, newVarInternal = RuleGenerator.findNextVarInternal(new_rule_mapping)
+            
+            # Replace given literal into newVarInternal in new rule
+            #
+            new_rule_pattern_json = RuleGenerator.replaceLiteralsOfASTJson(new_rule_pattern_json, [], literal, newVarInternal)
+            new_rule_rewrite_json = RuleGenerator.replaceLiteralsOfASTJson(new_rule_rewrite_json, [], literal, newVarInternal)
+            
+            # TODO - add newVarInternal is a literal constraint into new rule's constraints
+        
+        new_rule['mapping'] = json.dumps(new_rule_mapping)
+        new_rule['pattern_json'] = json.dumps(new_rule_pattern_json)
+        new_rule['rewrite_json'] = json.dumps(new_rule_rewrite_json)
+        
+        # Deparse new rule's pattern_json/rewrite_json into pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.deparse(new_rule_pattern_json)
+        new_rule['rewrite'] = RuleGenerator.deparse(new_rule_rewrite_json)
+
+        # Dereplace vars from new rule's pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.dereplaceVars(new_rule['pattern'], new_rule_mapping)
+        new_rule['rewrite'] = RuleGenerator.dereplaceVars(new_rule['rewrite'], new_rule_mapping)
+
+        return new_rule
+    
+    # generalization function - generalize aliases in a rule
+    #
+    @staticmethod
+    def generalize_aliases(rule: dict) -> dict:
+
+        # 1. Get candidate aliases from rule
+        #
+        aliases = RuleGenerator.aliases(rule['pattern_json'], rule['rewrite_json'])
+
+        # 2. Make all candidate aliases variables, and generate a new rule
+        #
+        return RuleGenerator.variablize_all_aliases(rule, aliases)
+    
+    # variablize all the given aliases in given rule and generate a new rule
+    #
+    @staticmethod
+    def variablize_all_aliases(rule: dict, aliases: list) -> dict:
+
+        # create a new rule based on rule
+        new_rule = copy.deepcopy(rule)
+        new_rule_mapping = json.loads(new_rule['mapping'])
+        new_rule_pattern_json = json.loads(new_rule['pattern_json'])
+        new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
+
+        # Traverse all aliases
+        for alias in aliases:
+
+            # Find a variable name for the given alias
+            #
+            new_rule_mapping, newVarInternal = RuleGenerator.findNextVarInternal(new_rule_mapping)
+
+            # Replace given alias into newVarInternal in new rule
+            #
+            new_rule_pattern_json = RuleGenerator.replaceAliasesOfASTJson(new_rule_pattern_json, [], alias, newVarInternal)
+            new_rule_rewrite_json = RuleGenerator.replaceAliasesOfASTJson(new_rule_rewrite_json, [], alias, newVarInternal)
+
+            # TODO - add newVarInternal is a alias constraint into new rule's constraints
+
+        new_rule['mapping'] = json.dumps(new_rule_mapping)
+        new_rule['pattern_json'] = json.dumps(new_rule_pattern_json)
+        new_rule['rewrite_json'] = json.dumps(new_rule_rewrite_json)
+        
+        # Deparse new rule's pattern_json/rewrite_json into pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.deparse(new_rule_pattern_json)
+        new_rule['rewrite'] = RuleGenerator.deparse(new_rule_rewrite_json)
+
+        # Dereplace vars from new rule's pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.dereplaceVars(new_rule['pattern'], new_rule_mapping)
+        new_rule['rewrite'] = RuleGenerator.dereplaceVars(new_rule['rewrite'], new_rule_mapping)
+
+        return new_rule
+    
+    # generalization function - generalize tables in a rule
+    #
+    @staticmethod
+    def generalize_tables(rule: dict) -> dict:
+
+        # 1. Get candidate tables from rule
+        #
+        tables = RuleGenerator.tables(rule['pattern_json'], rule['rewrite_json'])
+
+        # 2. Make all candidate tables variables, and generate a new rule
+        #
+        return RuleGenerator.variablize_all_tables(rule, tables)
+    
+    # variablize all the given tables in given rule and generate a new rule
+    #
+    @staticmethod
+    def variablize_all_tables(rule: dict, tables: list) -> dict:
+
+        # create a new rule based on rule
+        new_rule = copy.deepcopy(rule)
+        new_rule_mapping = json.loads(new_rule['mapping'])
+        new_rule_pattern_json = json.loads(new_rule['pattern_json'])
+        new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
+
+        for table in tables:
+            # Find a variable name for the given table
+            #
+            new_rule_mapping, newVarInternal = RuleGenerator.findNextVarInternal(new_rule_mapping)
+
+            # Replace given table into newVarInternal in new rule
+            #
+            new_rule_pattern_json = RuleGenerator.replaceTablesOfASTJson(new_rule_pattern_json, [], table, newVarInternal)
+            new_rule_rewrite_json = RuleGenerator.replaceTablesOfASTJson(new_rule_rewrite_json, [], table, newVarInternal)
+
+            # TODO - add newVarInternal is a table constraint into new rule's constraints
+
+        new_rule['mapping'] = json.dumps(new_rule_mapping)
+        new_rule['pattern_json'] = json.dumps(new_rule_pattern_json)
+        new_rule['rewrite_json'] = json.dumps(new_rule_rewrite_json)
+        
+        # Deparse new rule's pattern_json/rewrite_json into pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.deparse(new_rule_pattern_json)
+        new_rule['rewrite'] = RuleGenerator.deparse(new_rule_rewrite_json)
+
+        # Dereplace vars from new rule's pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.dereplaceVars(new_rule['pattern'], new_rule_mapping)
+        new_rule['rewrite'] = RuleGenerator.dereplaceVars(new_rule['rewrite'], new_rule_mapping)
+
+        return new_rule
+    
+    RuleGeneralizations = {
+        'generalize_columns' : generalize_columns,
+        'generalize_literals' : generalize_literals,
+        'generalize_aliases': generalize_aliases,
+        'generalize_tables': generalize_tables
+    }
+
+    # Generate a general rule given a rewriting pair q0 -> q1
+    #
+    @staticmethod
+    def generate_general_rule(q0: str, q1: str) -> dict:
+        
+        # Generate seedRule from the given rewriting pair
+        #
+        seedRule = RuleGenerator.generate_seed_rule(q0, q1)
+
+        # Parse seedRule's pattern and rewrite into SQL AST json
+        #
+        seedRule['pattern_json'], seedRule['rewrite_json'], seedRule['mapping'] = RuleParser.parse(seedRule['pattern'], seedRule['rewrite'])
+        
+        # Initially, seedRule has no constraints and actions
+        #
+        seedRule['constraints'], seedRule['constraints_json'], seedRule['actions'], seedRule['actions_json'] = '', '[]', '', '[]'
+
+        # Generalize the seedRule by applying all possible transformations
+        #
+        generalRule = seedRule
+        for generalization in RuleGenerator.RuleGeneralizations.keys():
+            generalRule = getattr(RuleGenerator, generalization)(generalRule)
+        
+        return generalRule
 

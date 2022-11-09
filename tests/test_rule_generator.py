@@ -999,7 +999,7 @@ def test_generate_rule_graph_3():
 def test_generate_rule_graph_4():
     q0 = '''
         SELECT *
-        FROM   blc_admin_permission admipermi0_
+        FROM   blc_admin_permission adminpermi0_
             INNER JOIN blc_admin_role_permission_xref allroles1_
                     ON adminpermi0_.admin_permission_id =
                         allroles1_.admin_permission_id
@@ -1018,7 +1018,7 @@ def test_generate_rule_graph_4():
 
     rootRule = RuleGenerator.generate_rule_graph(q0, q1)
     children = rootRule['children']
-    assert len(children) == 10
+    assert len(children) == 9
 
 
 def test_generate_rules_graph_1():
@@ -1110,3 +1110,69 @@ def test_recommend_rules_2():
     recommendRules = RuleGenerator.recommend_rules(rootRules, len(examples))
     assert type(recommendRules) is list
     assert len(recommendRules) == 1
+
+
+def test_generate_general_rule_1():
+    q0 = "SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'"
+    q1 = "SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    assert rule['pattern'] == 'CAST(<x1> AS DATE)'
+    assert rule['rewrite'] == '<x1>'
+
+
+def test_generate_general_rule_2():
+    q0 = "SELECT * FROM t WHERE STRPOS(LOWER(text), 'iphone') > 0"
+    q1 = "SELECT * FROM t WHERE ILIKE(text, '%iphone%')"
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    assert rule['pattern'] == "STRPOS(LOWER(<x1>), '<x2>') > 0"
+    assert rule['rewrite'] == "ILIKE(<x1>, '%<x2>%')"
+
+
+def test_generate_general_rule_3():
+    q0 = '''
+        select e1.name, e1.age, e2.salary
+        from employee e1,
+            employee e2
+        where e1.id = e2.id
+        and e1.age > 17
+        and e2.salary > 35000
+    '''
+    q1 = '''
+        SELECT e1.name, e1.age, e1.salary 
+        FROM employee e1
+        WHERE e1.age > 17
+        AND e1.salary > 35000
+    '''
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+
+def test_generate_general_rule_4():
+    q0 = '''
+        SELECT *
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminrolei2_.admin_role_id = 1 
+    '''
+    q1 = '''
+        SELECT *
+        FROM   blc_admin_permission AS adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  allroles1_.admin_role_id = 1
+    '''
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
