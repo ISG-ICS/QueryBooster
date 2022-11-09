@@ -283,12 +283,11 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         logging.info("\n[/recommendRule] request:")
         logging.info(request)
 
-        # generate rule graph from rule generator
+        # generate a general rule from rule generator
         request_json = json.loads(request)
         q0 = request_json["q0"]
         q1 = request_json["q1"]
-        root_rule_json = RuleGenerator.generate_rule_graph(q0, q1)
-        recommend_rule_json = RuleGenerator.recommend_rule(root_rule_json)
+        recommend_rule_json = RuleGenerator.generate_general_rule(q0, q1)
 
         # patch pattern and rewrite in recommend rule
         # TODO - get database from frontend request
