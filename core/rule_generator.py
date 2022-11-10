@@ -265,7 +265,11 @@ class RuleGenerator:
         #   e.g., we want to treat these two generated rules as the same rule:
         #         rule 1: SELECT e1.<x1>, e1.<x2> FROM employee e1 WHERE e1.<x1> > 17 AND e1.<x2> > 35000
         #         rule 2: SELECT e1.<x2>, e1.<x1> FROM employee e1 WHERE e1.<x2> > 17 AND e1.<x1> > 35000
-        fingerPrint = rule['pattern']
+        return RuleGenerator._fingerPrint(rule['pattern'])
+    
+    @staticmethod
+    def _fingerPrint(fingerPrint: str) -> str:
+        #   get rid of the numbers inside each var/varList
         fingerPrint = re.sub(r"<x(\d+)>", "<x>", fingerPrint)
         fingerPrint = re.sub(r"<<y(\d+)>>", "<<y>>", fingerPrint)
         return fingerPrint
@@ -975,29 +979,41 @@ class RuleGenerator:
         # Case-3: string
         if QueryRewriter.is_string(astJson):
             # case-1: {'from': 'employee'}
-            #         path = ['from'], patternASTJson = 'employee'
+            #         path = ['from']
             # case-2: {'from': [{'value': 'employee', 'name': 'e1'}]}
-            #         path = ['from', 'value'], patternASTJson = 'employee'
-            # case-3: {'from': [..., {'inner join': {'value': 'employee', 'name': 'e1'}}]}
-            #         path = ['from', 'inner join', 'value'], patternASTJson = 'employee'
+            #         path = ['from', 'value']
+            # case-3: {'inner join': 'employee'}
+            #         path = ['inner join']
+            # case-4: {'inner join': {'value': 'employee', 'name': 'e1'}}
+            #         path = ['inner join', 'value']
             #
-            if len(path) >=1 and path[-1] == 'from' or \
-               len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value' or \
-               len(path) >= 2 and path[-2] == 'inner join' and path[-1] == 'value':
+            if len(path) >=1 and path[-1] == 'from':
+                res.add(astJson)
+            elif len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value':
+                res.add(astJson)
+            elif len(path) >=1 and path[-1] == 'inner join':
+                res.add(astJson)
+            elif len(path) >= 2 and path[-2] == 'inner join' and path[-1] == 'value':
                 res.add(astJson)
         
         # Case-4: dot expression
         if QueryRewriter.is_dot_expression(astJson):
             # case-1: {'from': 'employee'}
-            #         path = ['from'], patternASTJson = 'employee'
+            #         path = ['from']
             # case-2: {'from': [{'value': 'employee', 'name': 'e1'}]}
-            #         path = ['from', 'value'], patternASTJson = 'employee'
-            # case-3: {'from': [..., {'inner join': {'value': 'employee', 'name': 'e1'}}]}
-            #         path = ['from', 'inner join', 'value'], patternASTJson = 'employee'
+            #         path = ['from', 'value']
+            # case-3: {'inner join': 'employee'}
+            #         path = ['inner join']
+            # case-4: {'inner join': {'value': 'employee', 'name': 'e1'}}
+            #         path = ['inner join', 'value']
             #
-            if len(path) >=1 and path[-1] == 'from' or \
-               len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value' or \
-               len(path) >= 2 and path[-2] == 'inner join' and path[-1] == 'value':
+            if len(path) >=1 and path[-1] == 'from':
+                res.add(astJson)
+            elif len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value':
+                res.add(astJson)
+            elif len(path) >=1 and path[-1] == 'inner join':
+                res.add(astJson)
+            elif len(path) >= 2 and path[-2] == 'inner join' and path[-1] == 'value':
                 res.add(astJson)
         
         return res
@@ -1063,40 +1079,58 @@ class RuleGenerator:
         # Case-3: string
         if QueryRewriter.is_string(astJson):
             # case-1: {'from': 'employee'}
-            #         path = ['from'], patternASTJson = 'employee'
+            #         path = ['from']
             # case-2: {'from': [{'value': 'employee', 'name': 'e1'}]}
-            #         path = ['from', 'value'], patternASTJson = 'employee'
-            # case-3: {'from': [..., {'inner join': {'value': 'employee', 'name': 'e1'}}]}
-            #         path = ['from', 'inner join', 'value'], patternASTJson = 'employee'
+            #         path = ['from', 'value']
+            # case-3: {'inner join': 'employee'}
+            #         path = ['inner join']
+            # case-4: {'inner join': {'value': 'employee', 'name': 'e1'}}
+            #         path = ['inner join', 'value']
             #
-            if len(path) >=1 and path[-1] == 'from' or \
-               len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value' or \
-               len(path) >= 2 and path[-2] == 'inner join' and path[-1] == 'value':
+            if len(path) >=1 and path[-1] == 'from':
+                if astJson == table:
+                    return var
+            elif len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value':
+                if astJson == table:
+                    return var
+            elif len(path) >=1 and path[-1] == 'inner join':
+                if astJson == table:
+                    return var
+            elif len(path) >= 2 and path[-2] == 'inner join' and path[-1] == 'value':
                 if astJson == table:
                     return var
         
         # Case-4: dot expression
         if QueryRewriter.is_dot_expression(astJson):
             # case-1: {'from': 'employee'}
-            #         path = ['from'], patternASTJson = 'employee'
+            #         path = ['from']
             # case-2: {'from': [{'value': 'employee', 'name': 'e1'}]}
-            #         path = ['from', 'value'], patternASTJson = 'employee'
-            # case-3: {'from': [..., {'inner join': {'value': 'employee', 'name': 'e1'}}]}
-            #         path = ['from', 'inner join', 'value'], patternASTJson = 'employee'
+            #         path = ['from', 'value']
+            # case-3: {'inner join': 'employee'}
+            #         path = ['inner join']
+            # case-4: {'inner join': {'value': 'employee', 'name': 'e1'}}
+            #         path = ['inner join', 'value']
             #
-            if len(path) >=1 and path[-1] == 'from' or \
-               len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value' or \
-               len(path) >= 2 and path[-2] == 'inner join' and path[-1] == 'value':
+            if len(path) >=1 and path[-1] == 'from':
+                if astJson == table:
+                    return var
+            elif len(path) >= 2 and path[-2] == 'from' and path[-1] == 'value':
+                if astJson == table:
+                    return var
+            elif len(path) >=1 and path[-1] == 'inner join':
+                if astJson == table:
+                    return var
+            elif len(path) >= 2 and path[-2] == 'inner join' and path[-1] == 'value':
                 if astJson == table:
                     return var
         
         return astJson
 
     RuleTransformations = {
-        'variablize_columns' : variablize_columns,
-        'variablize_literals' : variablize_literals,
+        'variablize_tables': variablize_tables,
         'variablize_aliases': variablize_aliases,
-        'variablize_tables': variablize_tables
+        'variablize_columns' : variablize_columns,
+        'variablize_literals' : variablize_literals
     }
 
     # Generate the candidate rule graph for a given rewriting pair q0 -> q1
@@ -1505,10 +1539,10 @@ class RuleGenerator:
         return new_rule
     
     RuleGeneralizations = {
-        'generalize_columns' : generalize_columns,
-        'generalize_literals' : generalize_literals,
+        'generalize_tables': generalize_tables,
         'generalize_aliases': generalize_aliases,
-        'generalize_tables': generalize_tables
+        'generalize_columns' : generalize_columns,
+        'generalize_literals' : generalize_literals
     }
 
     # Generate a general rule given a rewriting pair q0 -> q1

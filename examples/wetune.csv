@@ -33,7 +33,7 @@ FROM   blc_admin_permission adminpermi0_
                   allroles1_.admin_permission_id
        INNER JOIN blc_admin_role adminrolei2_
                ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
-WHERE  adminpermi0_.is_friendy = 1
+WHERE  adminpermi0_.is_friendly = 1
        AND adminrolei2_.admin_role_id = 1 ","SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
 FROM   blc_admin_permission AS adminpermi0_
        INNER JOIN blc_admin_role_permission_xref AS allroles1_

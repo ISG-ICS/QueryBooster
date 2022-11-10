@@ -38,6 +38,9 @@ if __name__ == '__main__':
         q0 = rewriting_example['q0']
         q1 = rewriting_example['q1']
 
+        print('---------- Original Q0 -------------')
+        print(QueryRewriter.beautify(q0))
+
         # generate rule
         rule = RuleGenerator.generate_general_rule(q0, q1)
 

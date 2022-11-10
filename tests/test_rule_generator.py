@@ -1296,3 +1296,77 @@ def test_generate_general_rule_5():
 
     rule = RuleGenerator.generate_general_rule(q0, q1)
     assert type(rule) is dict
+
+
+def test_generate_general_rule_6():
+
+    q0 = '''
+        SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminpermi0_.is_friendly = 1
+            AND adminrolei2_.admin_role_id = 1 
+    '''
+    q1 = '''
+        SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM   blc_admin_permission AS adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  allroles1_.admin_role_id = 1
+            AND adminpermi0_.is_friendly = 1 
+    '''
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT COUNT(<x5>.<x1>) AS <x7>
+        FROM <x11> AS <x5>
+        INNER JOIN <x9> AS <x6> ON <x5>.<x1> = <x6>.<x1>
+        INNER JOIN <x10> AS <x8> ON <x6>.<x3> = <x8>.<x3>
+        WHERE <x5>.<x2> = <x4>
+        AND <x8>.<x3> = <x4>
+    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT COUNT(<x5>.<x1>) AS <x7>
+        FROM <x11> AS <x5>
+        INNER JOIN <x9> AS <x6> ON <x5>.<x1> = <x6>.<x1>
+        WHERE <x6>.<x3> = <x4>
+        AND <x5>.<x2> = <x4>
+    '''))
+
+
+def test_generate_general_rule_7():
+
+    q0 = '''
+        SELECT o_auth_applications.id
+        FROM   o_auth_applications
+            INNER JOIN authorizations
+                    ON o_auth_applications.id = authorizations.o_auth_application_id
+        WHERE  authorizations.user_id = 1465 
+    '''
+    q1 = '''
+        SELECT authorizations.o_auth_application_id 
+        FROM   authorizations AS authorizations
+        WHERE  authorizations.user_id = 1465 
+    '''
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT <x6>.<x1>
+        FROM <x8>
+        INNER JOIN <x2> ON <x6>.<x1> = <x7>.<x3>
+        WHERE <x7>.<x4> = <x5>
+    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT <x7>.<x3>
+        FROM <x2> AS <x7>
+        WHERE <x7>.<x4> = <x5>
+    '''))
