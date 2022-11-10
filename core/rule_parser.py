@@ -74,17 +74,24 @@ class RuleParser:
     # 
     @staticmethod
     def extendToFullSQL(partialSQL: str) -> Tuple[str, Scope]:
+
+        # Special case: condition on subquery 
+        #   e.g., group_users.group_id IN (SELECT groups.id FROM groups WHERE groups.id > 0 ORDER BY NAME ASC)
+        # Remove subquery in (*) before check existence of SELECT, FROM, and WHERE keywords
+        #
+        sanitisedPartialSQL = re.sub(r'\(.*\)', '(x)', partialSQL)
+
         # case-1: no SELECT and no FROM and no WHERE
-        if not 'SELECT' in partialSQL.upper() and \
-            not 'FROM' in partialSQL.upper() and \
-                not 'WHERE' in partialSQL.upper():
+        if not 'SELECT' in sanitisedPartialSQL.upper() and \
+            not 'FROM' in sanitisedPartialSQL.upper() and \
+                not 'WHERE' in sanitisedPartialSQL.upper():
             scope = Scope.CONDITION
         # case-2: no SELECT and no FROM but has WHERE
-        elif not 'SELECT' in partialSQL.upper() and \
-            not 'FROM' in partialSQL.upper():
+        elif not 'SELECT' in sanitisedPartialSQL.upper() and \
+            not 'FROM' in sanitisedPartialSQL.upper():
             scope = Scope.WHERE
         # case-3: no SELECT but has FROM
-        elif not 'SELECT' in partialSQL.upper():
+        elif not 'SELECT' in sanitisedPartialSQL.upper():
             scope = Scope.FROM
         # case-4: has SELECT and has FROM
         else:
