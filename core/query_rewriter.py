@@ -86,6 +86,8 @@ class QueryRewriter:
             if QueryRewriter.match_node(curr_node, rule['pattern_json'], rule, memo):
                 memo['rule'] = curr_node
                 return True
+            else:
+                memo.clear()
             if type(curr_node) is dict:
                 for child in curr_node.values():
                     queue.append(child)
@@ -99,6 +101,7 @@ class QueryRewriter:
     @staticmethod
     def match_node(query_node: Any, rule_node: Any, rule: dict, memo: dict) -> bool:
 
+        # TODO - Do the escalation in RuleParser
         # Special case for value of 'select' and 'from':
         #   e.g., query_node = [{"value": "e1.name"}, {"value": "e1.age"}, {"value": "e2.salary"}]
         #         rule_node = {"value": "VL1"}
@@ -108,16 +111,10 @@ class QueryRewriter:
             memo[rule_node['value']] = query_node
             return True
         
-        # Case-1: rule_node is a Var, it can match a constant or a dict
+        # Case-1: rule_node is a Var
         # 
         if QueryRewriter.is_var(rule_node):
-            if QueryRewriter.is_constant(query_node) or \
-                QueryRewriter.is_dict(query_node) or \
-                QueryRewriter.is_dot_expression(query_node):
-                # TODO - resolve conflicts if one Var matched more than once
-                # 
-                memo[rule_node] = query_node
-                return True
+            return QueryRewriter.match_var(query_node, rule_node, rule, memo)
         
         # Case-2: rule_node is a VarList, it can match anything
         # 
@@ -150,6 +147,59 @@ class QueryRewriter:
                 return QueryRewriter.match_dot_expression(query_node, rule_node, rule, memo)
 
         return False
+    
+    # Check if a Var rule_node matches the query_node
+    # 
+    @staticmethod
+    def match_var(query_node: Any, rule_node: str, rule: dict, memo: dict) -> bool:
+        # Var has matched something before, compare the value of Var with the query_node
+        #
+        if rule_node in memo.keys():
+            # value is the matched subtree represented by the Var
+            value = memo[rule_node]
+            if QueryRewriter.is_constant(value):
+                if QueryRewriter.is_constant(query_node):
+                    if value == query_node:
+                        return True
+                return False
+            elif QueryRewriter.is_dot_expression(value):
+                # TODO - Be more intelligent for the case 
+                #        where table name and alias refer to the same column
+                #        e.g, V1 = "e1.age", it should match "employee.age"
+                #
+                if QueryRewriter.is_dot_expression(query_node):
+                    if value == query_node:
+                        return True
+                return False
+            elif QueryRewriter.is_dict(value):
+                # Special case when a dict Var can match a constant query_node
+                #
+                if QueryRewriter.is_constant(query_node):
+                    # Special case where a Var represents a table along with its alias
+                    #   e.g., V1 = {"value": "employee", "name": "e1"}
+                    # and query_node is the table name or alias
+                    #
+                    if 'value' in value.keys() and 'name' in value.keys():
+                        if value['value'] == query_node or value['name'] == query_node:
+                            return True
+                    return False
+                elif QueryRewriter.is_dict(query_node):
+                    return QueryRewriter.match_dict(query_node, value, rule, memo)
+                else:
+                    return False
+            # TODO - This path should not happen
+            else:
+                return False
+        else:
+            # A Var can match a constant, a dot_expression, or a dict
+            #
+            if QueryRewriter.is_constant(query_node) or \
+                QueryRewriter.is_dot_expression(query_node) or \
+                QueryRewriter.is_dict(query_node):
+                memo[rule_node] = query_node
+                return True
+            else:
+                return False
 
     # Check if two strings of query_node and rule_node match each other
     # 
@@ -240,6 +290,8 @@ class QueryRewriter:
         #   For each element in remaining of rule_node:
         for rule_element in remaining_in_rule:
             for query_element in remaining_in_query:
+                # Snapshot the memo's keys before try this combination
+                memo_keys_snapshot = set(memo.keys())
                 if QueryRewriter.match_node(query_element, rule_element, rule, memo):
                     query_list = remaining_in_query.copy()
                     query_list.remove(query_element)
@@ -247,6 +299,13 @@ class QueryRewriter:
                     rule_list.remove(rule_element)
                     if QueryRewriter.match_list(query_list, rule_list, rule, memo):
                         return True
+                    else:
+                        # The remaining rule_list doesn't match the remaining query_list
+                        #   revert the memo keys that were incorrectly modified in match_node(query_element, rule_element, ...)
+                        #
+                        for key in set(memo.keys()) - set(memo_keys_snapshot):
+                            del memo[key]
+
             # TODO - short-cut match the entire remaining list of query list if rule_element is a VarList,
             #        come up with a better way to combine this case with the exaustive combination loop
             # 
@@ -342,13 +401,25 @@ class QueryRewriter:
     # Action: Substitute
     # 
     @staticmethod
-    def substitute(sub_ast: Any, source: str, target: str) -> Any:
+    def substitute(sub_ast: Any, source: Any, target: Any) -> Any:
         # sub_ast is a string
         if type(sub_ast) == str:
-            if sub_ast == source:
-                return target
             if '.' in sub_ast:
                 return '.'.join([QueryRewriter.substitute(x, source, target) for x in sub_ast.split('.')])
+            else:
+                if sub_ast == source:
+                    return target
+                # handle case where source or target is a table (with name and alias),
+                #   e.g., source = {'value': 'employee', 'name': 'e2'}
+                #         target = {'value': 'employee', 'name': 'e1'}
+                #
+                if type(source) == dict:
+                    if 'name' in source.keys() and sub_ast == source['name']:
+                        if type(target) == str:
+                            return target
+                        elif type(target) == dict:
+                            if 'name' in target.keys():
+                                return target['name']
         
         # sub_ast is a number
         if type(sub_ast) == numbers.Number:
@@ -427,7 +498,27 @@ class QueryRewriter:
             children = query.split('.')
             ans = []
             for child in children:
-                ans.append(QueryRewriter.replace(child, rule, memo))
+                child = QueryRewriter.replace(child, rule, memo)
+                # handle case where child is a var 
+                # and replaced by a table dict (with name and alias)
+                #   e.g., V001 = {'value': 'employee', 'name': 'e1'}
+                #
+                if type(child) == dict:
+                    if 'name' in child.keys():
+                        child = child['name']
+                    elif 'value' in child.keys():
+                        child = child['value']
+                    else:
+                        # TODO - should not have this path
+                        pass
+                # handle case where child is a var
+                # and replaced by a dot_expression
+                #   e.g., V002 = 'e1.age'
+                #
+                if QueryRewriter.is_dot_expression(child):
+                    # only keep the column name after the dot
+                    child = child.split('.')[-1]
+                ans.append(child)
             query = '.'.join(ans)
         
         return query

@@ -163,6 +163,24 @@ def test_match_rule_remove_self_join_3():
     assert QueryRewriter.match(parse(query), rule, memo)
 
 
+def test_match_rule_remove_self_join_advance_1():
+    rule = get_rule('remove_self_join_advance')
+    assert rule is not None
+    
+    # match
+    query = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e2.salary 
+        FROM employee e1, employee e2
+        WHERE e1.id = e2.id
+        AND e1.age > 17
+        AND e2.salary > 35000;
+    '''
+    memo = {}
+    assert QueryRewriter.match(parse(query), rule, memo)
+
+
 def test_match_rule_subquery_to_join_1():
     rule = get_rule('subquery_to_join')
     assert rule is not None
@@ -518,6 +536,32 @@ def test_rewrite_rule_remove_self_join_2():
     assert format(parse(q1)) == format(parse(_q1))
 
 
+def test_rewrite_rule_remove_self_join_advance_1():
+    q0 = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e2.salary 
+        FROM employee e1, employee e2
+        WHERE e1.id = e2.id
+        AND e1.age > 17
+        AND e2.salary > 35000;
+    '''
+    q1 = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e1.salary 
+        FROM employee e1
+        WHERE 1=1
+        AND e1.age > 17
+        AND e1.salary > 35000;
+    '''
+    rule_keys = ['remove_self_join_advance']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
 def test_rewrite_rule_subquery_to_join_1():
     q0 = '''
         select empno, firstnme, lastname, phoneno
@@ -590,30 +634,28 @@ def test_rewrite_rule_subquery_to_join_2():
     assert format(parse(q1)) == format(parse(_q1))
 
 
-# TODO - Unify table name and alias, replace them as inter-changable entities
-# 
-# def test_rewrite_rule_subquery_to_join_3():
-#     q0 = '''
-#         select e.empno, e.firstnme, e.lastname, e.phoneno
-#         from employee e
-#         where e.workdept in
-#             (select d.deptno
-#                 from department d
-#                 where d.deptname = 'OPERATIONS')
-#         and e.age > 17;
-#     '''
-#     q1 = '''
-#         select distinct e.empno, e.firstnme, e.lastname, e.phoneno
-#         from employee e, department d
-#         where e.workdept = d.deptno 
-#         and e.age > 17
-#         and d.deptname = 'OPERATIONS';
-#     '''
-#     rule_keys = ['subquery_to_join']
+def test_rewrite_rule_subquery_to_join_3():
+    q0 = '''
+        select e.empno, e.firstnme, e.lastname, e.phoneno
+        from employee e
+        where e.workdept in
+            (select d.deptno
+                from department d
+                where d.deptname = 'OPERATIONS')
+        and e.age > 17;
+    '''
+    q1 = '''
+        select distinct e.empno, e.firstnme, e.lastname, e.phoneno
+        from employee e, department d
+        where e.workdept = d.deptno 
+        and e.age > 17
+        and d.deptname = 'OPERATIONS';
+    '''
+    rule_keys = ['subquery_to_join']
 
-#     rules = [get_rule(k) for k in rule_keys]
-#     _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
-#     assert format(parse(q1)) == format(parse(_q1))
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
 
 
 def test_rewrite_rule_join_to_filter_1():
@@ -672,34 +714,116 @@ def test_rewrite_rule_join_to_filter_2():
     assert format(parse(q1)) == format(parse(_q1))
 
 
-# TODO - Should pass when line 117 in query_rewriter.py is fixed.
-#
-# def test_rewrite_rule_join_to_filter_3():
-#     q0 = '''
-#         SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
-#         FROM   blc_admin_permission adminpermi0_
-#             INNER JOIN blc_admin_role_permission_xref allroles1_
-#                     ON adminpermi0_.admin_permission_id =
-#                         allroles1_.admin_permission_id
-#             INNER JOIN blc_admin_role adminrolei2_
-#                     ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
-#         WHERE  adminpermi0_.is_friendy = 1 
-#         AND    adminrolei2_.admin_role_id = 1;
-#     '''
-#     q1 = '''
-#         SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
-#         FROM   blc_admin_permission AS adminpermi0_
-#             INNER JOIN blc_admin_role_permission_xref AS allroles1_
-#                     ON adminpermi0_.admin_permission_id =
-#                         allroles1_.admin_permission_id
-#         WHERE  allroles1_.admin_role_id = 1 
-#         AND    adminpermi0_.is_friendy = 1;
-#     '''
-#     rule_keys = ['join_to_filter']
+def test_rewrite_rule_join_to_filter_3():
+    q0 = '''
+        SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminpermi0_.is_friendy = 1 
+        AND    adminrolei2_.admin_role_id = 1;
+    '''
+    q1 = '''
+        SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM   blc_admin_permission AS adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  allroles1_.admin_role_id = 1 
+        AND    adminpermi0_.is_friendy = 1;
+    '''
+    rule_keys = ['join_to_filter']
 
-#     rules = [get_rule(k) for k in rule_keys]
-#     _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
-#     assert format(parse(q1)) == format(parse(_q1))
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_join_to_filter_advance_1():
+    q0 = '''
+        SELECT *
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminrolei2_.admin_role_id = 1
+        AND 1=1;
+    '''
+    q1 = '''
+        SELECT *
+        FROM   blc_admin_permission AS adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  allroles1_.admin_role_id = 1
+        AND 1=1;
+    '''
+    rule_keys = ['join_to_filter_advance']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_join_to_filter_advance_2():
+    q0 = '''
+        SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminrolei2_.admin_role_id = 1
+        AND    adminpermi0_.is_friendy = 1;
+    '''
+    q1 = '''
+        SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM   blc_admin_permission AS adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  allroles1_.admin_role_id = 1 
+        AND    adminpermi0_.is_friendy = 1;
+    '''
+    rule_keys = ['join_to_filter_advance']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_join_to_filter_advance_3():
+    q0 = '''
+        SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminpermi0_.is_friendy = 1 
+        AND    adminrolei2_.admin_role_id = 1;
+    '''
+    q1 = '''
+        SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM   blc_admin_permission AS adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  allroles1_.admin_role_id = 1 
+        AND    adminpermi0_.is_friendy = 1;
+    '''
+    rule_keys = ['join_to_filter_advance']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
 
 
 # TODO - TBI
