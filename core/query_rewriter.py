@@ -205,6 +205,9 @@ class QueryRewriter:
     # 
     @staticmethod
     def match_string(query_node: Any, rule_node: Any) -> bool:
+        # TODO - handle the case where a rule has constant table names and aliases:
+        #        try to store the mapping between a constant table name and its constant alias,
+        #        then match a constant table name with a constant alias inter-changably.
         return type(query_node) is str and type(rule_node) is str and query_node.lower() == rule_node.lower()
     
     # Check if two numbers of query_node and rule_node match each other
