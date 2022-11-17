@@ -1,3 +1,4 @@
+from core.query_rewriter import QueryRewriter
 from core.rule_generator import RuleGenerator
 from core.rule_parser import RuleParser
 import json
@@ -666,260 +667,6 @@ def test_variablize_literal_2():
         ''')
 
 
-def test_aliases_1():
-    pattern = "STRPOS(LOWER(tweets.text), 'iphone') > 0"
-    rewrite = "ILIKE(tweets.text, '%iphone%')"
-    aliases = ["tweets"]
-
-    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
-
-    test_aliases = RuleGenerator.aliases(pattern_json, rewrite_json)
-    assert set(test_aliases) == set(aliases)
-
-
-def test_aliases_2():
-    pattern = '''
-        select e1.name, e1.age, e2.salary
-        from employee e1,
-            employee e2
-        where e1.id = e2.id
-        and e1.age > 17
-        and e2.salary  > 35000;
-    '''
-    rewrite = '''
-        SELECT  e1.name, 
-                e1.age, 
-                e1.salary 
-        FROM employee e1
-        WHERE e1.age > 17
-        AND e1.salary > 35000;
-    '''
-    aliases = ["e1", "e2"]
-
-    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
-
-    test_aliases = RuleGenerator.aliases(pattern_json, rewrite_json)
-    assert set(test_aliases) == set(aliases)
-
-
-def test_aliases_3():
-    pattern = '''
-        select e1.name, e1.age, <x1>.salary
-        from employee e1,
-            employee <x1>
-        where e1.id = <x1>.id
-        and e1.age > 17
-        and <x1>.salary > 35000;
-    '''
-    rewrite = '''
-        SELECT  e1.name, 
-                e1.age, 
-                e1.salary 
-        FROM employee e1
-        WHERE e1.age > 17
-        AND e1.salary > 35000;
-    '''
-    aliases = ["e1"]
-
-    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
-
-    test_aliases = RuleGenerator.aliases(pattern_json, rewrite_json)
-    assert set(test_aliases) == set(aliases)
-
-
-def test_aliases_4():
-    pattern = '''
-        select *
-        from employee e1
-        where age > 17
-        and salary > 35000;
-    '''
-    rewrite = '''
-        SELECT * 
-        FROM employee
-        WHERE age > 17
-        AND salary > 35000;
-    '''
-    aliases = ["e1"]
-
-    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
-
-    test_aliases = RuleGenerator.aliases(pattern_json, rewrite_json)
-    assert set(test_aliases) == set(aliases)
-
-
-def test_aliases_5():
-    pattern = '''
-        SELECT *
-        FROM   blc_admin_permission adminpermi0_
-            INNER JOIN blc_admin_role_permission_xref allroles1_
-                    ON adminpermi0_.admin_permission_id =
-                        allroles1_.admin_permission_id
-            INNER JOIN blc_admin_role adminrolei2_
-                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
-        WHERE  adminrolei2_.admin_role_id = 1 
-    '''
-    rewrite = '''
-        SELECT *
-        FROM   blc_admin_permission AS adminpermi0_
-            INNER JOIN blc_admin_role_permission_xref AS allroles1_
-                    ON adminpermi0_.admin_permission_id =
-                        allroles1_.admin_permission_id
-        WHERE  allroles1_.admin_role_id = 1
-    '''
-    aliases = ["adminpermi0_", "allroles1_", "adminrolei2_"]
-
-    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
-
-    test_aliases = RuleGenerator.aliases(pattern_json, rewrite_json)
-    assert set(test_aliases) == set(aliases)
-
-
-def test_aliases_6():
-    pattern = '''
-        SELECT  adminpermi0_.admin_permission_id AS admin_pe1_4_,
-                adminpermi0_.description         AS descript2_4_,
-                adminpermi0_.is_friendly         AS is_frien3_4_,
-                adminpermi0_.name                AS name4_4_,
-                adminpermi0_.permission_type     AS permissi5_4_
-        FROM   blc_admin_permission adminpermi0_
-            INNER JOIN blc_admin_role_permission_xref allroles1_
-                    ON adminpermi0_.admin_permission_id =
-                        allroles1_.admin_permission_id
-            INNER JOIN blc_admin_role adminrolei2_
-                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
-        WHERE  adminpermi0_.is_friendly = 1
-            AND adminrolei2_.admin_role_id = 1
-        ORDER  BY adminpermi0_.description ASC
-        LIMIT  50 
-    '''
-    rewrite = '''
-        SELECT  adminpermi0_.admin_permission_id AS admin_pe1_4_,
-                adminpermi0_.description         AS descript2_4_,
-                adminpermi0_.is_friendly         AS is_frien3_4_,
-                adminpermi0_.name                AS name4_4_,
-                adminpermi0_.permission_type     AS permissi5_4_
-        FROM   blc_admin_permission adminpermi0_
-            INNER JOIN blc_admin_role_permission_xref allroles1_
-                    ON adminpermi0_.admin_permission_id =
-                        allroles1_.admin_permission_id
-        WHERE  adminpermi0_.is_friendly = 1
-            AND allroles1_.admin_role_id = 1
-        ORDER  BY adminpermi0_.description ASC
-        LIMIT  50 
-    '''
-    aliases = ["admin_pe1_4_", "descript2_4_", "is_frien3_4_", "name4_4_", "permissi5_4_", "adminpermi0_", "allroles1_", "adminrolei2_"]
-
-    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
-
-    test_aliases = RuleGenerator.aliases(pattern_json, rewrite_json)
-    assert set(test_aliases) == set(aliases)
-
-
-def test_variablize_alias_1():
-
-    rule = {
-        'pattern': "STRPOS(LOWER(tweets.text), 'iphone') > 0",
-        'rewrite': "ILIKE(tweets.text, '%iphone%')"
-    }
-    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
-    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
-    
-    rule = RuleGenerator.variablize_alias(rule, 'tweets')
-    assert rule['pattern'] == "STRPOS(LOWER(<x1>.text), 'iphone') > 0"
-    assert rule['rewrite'] == "ILIKE(<x1>.text, '%iphone%')"
-
-
-def test_variablize_alias_2():
-
-    rule = {
-        'pattern': "STRPOS(LOWER(tweets.<x1>), 'iphone') > 0",
-        'rewrite': "ILIKE(tweets.<x1>, '%iphone%')"
-    }
-    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
-    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
-    
-    rule = RuleGenerator.variablize_alias(rule, 'tweets')
-    assert rule['pattern'] == "STRPOS(LOWER(<x2>.<x1>), 'iphone') > 0"
-    assert rule['rewrite'] == "ILIKE(<x2>.<x1>, '%iphone%')"
-
-
-def test_variablize_alias_3():
-
-    rule = {
-        'pattern': '''
-            select e1.name, e1.age, e2.salary
-            from employee e1,
-                employee e2
-            where e1.id = e2.id
-            and e1.age > 17
-            and e2.salary > 35000
-        ''',
-        'rewrite': '''
-            SELECT e1.name, e1.age, e1.salary 
-            FROM employee e1
-            WHERE e1.age > 17
-            AND e1.salary > 35000
-        '''
-    }
-    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
-    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
-    
-    rule = RuleGenerator.variablize_alias(rule, 'e1')
-    assert StringUtil.strim(rule['pattern']) == StringUtil.strim('''
-            SELECT <x1>.name, <x1>.age, e2.salary
-            FROM employee AS <x1>,
-                employee AS e2
-            WHERE <x1>.id = e2.id
-            AND <x1>.age > 17
-            AND e2.salary > 35000
-        ''')
-    assert StringUtil.strim(rule['rewrite']) == StringUtil.strim('''
-            SELECT <x1>.name, <x1>.age, <x1>.salary 
-            FROM employee AS <x1>
-            WHERE <x1>.age > 17
-            AND <x1>.salary > 35000
-        ''')
-
-
-def test_variablize_alias_4():
-
-    rule = {
-        'pattern': '''
-            select <x1>.name, <x1>.age, e2.salary
-            from employee <x1>,
-                employee e2
-            where <x1>.id = e2.id
-            and <x1>.age > 17
-            and e2.salary > 35000
-        ''',
-        'rewrite': '''
-            SELECT <x1>.name, <x1>.age, <x1>.salary 
-            FROM employee <x1>
-            WHERE <x1>.age > 17
-            AND <x1>.salary > 35000
-        '''
-    }
-    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
-    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
-    
-    rule = RuleGenerator.variablize_alias(rule, 'e2')
-    assert StringUtil.strim(rule['pattern']) == StringUtil.strim('''
-            SELECT <x1>.name, <x1>.age, <x2>.salary
-            FROM employee AS <x1>,
-                employee AS <x2>
-            WHERE <x1>.id = <x2>.id
-            AND <x1>.age > 17
-            AND <x2>.salary > 35000
-        ''')
-    assert StringUtil.strim(rule['rewrite']) == StringUtil.strim('''
-            SELECT <x1>.name, <x1>.age, <x1>.salary 
-            FROM employee AS <x1>
-            WHERE <x1>.age > 17
-            AND <x1>.salary > 35000
-        ''')
-
-
 def test_tables_1():
     pattern = "STRPOS(LOWER(text), 'iphone') > 0"
     rewrite = "ILIKE(text, '%iphone%')"
@@ -928,7 +675,7 @@ def test_tables_1():
     pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
 
     test_tables = RuleGenerator.tables(pattern_json, rewrite_json)
-    assert set(test_tables) == set(tables)
+    assert set(map(lambda t: t['value'] + '-' + t['name'], test_tables)) == set(map(lambda t: t['value'] + '-' + t['name'], tables))
 
 
 def test_tables_2():
@@ -948,37 +695,37 @@ def test_tables_2():
         WHERE e1.age > 17
         AND e1.salary > 35000;
     '''
-    tables = ["employee"]
+    tables = [{'value': 'employee', 'name': 'e1'}, {'value': 'employee', 'name': 'e2'}]
 
     pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
 
     test_tables = RuleGenerator.tables(pattern_json, rewrite_json)
-    assert set(test_tables) == set(tables)
+    assert set(map(lambda t: t['value'] + '-' + t['name'], test_tables)) == set(map(lambda t: t['value'] + '-' + t['name'], tables))
 
 
 def test_tables_3():
     pattern = '''
-        select e1.name, e1.age, e2.salary
-        from <tb1> e1,
-             <tb1> e2
-        where e1.<a1> = e2.<a1>
-        and e1.age > 17
-        and e2.salary > 35000;
+        select <tb1>.name, <tb1>.age, <tb2>.salary
+        from <tb1>,
+             <tb2>
+        where <tb1>.<a1> = <tb2>.<a1>
+        and <tb1>.age > 17
+        and <tb2>.salary > 35000;
     '''
     rewrite = '''
-        SELECT  e1.name, 
-                e1.age, 
-                e1.salary 
-        FROM <tb1> e1
-        WHERE e1.age > 17
-        AND e1.salary > 35000;
+        SELECT  <tb1>.name, 
+                <tb1>.age, 
+                <tb1>.salary 
+        FROM <tb1>
+        WHERE <tb1>.age > 17
+        AND <tb1>.salary > 35000;
     '''
     tables = []
 
     pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
 
     test_tables = RuleGenerator.tables(pattern_json, rewrite_json)
-    assert set(test_tables) == set(tables)
+    assert set(map(lambda t: t['value'] + '-' + t['name'], test_tables)) == set(map(lambda t: t['value'] + '-' + t['name'], tables))
 
 
 def test_tables_4():
@@ -992,16 +739,16 @@ def test_tables_4():
     '''
     rewrite = '''
         select distinct *
-        from employee emp, department dept
-        where emp.workdept = dept.deptno 
-        and dept.deptname = 'OPERATIONS';
+        from employee, department
+        where employee.workdept = department.deptno 
+        and department.deptname = 'OPERATIONS';
     '''
-    tables = ["employee", "department"]
+    tables = [{'value': 'employee', 'name': 'employee'}, {'value': 'department', 'name': 'department'}]
 
     pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
 
     test_tables = RuleGenerator.tables(pattern_json, rewrite_json)
-    assert set(test_tables) == set(tables)
+    assert set(map(lambda t: t['value'] + '-' + t['name'], test_tables)) == set(map(lambda t: t['value'] + '-' + t['name'], tables))
 
 
 def test_tables_5():
@@ -1023,12 +770,141 @@ def test_tables_5():
                         allroles1_.admin_permission_id
         WHERE  allroles1_.admin_role_id = 1
     '''
-    tables = ["blc_admin_permission", "blc_admin_role_permission_xref", "blc_admin_role"]
+    tables = [
+        {'value': 'blc_admin_permission', 'name': 'adminpermi0_'}, 
+        {'value': 'blc_admin_role_permission_xref', 'name': 'allroles1_'}, 
+        {'value': 'blc_admin_role', 'name': 'adminrolei2_'}
+    ]
 
     pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
 
     test_tables = RuleGenerator.tables(pattern_json, rewrite_json)
-    assert set(test_tables) == set(tables)
+    assert set(map(lambda t: t['value'] + '-' + t['name'], test_tables)) == set(map(lambda t: t['value'] + '-' + t['name'], tables))
+
+
+def test_variablize_table_1():
+
+    rule = {
+        'pattern': '''
+            select e1.name, e1.age, e2.salary
+            from employee e1,
+                employee e2
+            where e1.id = e2.id
+            and e1.age > 17
+            and e2.salary > 35000
+        ''',
+        'rewrite': '''
+            SELECT e1.name, e1.age, e1.salary 
+            FROM employee e1
+            WHERE e1.age > 17
+            AND e1.salary > 35000
+        '''
+    }
+    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
+    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
+    
+    rule = RuleGenerator.variablize_table(rule, {'value': 'employee', 'name': 'e1'})
+    assert StringUtil.strim(rule['pattern']) == StringUtil.strim('''
+            SELECT <x1>.name, <x1>.age, e2.salary
+            FROM <x1>,
+                employee AS e2
+            WHERE <x1>.id = e2.id
+            AND <x1>.age > 17
+            AND e2.salary > 35000
+        ''')
+    assert StringUtil.strim(rule['rewrite']) == StringUtil.strim('''
+            SELECT <x1>.name, <x1>.age, <x1>.salary 
+            FROM <x1>
+            WHERE <x1>.age > 17
+            AND <x1>.salary > 35000
+        ''')
+
+
+def test_variablize_table_2():
+
+    rule = {
+        'pattern': '''
+            SELECT <x1>.name, <x1>.age, e2.salary
+            FROM <x1>,
+                employee AS e2
+            WHERE <x1>.id = e2.id
+            AND <x1>.age > 17
+            AND e2.salary > 35000
+        ''',
+        'rewrite': '''
+            SELECT <x1>.name, <x1>.age, <x1>.salary 
+            FROM <x1>
+            WHERE <x1>.age > 17
+            AND <x1>.salary > 35000
+        '''
+    }
+    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
+    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
+    
+    rule = RuleGenerator.variablize_table(rule, {'value': 'employee', 'name': 'e2'})
+    assert StringUtil.strim(rule['pattern']) == StringUtil.strim('''
+            SELECT <x1>.name, <x1>.age, <x2>.salary
+            FROM <x1>,
+                 <x2>
+            WHERE <x1>.id = <x2>.id
+            AND <x1>.age > 17
+            AND <x2>.salary > 35000
+        ''')
+    assert StringUtil.strim(rule['rewrite']) == StringUtil.strim('''
+            SELECT <x1>.name, <x1>.age, <x1>.salary 
+            FROM <x1>
+            WHERE <x1>.age > 17
+            AND <x1>.salary > 35000
+        ''')
+
+
+def test_variablize_table_3():
+
+    rule = {
+        'pattern': '''
+            SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+            FROM   blc_admin_permission adminpermi0_
+                INNER JOIN blc_admin_role_permission_xref allroles1_
+                        ON adminpermi0_.admin_permission_id =
+                            allroles1_.admin_permission_id
+                INNER JOIN blc_admin_role adminrolei2_
+                        ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+            WHERE  adminpermi0_.is_friendly = 1
+                AND adminrolei2_.admin_role_id = 1 
+        ''',
+        'rewrite': '''
+            SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+            FROM   blc_admin_permission AS adminpermi0_
+                INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                        ON adminpermi0_.admin_permission_id =
+                            allroles1_.admin_permission_id
+            WHERE  allroles1_.admin_role_id = 1
+                AND adminpermi0_.is_friendly = 1 
+        '''
+    }
+    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
+    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
+    
+    rule = RuleGenerator.variablize_table(rule, {'value': 'blc_admin_permission', 'name': 'adminpermi0_'})
+    assert StringUtil.strim(rule['pattern']) == StringUtil.strim('''
+            SELECT COUNT(<x1>.admin_permission_id) AS col_0_0_
+            FROM   <x1>
+                INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                        ON <x1>.admin_permission_id = allroles1_.admin_permission_id
+                INNER JOIN blc_admin_role AS adminrolei2_
+                        ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+            WHERE  <x1>.is_friendly = 1
+                AND adminrolei2_.admin_role_id = 1  
+        ''')
+    assert StringUtil.strim(rule['rewrite']) == StringUtil.strim('''
+            SELECT COUNT(<x1>.admin_permission_id) AS col_0_0_
+            FROM   <x1>
+                INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                        ON <x1>.admin_permission_id =
+                            allroles1_.admin_permission_id
+            WHERE  allroles1_.admin_role_id = 1
+                AND <x1>.is_friendly = 1 
+        ''')
 
 
 def test_generate_rule_graph_1():
@@ -1064,7 +940,7 @@ def test_generate_rule_graph_2():
 
     rootRule = RuleGenerator.generate_rule_graph(q0, q1)
     children = rootRule['children']
-    assert len(children) == 9
+    assert len(children) == 8
 
 
 def test_generate_rule_graph_3():
@@ -1100,7 +976,7 @@ def test_generate_rule_graph_4():
 
     rootRule = RuleGenerator.generate_rule_graph(q0, q1)
     children = rootRule['children']
-    assert len(children) == 9
+    assert len(children) == 6
 
 
 def test_generate_rules_graph_1():
@@ -1325,19 +1201,22 @@ def test_generate_general_rule_6():
     assert type(rule) is dict
 
     assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
-        SELECT COUNT(<x5>.<x1>) AS <x7>
-        FROM <x11> AS <x5>
-        INNER JOIN <x9> AS <x6> ON <x5>.<x1> = <x6>.<x1>
-        INNER JOIN <x10> AS <x8> ON <x6>.<x3> = <x8>.<x3>
-        WHERE <x5>.<x2> = <x4>
-        AND <x8>.<x3> = <x4>
+        SELECT     COUNT(<x1>.<x5>) AS col_0_0_
+        FROM       <x1>
+        INNER JOIN <x2>
+        ON         <x1>.<x5> = <x2>.<x5>
+        INNER JOIN <x3>
+        ON         <x2>.<x4> = <x3>.<x4>
+        WHERE      <x1>.<x6> = <x7>
+        AND        <x3>.<x4> = <x7>
     '''))
     assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
-        SELECT COUNT(<x5>.<x1>) AS <x7>
-        FROM <x11> AS <x5>
-        INNER JOIN <x9> AS <x6> ON <x5>.<x1> = <x6>.<x1>
-        WHERE <x6>.<x3> = <x4>
-        AND <x5>.<x2> = <x4>
+        SELECT     COUNT(<x1>.<x5>) AS col_0_0_
+        FROM       <x1>
+        INNER JOIN <x2>
+        ON         <x1>.<x5> = <x2>.<x5>
+        WHERE      <x2>.<x4> = <x7>
+        AND        <x1>.<x6> = <x7>
     '''))
 
 
@@ -1360,13 +1239,14 @@ def test_generate_general_rule_7():
     assert type(rule) is dict
 
     assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
-        SELECT <x6>.<x1>
-        FROM <x8>
-        INNER JOIN <x2> ON <x6>.<x1> = <x7>.<x3>
-        WHERE <x7>.<x4> = <x5>
+        SELECT     <x1>.<x3>
+        FROM       <x1>
+        INNER JOIN <x2>
+        ON         <x1>.<x3> = <x2>.<x5>
+        WHERE      <x2>.<x4> = <x6>
     '''))
     assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
-        SELECT <x7>.<x3>
-        FROM <x2> AS <x7>
-        WHERE <x7>.<x4> = <x5>
+        SELECT <x2>.<x5>
+        FROM   <x2>
+        WHERE  <x2>.<x4> = <x6>
     '''))

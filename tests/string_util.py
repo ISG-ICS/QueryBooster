@@ -4,7 +4,7 @@ class StringUtil:
     #
     @staticmethod
     def strim(x: str) -> str:
-        return ' '.join([line.strip() for line in x.splitlines()]).strip()
+        return ' '.join([' '.join(line.split()) for line in x.splitlines()]).strip()
 
 
 if __name__ == '__main__':
@@ -16,4 +16,16 @@ if __name__ == '__main__':
             AND e1.age > 17
             AND e2.salary > 35000
         '''
+    print(StringUtil.strim(input))
+
+    input = '''
+            SELECT     COUNT(<x1>.admin_permission_id) AS col_0_0_
+            FROM       <x1>
+            INNER JOIN blc_admin_role_permission_xref AS allroles1_
+            ON         <x1>.admin_permission_id = allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role AS adminrolei2_
+            ON         allroles1_.admin_role_id = adminrolei2_.admin_role_id
+            WHERE      <x1>.is_friendly = 1
+            AND        adminrolei2_.admin_role_id = 1
+    '''
     print(StringUtil.strim(input))
