@@ -11,6 +11,27 @@ import re
 
 class RuleGenerator:
 
+    # Initialize the seed rule for a given rewriting pair q0 -> q1
+    #
+    @staticmethod
+    def initialize_seed_rule(q0: str, q1: str) -> dict:
+        # Extend partial SQL statement to full SQL statement
+        #    for the sake of sql parser
+        # 
+        q0, q0Scope = RuleParser.extendToFullSQL(q0)
+        q1, q1Scope = RuleParser.extendToFullSQL(q1)
+
+        # Parse full SQL statement into AST json
+        # 
+        q0ASTJson = mosql.parse(q0)
+        q1ASTJson = mosql.parse(q1)
+
+        # 4. Extract subtree from AST json based on scope
+        patternASTJson = RuleParser.extractASTSubtree(q0ASTJson, q0Scope)
+        rewriteASTJson = RuleParser.extractASTSubtree(q1ASTJson, q1Scope)
+
+        return {'pattern': RuleGenerator.deparse(patternASTJson), 'rewrite': RuleGenerator.deparse(rewriteASTJson)}
+
     # Generate the seed rule for a given rewriting pair q0 -> q1
     #
     @staticmethod
@@ -768,10 +789,11 @@ class RuleGenerator:
         fingerprints = set()
         ans = []
         for table in patternTables:
-            fingerprint = table['value'] + '-' + table['name']
-            if fingerprint not in fingerprints:
-                ans.append(table)
-                fingerprints.add(fingerprint)
+            if type(table['value']) is str and type(table['name']) is str:
+                fingerprint = table['value'] + '-' + table['name']
+                if fingerprint not in fingerprints:
+                    ans.append(table)
+                    fingerprints.add(fingerprint)
         patternTables = ans
 
         return patternTables
@@ -982,7 +1004,11 @@ class RuleGenerator:
         
         # Generate seedRule from the given rewriting pair
         #
-        seedRule = RuleGenerator.generate_seed_rule(q0, q1)
+        # seedRule = RuleGenerator.generate_seed_rule(q0, q1)
+
+        # Initialize seedRule from the given rewriting pair
+        #
+        seedRule = RuleGenerator.initialize_seed_rule(q0, q1)
 
         # Parse seedRule's pattern and rewrite into SQL AST json
         #
@@ -1339,7 +1365,11 @@ class RuleGenerator:
         
         # Generate seedRule from the given rewriting pair
         #
-        seedRule = RuleGenerator.generate_seed_rule(q0, q1)
+        # seedRule = RuleGenerator.generate_seed_rule(q0, q1)
+
+        # Initialize seedRule from the given rewriting pair
+        #
+        seedRule = RuleGenerator.initialize_seed_rule(q0, q1)
 
         # Parse seedRule's pattern and rewrite into SQL AST json
         #

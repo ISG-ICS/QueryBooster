@@ -782,6 +782,34 @@ def test_tables_5():
     assert set(map(lambda t: t['value'] + '-' + t['name'], test_tables)) == set(map(lambda t: t['value'] + '-' + t['name'], tables))
 
 
+def test_tables_6():
+    pattern = '''
+        SELECT Count(*)
+        FROM   (SELECT 1 AS one
+                FROM   group_histories
+                WHERE  group_histories.group_id = 2578
+                    AND group_histories.action = 2
+                ORDER  BY group_histories.created_at DESC
+                LIMIT  25 offset 0) subquery_for_count 
+    '''
+    rewrite = '''
+        SELECT Count(*)
+        FROM   (SELECT 1 AS one
+                FROM   group_histories
+                WHERE  group_histories.group_id = 2578
+                    AND group_histories.action = 2
+                LIMIT  25 offset 0) AS subquery_for_count 
+    '''
+    tables = [
+        {'value': 'group_histories', 'name': 'group_histories'}
+    ]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_tables = RuleGenerator.tables(pattern_json, rewrite_json)
+    assert set(map(lambda t: t['value'] + '-' + t['name'], test_tables)) == set(map(lambda t: t['value'] + '-' + t['name'], tables))
+
+
 def test_variablize_table_1():
 
     rule = {
@@ -907,9 +935,9 @@ def test_variablize_table_3():
         ''')
 
 
-def test_generate_rule_graph_1():
-    q0 = "SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'"
-    q1 = "SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+def test_generate_rule_graph_0():
+    q0 = "CAST(created_at AS DATE)"
+    q1 = "created_at"
 
     rootRule = RuleGenerator.generate_rule_graph(q0, q1)
     assert type(rootRule) is dict
@@ -918,8 +946,23 @@ def test_generate_rule_graph_1():
     assert len(children) == 1
 
     childRule = children[0]
-    assert childRule['pattern'] == 'CAST(<x1> AS DATE)'
-    assert childRule['rewrite'] == '<x1>'
+    assert childRule['pattern'] == "CAST(<x1> AS DATE)"
+    assert childRule['rewrite'] == "<x1>"
+
+
+def test_generate_rule_graph_1():
+    q0 = "SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'"
+    q1 = "SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+
+    rootRule = RuleGenerator.generate_rule_graph(q0, q1)
+    assert type(rootRule) is dict
+
+    children = rootRule['children']
+    assert len(children) == 3
+
+    childRule = children[1]
+    assert childRule['pattern'] == "SELECT * FROM t WHERE CAST(<x1> AS DATE) = TIMESTAMP('2016-10-01 00:00:00.000')"
+    assert childRule['rewrite'] == "SELECT * FROM t WHERE <x1> = TIMESTAMP('2016-10-01 00:00:00.000')"
 
 
 def test_generate_rule_graph_2():
@@ -944,8 +987,8 @@ def test_generate_rule_graph_2():
 
 
 def test_generate_rule_graph_3():
-    q0 = "SELECT * FROM t WHERE STRPOS(LOWER(text), 'iphone') > 0"
-    q1 = "SELECT * FROM t WHERE ILIKE(text, '%iphone%')"
+    q0 = "STRPOS(LOWER(text), 'iphone') > 0"
+    q1 = "ILIKE(text, '%iphone%')"
 
     rootRule = RuleGenerator.generate_rule_graph(q0, q1)
     assert type(rootRule) is dict
@@ -1021,42 +1064,18 @@ def test_recommend_rules_2():
     examples = [
         {
             "q0":'''
-                    SELECT  SUM(1),
-                            CAST(state_name AS TEXT)
-                    FROM  tweets 
-                    WHERE  CAST(DATE_TRUNC('QUARTER', 
-                                            CAST(created_at AS DATE)) 
-                                AS DATE) IN 
-                                ((TIMESTAMP '2016-10-01 00:00:00.000'), 
-                                (TIMESTAMP '2017-01-01 00:00:00.000'), 
-                                (TIMESTAMP '2017-04-01 00:00:00.000'))
-                    AND  (STRPOS(UPPER(text), 'iphone') > 0)
-                    GROUP  BY 2;
+                    SELECT STRPOS(UPPER(text), 'iphone') > 0
             ''',
             "q1":'''
-                    SELECT  SUM(1),
-                            CAST(state_name AS TEXT)
-                    FROM  tweets 
-                    WHERE  CAST(DATE_TRUNC('QUARTER', 
-                                            CAST(created_at AS DATE)) 
-                            AS DATE) IN 
-                                ((TIMESTAMP '2016-10-01 00:00:00.000'), 
-                                (TIMESTAMP '2017-01-01 00:00:00.000'), 
-                                (TIMESTAMP '2017-04-01 00:00:00.000'))
-                    AND  text ILIKE '%iphone%'
-                    GROUP  BY 2;
+                    SELECT text ILIKE '%iphone%'
             '''
         },
         {
             "q0":'''
-                    SELECT  *
-                    FROM  tweets 
-                    WHERE  (STRPOS(UPPER(state_name), 'iphone') > 0);
+                    SELECT STRPOS(UPPER(state_name), 'iphone') > 0
             ''',
             "q1":'''
-                    SELECT  *
-                    FROM  tweets 
-                    WHERE  state_name ILIKE '%iphone%';
+                    SELECT state_name ILIKE '%iphone%'
             '''
         }
     ]
@@ -1071,25 +1090,25 @@ def test_recommend_rules_2():
 
 
 def test_generate_general_rule_1():
-    q0 = "SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'"
-    q1 = "SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+    q0 = "SELECT CAST(created_at AS DATE)"
+    q1 = "SELECT created_at"
 
     rule = RuleGenerator.generate_general_rule(q0, q1)
     assert type(rule) is dict
 
-    assert rule['pattern'] == 'CAST(<x1> AS DATE)'
-    assert rule['rewrite'] == '<x1>'
+    assert rule['pattern'] == "SELECT CAST(<x1> AS DATE)"
+    assert rule['rewrite'] == "SELECT <x1>"
 
 
 def test_generate_general_rule_2():
-    q0 = "SELECT * FROM t WHERE STRPOS(LOWER(text), 'iphone') > 0"
-    q1 = "SELECT * FROM t WHERE ILIKE(text, '%iphone%')"
+    q0 = "SELECT STRPOS(LOWER(text), 'iphone') > 0"
+    q1 = "SELECT ILIKE(text, '%iphone%')"
 
     rule = RuleGenerator.generate_general_rule(q0, q1)
     assert type(rule) is dict
 
-    assert rule['pattern'] == "STRPOS(LOWER(<x1>), '<x2>') > 0"
-    assert rule['rewrite'] == "ILIKE(<x1>, '%<x2>%')"
+    assert rule['pattern'] == "SELECT STRPOS(LOWER(<x1>), '<x2>') > 0"
+    assert rule['rewrite'] == "SELECT ILIKE(<x1>, '%<x2>%')"
 
 
 def test_generate_general_rule_3():
