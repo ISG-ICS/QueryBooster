@@ -161,6 +161,19 @@ class QueryRewriter:
                 if QueryRewriter.is_constant(query_node):
                     if value == query_node:
                         return True
+                # Special case where a Var represents a table's alias
+                #   e.g., V001 = 'e1'
+                # and query_node is the table object (name and alias)
+                #   e.g., {'value': 'employee', name: 'e1'}
+                # Note: this case happens when a Var first matches table alias in the SELECT clause
+                #       then it traverse the table object in FROM clause
+                #
+                elif QueryRewriter.is_dict(query_node):
+                    if 'value' in query_node and 'name' in query_node:
+                        if value == query_node['value'] or value == query_node['name']:
+                            # replace the Var's value in memo to be the table object
+                            memo[rule_node] = query_node
+                            return True
                 return False
             elif QueryRewriter.is_dot_expression(value):
                 # TODO - Be more intelligent for the case 

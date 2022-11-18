@@ -46,7 +46,7 @@ FROM   o_auth_applications
        INNER JOIN authorizations
                ON o_auth_applications.id = authorizations.o_auth_application_id
 WHERE  authorizations.user_id = 1465 ","SELECT authorizations.o_auth_application_id 
-FROM   authorizations AS authorizations
+FROM   authorizations
 WHERE  authorizations.user_id = 1465 "
 "SELECT 1 AS one
 FROM   people
@@ -55,7 +55,7 @@ FROM   people
 WHERE  blocks.user_id = 1
        AND people.id = 1
 LIMIT  1 ","SELECT 1 AS one
-FROM   blocks AS blocks
+FROM   blocks
 WHERE  blocks.person_id = 1
        AND blocks.user_id = 1
 LIMIT  1 "
@@ -77,7 +77,7 @@ FROM   (SELECT 1 AS one
         ORDER  BY group_histories.created_at DESC
         LIMIT  25 offset 0) subquery_for_count ","SELECT Count(*)
 FROM   (SELECT 1 AS one
-        FROM   group_histories AS group_histories
+        FROM   group_histories
         WHERE  group_histories.group_id = 2578
                AND group_histories.action = 2
         LIMIT  25 offset 0) AS subquery_for_count "
@@ -107,7 +107,7 @@ FROM   users
        INNER JOIN identities
                ON identities.user_id = users.id
 WHERE  ( identities.provider LIKE 'ldap%' ) ","SELECT Min(identities.user_id)
-FROM   identities AS identities
+FROM   identities
 WHERE  identities.provider LIKE 'ldap%' "
 "SELECT Count(*)
 FROM   issues

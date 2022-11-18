@@ -183,6 +183,34 @@ rules = [
         'database': 'postgresql'
     },
 
+    {
+        'id': 8090,
+        'key': 'test_rule_wetune_90',
+        'name': 'Test Rule Wetune 90',
+        'pattern': '''
+            SELECT <x1>.<x6> AS admin_pe1_4_, <x1>.<x5> AS descript2_4_, <x1>.<x4> AS is_frien3_4_, <x1>.<x9> AS name4_4_, <x1>.<x8> AS permissi5_4_
+            FROM <x1>
+            INNER JOIN <x2> ON <x1>.<x6> = <x2>.<x6>
+            INNER JOIN <x3> ON <x2>.<x7> = <x3>.<x7>
+            WHERE <x1>.<x4> = <x10>
+            AND <x3>.<x7> = <x10>
+            ORDER BY <x1>.<x5> ASC
+            LIMIT <x11>
+        ''',
+        'constraints': '',
+        'rewrite': '''
+            SELECT <x1>.<x6> AS admin_pe1_4_, <x1>.<x5> AS descript2_4_, <x1>.<x4> AS is_frien3_4_, <x1>.<x9> AS name4_4_, <x1>.<x8> AS permissi5_4_
+            FROM <x1>
+            INNER JOIN <x2> ON <x1>.<x6> = <x2>.<x6>
+            WHERE <x1>.<x4> = <x10>
+            AND <x2>.<x7> = <x10>
+            ORDER BY <x1>.<x5> ASC
+            LIMIT <x11>
+        ''',
+        'actions': '',
+        'database': 'postgresql'
+    },
+
     # MySQL Rules
     # 
     {
