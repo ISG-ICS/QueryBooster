@@ -990,11 +990,279 @@ class RuleGenerator:
                         return var + '.' + _column
         
         return astJson
+    
+    # transformation function - variablize subtrees in a rule
+    #   generate a list of child rules 
+    # 
+    # note: subtrees are defined as follows:
+    #       (1) it has one or two variables in leaves
+    #       (2) it has exact the same occurrences in both the pattern and rewrite of the rule
+    #       
+    #       to variablize a subtree is to replace the subtree as a new variable in both pattern and rewrite
+    #
+    @staticmethod
+    def variablize_subtrees(rule: dict) -> list:
+
+        Profiler.onFunctionStart('varialize_subtrees')
+
+        res = []
+
+        # 1. Get candidate subtrees from rule
+        #
+        subtrees = RuleGenerator.subtrees(rule['pattern_json'], rule['rewrite_json'])
+
+        # 2. Traverse candidate subtrees, make one of them variable, and generate a new rule
+        #
+        for subtree in subtrees:
+            res.append(RuleGenerator.variablize_subtree(rule, subtree))
+        
+        Profiler.onFunctionEnd('varialize_subtrees')
+
+        return res
+    
+    # get list of common subtrees in a seed rule's pattern_json and rewrite_json
+    #
+    @staticmethod
+    def subtrees(pattern_json: str, rewrite_json: str) -> list:
+        
+        patternASTJson = json.loads(pattern_json)
+        rewriteASTJson = json.loads(rewrite_json)
+
+        # traverse the AST jsons to get all subtrees
+        patternSubtrees = RuleGenerator.subtreesOfASTJson(patternASTJson, [])
+        rewriteSubtrees = RuleGenerator.subtreesOfASTJson(rewriteASTJson, [])
+
+        # find the common subtrees in pattern and rewrite
+        #
+        ans = []
+        while len(patternSubtrees) > 0:
+            patternSubtree = patternSubtrees.pop()
+            for rewriteSubtree in rewriteSubtrees:
+                if RuleGenerator.sameSubtree(patternSubtree, rewriteSubtree):
+                    rewriteSubtrees.remove(rewriteSubtree)
+                    ans.append(patternSubtree)
+                    break
+
+        return ans
+    
+    # check if the given two subtrees are the same
+    #
+    @staticmethod
+    def sameSubtree(left: dict, right: dict) -> bool:
+        for key, leftValue in left.items():
+            if key not in right:
+                return False
+            rightValue = right[key]
+            # a child cannot be a dict
+            #
+            # when a child is a list
+            if QueryRewriter.is_list(leftValue):
+                if not QueryRewriter.is_list(rightValue):
+                    return False
+                # each element is guaranteed to be one of 
+                #   constant, dot_expression, Var, or VarList
+                if set(leftValue) != set(rightValue):
+                    return False
+            # when a child is a constant
+            elif QueryRewriter.is_constant(leftValue):
+                if not QueryRewriter.is_constant(rightValue):
+                    return False
+                if leftValue != rightValue:
+                    return False
+            # when a child is a dot_expression
+            elif QueryRewriter.is_dot_expression(leftValue):
+                if not QueryRewriter.is_dot_expression(rightValue):
+                    return False
+                if leftValue != rightValue:
+                    return False
+            # when a child is Var
+            elif QueryRewriter.is_var(leftValue):
+                if not QueryRewriter.is_var(rightValue):
+                    return False
+                if leftValue != rightValue:
+                    return False
+            # when a child is VarList
+            elif QueryRewriter.is_varList(leftValue):
+                if not QueryRewriter.is_varList(rightValue):
+                    return False
+                if leftValue != rightValue:
+                    return False
+        return True
+    
+    # recursively get set of subtrees in a rule pattern/rewrite's AST Json
+    #
+    @staticmethod
+    def subtreesOfASTJson(astJson: Any, path: list) -> list:
+        res = []
+
+        # Case-1: dict
+        #
+        if QueryRewriter.is_dict(astJson):
+            # if current node is the root of a subtree
+            #
+            if RuleGenerator.isSubtree(astJson):
+                # put in result
+                #
+                res.append(astJson)
+            # otherwise
+            #
+            else:
+                # recursively traverse the dict
+                #
+                for key, value in astJson.items():
+                    # note: key can not be table, only traverse each value
+                    res.extend(RuleGenerator.subtreesOfASTJson(value, path + [key]))
+
+        # Case-2: list
+        # 
+        if QueryRewriter.is_list(astJson):
+            for child in astJson:
+                res.extend(RuleGenerator.subtreesOfASTJson(child, path))
+        
+        return res
+    
+    # check if a node in rule pattern/rewrite's AST Json is a subtree
+    #   see comments in variablize_subtrees() for the definition of a subtree
+    #
+    @staticmethod
+    def isSubtree(astJson: dict) -> bool:
+        var_count = 0
+        for key, value in astJson.items():
+            # key can not be keywords of [SELECT, FROM, WHERE, LIMIT, ORDERBY]
+            if key in ['select', 'from', 'where', 'limit', 'orderby']:
+                return False
+            # a child cannot be a dict
+            if QueryRewriter.is_dict(value):
+                return False
+            # when a child is a list
+            elif QueryRewriter.is_list(value):
+                # each element in the list has to be constant, dot_expression, Var or VarList
+                for element in value:
+                    if QueryRewriter.is_constant(element):
+                        pass
+                    elif QueryRewriter.is_dot_expression(element):
+                        # count Var
+                        #
+                        # split the dot expression into two parts
+                        # 
+                        _table = '.'.join(element.split('.')[0:-1])
+                        _column = element.split('.')[-1]
+                        # we count a dot_expression as a Var only if both parts are Vars
+                        #
+                        if QueryRewriter.is_var(_table) and QueryRewriter.is_var(_column): 
+                            var_count += 1
+                    elif QueryRewriter.is_var(element):
+                        var_count += 1
+                    elif QueryRewriter.is_varList(element):
+                        var_count += 1
+                    else:
+                        return False
+            # when a child is a constant
+            elif QueryRewriter.is_constant(value):
+                pass
+            # when a child is a dot_expression
+            elif QueryRewriter.is_dot_expression(value):
+                # count Var
+                #
+                # split the dot expression into two parts
+                # 
+                _table = '.'.join(value.split('.')[0:-1])
+                _column = value.split('.')[-1]
+                # we count a dot_expression as a Var only if both parts are Vars
+                #
+                if QueryRewriter.is_var(_table) and QueryRewriter.is_var(_column): 
+                    var_count += 1
+            # when a child is Var
+            elif QueryRewriter.is_var(value):
+                # count Var
+                #
+                var_count += 1
+            # when a child is VarList
+            elif QueryRewriter.is_varList(value):
+                # count Var
+                #
+                var_count += 1
+
+        if var_count >= 1:
+            return True
+        else:
+            return False
+    
+    # variablize the given subtree in given rule and generate a new rule
+    #
+    @staticmethod
+    def variablize_subtree(rule: dict, subtree: dict) -> dict:
+
+        # create a new rule based on rule
+        new_rule = copy.deepcopy(rule)
+
+        # Find a variable name for the given subtree
+        #
+        new_rule_mapping = json.loads(new_rule['mapping'])
+        new_rule_mapping, newVarInternal = RuleGenerator.findNextVarInternal(new_rule_mapping)
+        new_rule['mapping'] = json.dumps(new_rule_mapping)
+
+        # Replace given subtree into newVarInternal in new rule
+        #
+        new_rule_pattern_json = json.loads(new_rule['pattern_json'])
+        new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
+        new_rule_pattern_json = RuleGenerator.replaceSubtreesOfASTJson(new_rule_pattern_json, [], subtree, newVarInternal)
+        new_rule_rewrite_json = RuleGenerator.replaceSubtreesOfASTJson(new_rule_rewrite_json, [], subtree, newVarInternal)
+        new_rule['pattern_json'] = json.dumps(new_rule_pattern_json)
+        new_rule['rewrite_json'] = json.dumps(new_rule_rewrite_json)
+
+        # Deparse new rule's pattern_json/rewrite_json into pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.deparse(new_rule_pattern_json)
+        new_rule['rewrite'] = RuleGenerator.deparse(new_rule_rewrite_json)
+
+        # Dereplace vars from new rule's pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.dereplaceVars(new_rule['pattern'], new_rule_mapping)
+        new_rule['rewrite'] = RuleGenerator.dereplaceVars(new_rule['rewrite'], new_rule_mapping)
+
+        return new_rule
+    
+    # recursively replace given subtree into given var in a rule's pattern/rewrite AST Json
+    #
+    @staticmethod
+    def replaceSubtreesOfASTJson(astJson: Any, path: list, subtree: dict, var: str) -> Any:
+        
+        # Case-1: dict
+        #
+        if QueryRewriter.is_dict(astJson):
+            # if current node is the root of the subtree
+            #
+            if RuleGenerator.isSubtree(astJson):
+                # if the subtree is the same as the given subtree
+                #
+                if RuleGenerator.sameSubtree(astJson, subtree):
+                    return var
+            # otherwise
+            #
+            else:
+                # recursively traverse the dict
+                #
+                for key, value in astJson.items():
+                    # note: key can not be table, only traverse each value
+                    astJson[key] = RuleGenerator.replaceSubtreesOfASTJson(value, path + [key], subtree, var)
+                return astJson
+
+        # Case-2: list
+        # 
+        if QueryRewriter.is_list(astJson):
+            res = []
+            for child in astJson:
+                res.append(RuleGenerator.replaceSubtreesOfASTJson(child, path, subtree, var))
+            return res
+        
+        return astJson
 
     RuleTransformations = {
         'variablize_tables': variablize_tables,
         'variablize_columns' : variablize_columns,
-        'variablize_literals' : variablize_literals
+        'variablize_literals' : variablize_literals,
+        'variablize_subtrees' : variablize_subtrees
     }
 
     # Generate the candidate rule graph for a given rewriting pair q0 -> q1

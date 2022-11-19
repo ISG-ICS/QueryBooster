@@ -935,6 +935,129 @@ def test_variablize_table_3():
         ''')
 
 
+def test_subtrees_1():
+    pattern = "STRPOS(LOWER(text), 'iphone') > 0"
+    rewrite = "ILIKE(text, '%iphone%')"
+    subtrees = []
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_subtrees = RuleGenerator.subtrees(pattern_json, rewrite_json)
+    assert set(map(lambda t: json.dumps(t), test_subtrees)) == set(map(lambda t: json.dumps(t), subtrees))
+
+
+def test_subtrees_2():
+    pattern = '''
+        select e1.name, e1.age, e2.salary
+        from employee e1,
+            employee e2
+        where e1.id = e2.id
+        and e1.age > 17
+        and e2.salary  > 35000;
+    '''
+    rewrite = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e1.salary 
+        FROM employee e1
+        WHERE e1.age > 17
+        AND e1.salary > 35000;
+    '''
+    subtrees = []
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_subtrees = RuleGenerator.subtrees(pattern_json, rewrite_json)
+    assert set(map(lambda t: json.dumps(t), test_subtrees)) == set(map(lambda t: json.dumps(t), subtrees))
+
+
+def test_subtrees_3():
+    pattern = '''
+        select <tb1>.name, <tb1>.age, <tb2>.salary
+        from <tb1>,
+             <tb2>
+        where <tb1>.<a1> = <tb2>.<a1>
+        and <tb1>.age > 17
+        and <tb2>.salary > 35000;
+    '''
+    rewrite = '''
+        SELECT  <tb1>.name, 
+                <tb1>.age, 
+                <tb1>.salary 
+        FROM <tb1>
+        WHERE <tb1>.age > 17
+        AND <tb1>.salary > 35000;
+    '''
+    subtrees = []
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_subtrees = RuleGenerator.subtrees(pattern_json, rewrite_json)
+    assert set(map(lambda t: json.dumps(t), test_subtrees)) == set(map(lambda t: json.dumps(t), subtrees))
+
+
+def test_subtrees_4():
+    pattern = '''
+        select <tb1>.<a2>, <tb1>.age, <tb2>.salary
+        from <tb1>,
+             <tb2>
+        where <tb1>.<a1> = <tb2>.<a1>
+        and <tb1>.age > 17
+        and <tb2>.salary > 35000;
+    '''
+    rewrite = '''
+        SELECT  <tb1>.<a2>, 
+                <tb1>.age, 
+                <tb1>.salary 
+        FROM <tb1>
+        WHERE <tb1>.age > 17
+        AND <tb1>.salary > 35000;
+    '''
+    subtrees = [{'value': 'V001.V002'}]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_subtrees = RuleGenerator.subtrees(pattern_json, rewrite_json)
+    assert set(map(lambda t: json.dumps(t), test_subtrees)) == set(map(lambda t: json.dumps(t), subtrees))
+
+
+def test_subtrees_5():
+    pattern = '''
+        SELECT <x1>.<x7> AS admin_pe1_4_, <x1>.<x6> AS descript2_4_, <x1>.<x8> AS is_frien3_4_, <x1>.<x9> AS name4_4_, <x1>.<x4> AS permissi5_4_
+        FROM <x1>
+        INNER JOIN <x2> ON <x1>.<x7> = <x2>.<x7>
+        INNER JOIN <x3> ON <x2>.<x5> = <x3>.<x5>
+        WHERE <x1>.<x8> = <x10>
+        AND <x3>.<x5> = <x10>
+        ORDER BY <x1>.<x6> ASC
+        LIMIT <x11>
+    '''
+    rewrite = '''
+        SELECT <x1>.<x7> AS admin_pe1_4_, <x1>.<x6> AS descript2_4_, <x1>.<x8> AS is_frien3_4_, <x1>.<x9> AS name4_4_, <x1>.<x4> AS permissi5_4_
+        FROM <x1>
+        INNER JOIN <x2> ON <x1>.<x7> = <x2>.<x7>
+        WHERE <x1>.<x8> = <x10>
+        AND <x2>.<x5> = <x10>
+        ORDER BY <x1>.<x6> ASC
+        LIMIT <x11>
+    '''
+    subtrees = [
+        {'value': 'V001.V003', 'sort': 'asc'}, 
+        {'eq': ['V001.V004', 'V010']}, 
+        {'eq': ['V001.V002', 'V007.V002']}, 
+        {'value': 'V001.V006', 'name': 'permissi5_4_'}, 
+        {'value': 'V001.V005', 'name': 'name4_4_'}, 
+        {'value': 'V001.V004', 'name': 'is_frien3_4_'}, 
+        {'value': 'V001.V003', 'name': 'descript2_4_'}, 
+        {'value': 'V001.V002', 'name': 'admin_pe1_4_'}
+    ]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_subtrees = RuleGenerator.subtrees(pattern_json, rewrite_json)
+    assert set(map(lambda t: json.dumps(t), test_subtrees)) == set(map(lambda t: json.dumps(t), subtrees))
+
+
 def test_generate_rule_graph_0():
     q0 = "CAST(created_at AS DATE)"
     q1 = "created_at"
