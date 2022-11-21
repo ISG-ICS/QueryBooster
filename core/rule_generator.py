@@ -1128,8 +1128,8 @@ class RuleGenerator:
     def isSubtree(astJson: dict) -> bool:
         var_count = 0
         for key, value in astJson.items():
-            # key can not be keywords of [SELECT, FROM, WHERE, LIMIT, ORDERBY]
-            if key in ['select', 'from', 'where', 'limit', 'orderby']:
+            # key can not be keywords of [SELECT, FROM, WHERE, LIMIT, ORDERBY, SORT, INNER JOIN]
+            if key in ['select', 'from', 'where', 'limit', 'orderby', 'sort', 'inner join']:
                 return False
             # a child cannot be a dict
             if QueryRewriter.is_dict(value):
@@ -1620,10 +1620,61 @@ class RuleGenerator:
 
         return new_rule
     
+    # generalization function - generalize subtrees in a rule
+    #
+    @staticmethod
+    def generalize_subtrees(rule: dict) -> dict:
+
+        # 1. Get candidate subtrees from rule
+        #
+        subtrees = RuleGenerator.subtrees(rule['pattern_json'], rule['rewrite_json'])
+
+        # 2. Make all candidate subtrees variables, and generate a new rule
+        #
+        return RuleGenerator.variablize_all_subtrees(rule, subtrees)
+    
+    # variablize all the given subtrees in given rule and generate a new rule
+    #
+    @staticmethod
+    def variablize_all_subtrees(rule: dict, subtrees: list) -> dict:
+
+        # create a new rule based on rule
+        new_rule = copy.deepcopy(rule)
+        new_rule_mapping = json.loads(new_rule['mapping'])
+        new_rule_pattern_json = json.loads(new_rule['pattern_json'])
+        new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
+
+        for subtree in subtrees:
+            # Find a variable name for the given subtree
+            #
+            new_rule_mapping, newVarInternal = RuleGenerator.findNextVarInternal(new_rule_mapping)
+
+            # Replace given subtree into newVarInternal in new rule
+            #
+            new_rule_pattern_json = RuleGenerator.replaceSubtreesOfASTJson(new_rule_pattern_json, [], subtree, newVarInternal)
+            new_rule_rewrite_json = RuleGenerator.replaceSubtreesOfASTJson(new_rule_rewrite_json, [], subtree, newVarInternal)
+
+        new_rule['mapping'] = json.dumps(new_rule_mapping)
+        new_rule['pattern_json'] = json.dumps(new_rule_pattern_json)
+        new_rule['rewrite_json'] = json.dumps(new_rule_rewrite_json)
+        
+        # Deparse new rule's pattern_json/rewrite_json into pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.deparse(new_rule_pattern_json)
+        new_rule['rewrite'] = RuleGenerator.deparse(new_rule_rewrite_json)
+
+        # Dereplace vars from new rule's pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.dereplaceVars(new_rule['pattern'], new_rule_mapping)
+        new_rule['rewrite'] = RuleGenerator.dereplaceVars(new_rule['rewrite'], new_rule_mapping)
+
+        return new_rule
+    
     RuleGeneralizations = {
         'generalize_tables': generalize_tables,
         'generalize_columns' : generalize_columns,
-        'generalize_literals' : generalize_literals
+        'generalize_literals' : generalize_literals,
+        'generalize_subtrees': generalize_subtrees
     }
 
     # Generate a general rule given a rewriting pair q0 -> q1
@@ -1647,11 +1698,19 @@ class RuleGenerator:
         #
         seedRule['constraints'], seedRule['constraints_json'], seedRule['actions'], seedRule['actions_json'] = '', '[]', '', '[]'
 
-        # Generalize the seedRule by applying all possible transformations
+        # Generalize the seedRule by applying all possible transformations 
+        #   recursively until no more differences
         #
         generalRule = seedRule
-        for generalization in RuleGenerator.RuleGeneralizations.keys():
-            generalRule = getattr(RuleGenerator, generalization)(generalRule)
+        preRuleFingerprint = RuleGenerator.fingerPrint(generalRule)
+        diff = True
+        while diff:
+            for generalization in RuleGenerator.RuleGeneralizations.keys():
+                generalRule = getattr(RuleGenerator, generalization)(generalRule)
+            newRuleFingerprint = RuleGenerator.fingerPrint(generalRule)
+            if newRuleFingerprint == preRuleFingerprint:
+                diff = False
+            preRuleFingerprint = newRuleFingerprint
         
         return generalRule
 

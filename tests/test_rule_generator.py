@@ -1042,7 +1042,6 @@ def test_subtrees_5():
         LIMIT <x11>
     '''
     subtrees = [
-        {'value': 'V001.V003', 'sort': 'asc'}, 
         {'eq': ['V001.V004', 'V010']}, 
         {'eq': ['V001.V002', 'V007.V002']}, 
         {'value': 'V001.V006', 'name': 'permissi5_4_'}, 
@@ -1056,6 +1055,78 @@ def test_subtrees_5():
 
     test_subtrees = RuleGenerator.subtrees(pattern_json, rewrite_json)
     assert set(map(lambda t: json.dumps(t), test_subtrees)) == set(map(lambda t: json.dumps(t), subtrees))
+
+
+def test_variablize_subtree_1():
+
+    rule = {
+        'pattern': '''
+            select <tb1>.<a2>, <tb1>.age, <tb2>.salary
+            from <tb1>,
+                <tb2>
+            where <tb1>.<a1> = <tb2>.<a1>
+            and <tb1>.age > 17
+            and <tb2>.salary > 35000
+        ''',
+        'rewrite': '''
+            SELECT  <tb1>.<a2>, 
+                    <tb1>.age, 
+                    <tb1>.salary 
+            FROM <tb1>
+            WHERE <tb1>.age > 17
+            AND <tb1>.salary > 35000
+        '''
+    }
+    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
+    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
+    
+    rule = RuleGenerator.variablize_subtree(rule, {'value': 'V001.V002'})
+    assert StringUtil.strim(rule['pattern']) == StringUtil.strim('''
+            SELECT <x5>, <tb1>.age, <tb2>.salary
+            FROM <tb1>,
+                <tb2>
+            WHERE <tb1>.<a1> = <tb2>.<a1>
+            AND <tb1>.age > 17
+            AND <tb2>.salary > 35000
+        ''')
+    assert StringUtil.strim(rule['rewrite']) == StringUtil.strim('''
+            SELECT  <x5>, 
+                    <tb1>.age, 
+                    <tb1>.salary 
+            FROM <tb1>
+            WHERE <tb1>.age > 17
+            AND <tb1>.salary > 35000
+        ''')
+
+
+def test_variablize_subtrees_1():
+
+    rule = {
+        'pattern': '''
+            SELECT <x1>.<x7> AS admin_pe1_4_, <x1>.<x6> AS descript2_4_, <x1>.<x8> AS is_frien3_4_, <x1>.<x9> AS name4_4_, <x1>.<x4> AS permissi5_4_
+            FROM <x1>
+            INNER JOIN <x2> ON <x1>.<x7> = <x2>.<x7>
+            INNER JOIN <x3> ON <x2>.<x5> = <x3>.<x5>
+            WHERE <x1>.<x8> = <x10>
+            AND <x3>.<x5> = <x10>
+            ORDER BY <x1>.<x6> ASC
+            LIMIT <x11>
+        ''',
+        'rewrite': '''
+            SELECT <x1>.<x7> AS admin_pe1_4_, <x1>.<x6> AS descript2_4_, <x1>.<x8> AS is_frien3_4_, <x1>.<x9> AS name4_4_, <x1>.<x4> AS permissi5_4_
+            FROM <x1>
+            INNER JOIN <x2> ON <x1>.<x7> = <x2>.<x7>
+            WHERE <x1>.<x8> = <x10>
+            AND <x2>.<x5> = <x10>
+            ORDER BY <x1>.<x6> ASC
+            LIMIT <x11>
+        '''
+    }
+    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
+    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
+    
+    children = RuleGenerator.variablize_subtrees(rule)
+    assert len(children) == 7
 
 
 def test_generate_rule_graph_0():
@@ -1343,22 +1414,22 @@ def test_generate_general_rule_6():
     assert type(rule) is dict
 
     assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
-        SELECT     COUNT(<x1>.<x5>) AS col_0_0_
+        SELECT     <x11>
         FROM       <x1>
         INNER JOIN <x2>
-        ON         <x1>.<x5> = <x2>.<x5>
+        ON         <x9>
         INNER JOIN <x3>
         ON         <x2>.<x4> = <x3>.<x4>
-        WHERE      <x1>.<x6> = <x7>
+        WHERE      <x8>
         AND        <x3>.<x4> = <x7>
     '''))
     assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
-        SELECT     COUNT(<x1>.<x5>) AS col_0_0_
+        SELECT     <x11>
         FROM       <x1>
         INNER JOIN <x2>
-        ON         <x1>.<x5> = <x2>.<x5>
+        ON         <x9>
         WHERE      <x2>.<x4> = <x7>
-        AND        <x1>.<x6> = <x7>
+        AND        <x8>
     '''))
 
 
@@ -1385,10 +1456,10 @@ def test_generate_general_rule_7():
         FROM       <x1>
         INNER JOIN <x2>
         ON         <x1>.<x3> = <x2>.<x5>
-        WHERE      <x2>.<x4> = <x6>
+        WHERE      <x7>
     '''))
     assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
         SELECT <x2>.<x5>
         FROM   <x2>
-        WHERE  <x2>.<x4> = <x6>
+        WHERE  <x7>
     '''))
