@@ -822,6 +822,11 @@ class RuleGenerator:
                 #
                 elif len(path) >= 1 and path[-1] == 'inner join':
                     res.append(astJson)
+                # case-3: {'left outer join': {'value': 'employee', 'name': 'e1'}}
+                #         path = ['left outer join']
+                #
+                elif len(path) >= 1 and path[-1] == 'left outer join':
+                    res.append(astJson)
             # recursively traverse the dict
             #
             for key, value in astJson.items():
@@ -850,6 +855,13 @@ class RuleGenerator:
                 # treat the table name itself as the alias
                 #
                 res.append({'value': astJson, 'name': astJson})
+            # case-3: {'left outer join': 'employee'}
+            #         path = ['left outer join']
+            #
+            elif len(path) >=1 and path[-1] == 'left outer join':
+                # treat the table name itself as the alias
+                #
+                res.append({'value': astJson, 'name': astJson})
         
         # Case-4: dot expression
         if QueryRewriter.is_dot_expression(astJson):
@@ -864,6 +876,13 @@ class RuleGenerator:
             #         path = ['inner join']
             #
             elif len(path) >=1 and path[-1] == 'inner join':
+                # treat the table name itself as the alias
+                #
+                res.append({'value': astJson, 'name': astJson})
+            # case-3: {'left outer join': 'tablespace.employee'}
+            #         path = ['left outer join']
+            #
+            elif len(path) >=1 and path[-1] == 'left outer join':
                 # treat the table name itself as the alias
                 #
                 res.append({'value': astJson, 'name': astJson})
@@ -931,6 +950,12 @@ class RuleGenerator:
                 elif len(path) >= 1 and path[-1] == 'inner join':
                     if astJson['value'] == table['value'] and astJson['name'] == table['name']:
                         return var
+                # case-3: {'left outer join': {'value': 'employee', 'name': 'e1'}}
+                #         path = ['left outer join']
+                #
+                elif len(path) >= 1 and path[-1] == 'left outer join':
+                    if astJson['value'] == table['value'] and astJson['name'] == table['name']:
+                        return var
             # recursively traverse the dict
             #
             for key, value in astJson.items():
@@ -960,6 +985,12 @@ class RuleGenerator:
             elif len(path) >=1 and path[-1] == 'inner join':
                 if astJson == table['value']:
                     return var
+            # case-3: {'left outer join': 'employee'}
+            #         path = ['left outer join']
+            #
+            elif len(path) >=1 and path[-1] == 'left outer join':
+                if astJson == table['value']:
+                    return var
         
         # Case-4: dot expression
         if QueryRewriter.is_dot_expression(astJson):
@@ -975,7 +1006,13 @@ class RuleGenerator:
             elif len(path) >=1 and path[-1] == 'inner join':
                 if astJson == table['value']:
                     return var
-            # case-3: table's alias occurs in select or where clause
+            # case-3: {'left outer join': 'tablespace.employee'}
+            #         path = ['left outer join']
+            #
+            elif len(path) >=1 and path[-1] == 'left outer join':
+                if astJson == table['value']:
+                    return var
+            # case-4: table's alias occurs in select or where clause
             #
             else:
                 # split the dot expression into two parts
@@ -1128,8 +1165,8 @@ class RuleGenerator:
     def isSubtree(astJson: dict) -> bool:
         var_count = 0
         for key, value in astJson.items():
-            # key can not be keywords of [SELECT, FROM, WHERE, LIMIT, ORDERBY, SORT, INNER JOIN]
-            if key in ['select', 'from', 'where', 'limit', 'orderby', 'sort', 'inner join']:
+            # key can not be keywords of [SELECT, FROM, WHERE, LIMIT, ORDERBY, SORT, INNER JOIN, LEFT OUTER JOIN]
+            if key in ['select', 'from', 'where', 'limit', 'orderby', 'sort', 'inner join', 'left outer join']:
                 return False
             # a child cannot be a dict
             if QueryRewriter.is_dict(value):
