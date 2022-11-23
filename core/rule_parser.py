@@ -23,7 +23,7 @@ VarTypesInfo = {
         'markerStart': '<<',
         'markerEnd': '>>',
         'internalBase': 'VL',
-        'exteranlBase': 'y'
+        'externalBase': 'y'
     }
 }
 

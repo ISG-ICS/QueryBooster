@@ -560,9 +560,9 @@ class RuleGenerator:
         return astJson
     
     # Find the next Var internal name given the current mapping
-    #   Traverse all var/varList mappings in rule
-    #     Count the max number of var
-    # Return the new mapping with the new Var map (e.g., <x3> -> VL3) and the new VarInternal (e.g., VL3)
+    #   Traverse all Var/VarList mappings in rule
+    #     Count the max number of Var
+    # Return the new mapping with the new Var map (e.g., <x3> -> V3) and the new VarInternal (e.g., V3)
     #
     @staticmethod
     def findNextVarInternal(mapping: dict) -> tuple[dict, str]:
@@ -578,6 +578,26 @@ class RuleGenerator:
         # add new map into mapping
         mapping[newVarExternal] = newVarInternal
         return mapping, newVarInternal
+    
+    # Find the next VarList internal name given the current mapping
+    #   Traverse all Var/VarList mappings in rule
+    #     Count the max number of varList
+    # Return the new mapping with the new VarList map (e.g., <<y3>> -> VL3) and the new VarListInternal (e.g., VL3)
+    #
+    @staticmethod
+    def findNextVarListInternal(mapping: dict) -> tuple[dict, str]:
+        maxVarListNum = 0
+        for varInternal in mapping.values():
+            if VarTypesInfo[VarType.VarList]['internalBase'] in varInternal:
+                num = int(varInternal.split(VarTypesInfo[VarType.VarList]['internalBase'], 1)[1])
+                if num > maxVarListNum:
+                    maxVarListNum = num
+        newVarListNum = maxVarListNum + 1
+        newVarListInternal = VarTypesInfo[VarType.VarList]['internalBase'] + str(newVarListNum).zfill(3)
+        newVarListExternal = VarTypesInfo[VarType.VarList]['externalBase'] + str(newVarListNum)
+        # add new map into mapping
+        mapping[newVarListExternal] = newVarListInternal
+        return mapping, newVarListInternal
 
     # transformation function - variablize literals in a rule
     #   generate a list of child rules 
@@ -1147,7 +1167,7 @@ class RuleGenerator:
                 # recursively traverse the dict
                 #
                 for key, value in astJson.items():
-                    # note: key can not be table, only traverse each value
+                    # note: key can not be subtree, only traverse each value
                     res.extend(RuleGenerator.subtreesOfASTJson(value, path + [key]))
 
         # Case-2: list
@@ -1281,7 +1301,7 @@ class RuleGenerator:
                 # recursively traverse the dict
                 #
                 for key, value in astJson.items():
-                    # note: key can not be table, only traverse each value
+                    # note: key can not be subtree, only traverse each value
                     astJson[key] = RuleGenerator.replaceSubtreesOfASTJson(value, path + [key], subtree, var)
                 return astJson
 
@@ -1294,12 +1314,248 @@ class RuleGenerator:
             return res
         
         return astJson
+    
+    # transformation function - merge variables in a rule
+    #   generate a list of child rules 
+    # 
+    # note: we find common lists of variables in pattern and rewrite
+    #       and merge each list of variables into a VarList
+    #
+    @staticmethod
+    def merge_variables(rule: dict) -> list:
+
+        Profiler.onFunctionStart('merge_variables')
+
+        res = []
+
+        # 1. Get candidate variable lists from rule
+        #
+        variableLists = RuleGenerator.variable_lists(rule['pattern_json'], rule['rewrite_json'])
+
+        # 2. Traverse candidate variable lists, make one of them VarList, and generate a new rule
+        #
+        for variableList in variableLists:
+            res.append(RuleGenerator.merge_variable_list(rule, variableList))
+        
+        Profiler.onFunctionEnd('merge_variables')
+
+        return res
+    
+    # get list of variable lists in a seed rule's pattern_json and rewrite_json
+    #
+    @staticmethod
+    def variable_lists(pattern_json: str, rewrite_json: str) -> list:
+        
+        patternASTJson = json.loads(pattern_json)
+        rewriteASTJson = json.loads(rewrite_json)
+
+        # traverse the AST jsons to get all variable lists
+        patternVariableLists = RuleGenerator.variableListsOfASTJson(patternASTJson, [])
+        rewriteVariableLists = RuleGenerator.variableListsOfASTJson(rewriteASTJson, [])
+
+        # find the common variable lists in pattern and rewrite
+        #   and for each common variable list, find the common variables
+        #
+        ans = []
+        patternVariableLists = list(map(lambda x: set(x), patternVariableLists))
+        rewriteVariableLists = list(map(lambda x: set(x), rewriteVariableLists))
+        while len(patternVariableLists) > 0:
+            patternVariableList = patternVariableLists.pop()
+            for rewriteVariableList in rewriteVariableLists:
+                intersection = patternVariableList.intersection(rewriteVariableList)
+                if len(intersection) > 0:
+                    ans.append(list(intersection))
+                    rewriteVariableLists.remove(rewriteVariableList)
+                    break
+
+        return ans
+    
+    # recursively get set of variable lists in a rule pattern/rewrite's AST Json
+    #
+    @staticmethod
+    def variableListsOfASTJson(astJson: Any, path: list) -> list:
+        res = []
+
+        # Case-1: dict
+        #
+        if QueryRewriter.is_dict(astJson):
+            # special case for single node under SELECT clause
+            #   e.g., 'select': {'value': 'V001'}
+            #     extract the variable from child['value']
+            #
+            if len(path) >= 1 and path[-1] in ['select'] and 'value' in astJson and 'name' not in astJson and QueryRewriter.is_var(astJson['value']):
+                res.append([astJson['value']])
+            # recursively traverse the dict
+            #
+            for key, value in astJson.items():
+                # note: key can not be variable list, only traverse each value
+                res.extend(RuleGenerator.variableListsOfASTJson(value, path + [key]))
+
+        # Case-2: list
+        # 
+        if QueryRewriter.is_list(astJson):
+            # traverse the chidlren
+            #
+            variableList = []
+            for child in astJson:
+                # put Var into the candidate variable list
+                #
+                if QueryRewriter.is_var(child):
+                    variableList.append(child)
+                # special case for list under SELECT clause
+                #   e.g., 'select': [{'value': 'V001'}, {'value': 'V002'}, ...]
+                #     extract the variable from child['value']
+                #
+                elif QueryRewriter.is_dict(child) and 'value' in child and 'name' not in child and QueryRewriter.is_var(child['value']):
+                    variableList.append(child['value'])
+                # otherwise, recursively traverse the child
+                #
+                else:
+                    res.extend(RuleGenerator.variableListsOfASTJson(child, path))
+            # TODO - currently only consider the variable list under SELECT, AND keys
+            #
+            if len(path) >= 1 and path[-1] in ['select', 'and'] and len(variableList) > 0:
+                res.append(variableList)
+        
+        # Case-3: var
+        #
+        if QueryRewriter.is_var(astJson):
+            # special case for single Var under SELECT
+            #
+            if len(path) >= 1 and path[-1] in ['select']:
+                res.append([astJson])
+        
+        return res
+    
+    # merge the given variable list in given rule and generate a new rule
+    #
+    @staticmethod
+    def merge_variable_list(rule: dict, variableList: list) -> dict:
+
+        # create a new rule based on rule
+        new_rule = copy.deepcopy(rule)
+
+        # Find a VarList name for the given variable list
+        #
+        new_rule_mapping = json.loads(new_rule['mapping'])
+        new_rule_mapping, newVarListInternal = RuleGenerator.findNextVarListInternal(new_rule_mapping)
+        new_rule['mapping'] = json.dumps(new_rule_mapping)
+
+        # Replace given variable list into newVarListInternal in new rule
+        #
+        new_rule_pattern_json = json.loads(new_rule['pattern_json'])
+        new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
+        new_rule_pattern_json = RuleGenerator.replaceVariableListsOfASTJson(new_rule_pattern_json, [], variableList, newVarListInternal)
+        new_rule_rewrite_json = RuleGenerator.replaceVariableListsOfASTJson(new_rule_rewrite_json, [], variableList, newVarListInternal)
+        new_rule['pattern_json'] = json.dumps(new_rule_pattern_json)
+        new_rule['rewrite_json'] = json.dumps(new_rule_rewrite_json)
+
+        # Deparse new rule's pattern_json/rewrite_json into pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.deparse(new_rule_pattern_json)
+        new_rule['rewrite'] = RuleGenerator.deparse(new_rule_rewrite_json)
+
+        # Dereplace vars from new rule's pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.dereplaceVars(new_rule['pattern'], new_rule_mapping)
+        new_rule['rewrite'] = RuleGenerator.dereplaceVars(new_rule['rewrite'], new_rule_mapping)
+
+        return new_rule
+    
+    # recursively replace given variable list into given VarList in a rule's pattern/rewrite AST Json
+    #
+    @staticmethod
+    def replaceVariableListsOfASTJson(astJson: Any, path: list, variableList: list, varList: str) -> Any:
+        
+        # Case-1: dict
+        #
+        if QueryRewriter.is_dict(astJson):
+            # special case for single node under SELECT clause
+            #   e.g., 'select': {'value': 'V001'}
+            #     extract the variable from child['value']
+            #
+            if len(path) >= 1 and path[-1] in ['select'] and 'value' in astJson and 'name' not in astJson and QueryRewriter.is_var(astJson['value']):
+                if len(variableList) == 1 and astJson['value'] == variableList[0]:
+                    return varList
+            # recursively traverse the dict
+            #
+            for key, value in astJson.items():
+                # note: key can not be variable list, only traverse each value
+                astJson[key] = RuleGenerator.replaceVariableListsOfASTJson(value, path + [key], variableList, varList)
+            return astJson
+
+        # Case-2: list
+        # 
+        if QueryRewriter.is_list(astJson):
+            res = []
+            # traverse the chidlren 1st time
+            #   find candidate variable list
+            #
+            candidateVariableList = []
+            for child in astJson:
+                # put Var into the candidate variable list
+                #
+                if QueryRewriter.is_var(child):
+                    candidateVariableList.append(child)
+                # special case for list under SELECT clause
+                #   e.g., 'select': [{'value': 'V001'}, {'value': 'V002'}, ...]
+                #     extract the variable from child['value']
+                #
+                elif QueryRewriter.is_dict(child) and 'value' in child and 'name' not in child and QueryRewriter.is_var(child['value']):
+                    candidateVariableList.append(child['value'])
+            # if candidate variable list contains all variables in the list we want to replace
+            #
+            if set(variableList).issubset(set(candidateVariableList)):
+                # make the candidate variable list the ones we will replace
+                #
+                candidateVariableList = variableList
+            # otherwise, we do nothing on this astJson
+            #
+            else:
+                candidateVariableList = []
+
+            # traverse the chidlren 2nd time
+            #   skip those variables in the candidate variable list
+            #   NOTE: we intentionally do the traversal twice to 
+            #         keep the original order of the list
+            #
+            for child in astJson:
+                if QueryRewriter.is_var(child) and child in candidateVariableList:
+                    # append the varList into the result children only once
+                    # 
+                    if varList not in res:
+                        res.append(varList) 
+                # special case for list under SELECT clause
+                #   e.g., 'select': [{'value': 'V001'}, {'value': 'V002'}, ...]
+                #     extract the variable from child['value']
+                #
+                elif QueryRewriter.is_dict(child) and 'value' in child and 'name' not in child and QueryRewriter.is_var(child['value']) and child['value'] in candidateVariableList:
+                    # append the varList into the result children only once
+                    # 
+                    if varList not in res:
+                        res.append(varList) 
+                else:
+                    res.append(RuleGenerator.replaceVariableListsOfASTJson(child, path, variableList, varList))
+
+            return res
+
+        # Case-3: var
+        #
+        if QueryRewriter.is_var(astJson):
+            # special case for single Var under SELECT
+            #
+            if len(path) >= 1 and path[-1] in ['select']:
+                if len(variableList) == 1 and astJson == variableList[0]:
+                    return varList
+        
+        return astJson
 
     RuleTransformations = {
         'variablize_tables': variablize_tables,
         'variablize_columns' : variablize_columns,
         'variablize_literals' : variablize_literals,
-        'variablize_subtrees' : variablize_subtrees
+        'variablize_subtrees' : variablize_subtrees,
+        'merge_variables': merge_variables
     }
 
     # Generate the candidate rule graph for a given rewriting pair q0 -> q1
@@ -1707,11 +1963,62 @@ class RuleGenerator:
 
         return new_rule
     
+    # generalization function - generalize variables in a rule
+    #
+    @staticmethod
+    def generalize_variables(rule: dict) -> dict:
+
+        # 1. Get candidate variable lists from rule
+        #
+        variableLists = RuleGenerator.variable_lists(rule['pattern_json'], rule['rewrite_json'])
+
+        # 2. Make all candidate variable lists VarLists, and generate a new rule
+        #
+        return RuleGenerator.merge_all_variable_lists(rule, variableLists)
+
+    # merge all the given variable lists in given rule and generate a new rule
+    #
+    @staticmethod
+    def merge_all_variable_lists(rule: dict, variableLists: list) -> dict:
+
+        # create a new rule based on rule
+        new_rule = copy.deepcopy(rule)
+        new_rule_mapping = json.loads(new_rule['mapping'])
+        new_rule_pattern_json = json.loads(new_rule['pattern_json'])
+        new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
+
+        for variableList in variableLists:
+            # Find a VarList name for the given variable list
+            #
+            new_rule_mapping, newVarListInternal = RuleGenerator.findNextVarListInternal(new_rule_mapping)
+
+            # Replace given variable list into newVarListInternal in new rule
+            #
+            new_rule_pattern_json = RuleGenerator.replaceVariableListsOfASTJson(new_rule_pattern_json, [], variableList, newVarListInternal)
+            new_rule_rewrite_json = RuleGenerator.replaceVariableListsOfASTJson(new_rule_rewrite_json, [], variableList, newVarListInternal)
+
+        new_rule['mapping'] = json.dumps(new_rule_mapping)
+        new_rule['pattern_json'] = json.dumps(new_rule_pattern_json)
+        new_rule['rewrite_json'] = json.dumps(new_rule_rewrite_json)
+        
+        # Deparse new rule's pattern_json/rewrite_json into pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.deparse(new_rule_pattern_json)
+        new_rule['rewrite'] = RuleGenerator.deparse(new_rule_rewrite_json)
+
+        # Dereplace vars from new rule's pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.dereplaceVars(new_rule['pattern'], new_rule_mapping)
+        new_rule['rewrite'] = RuleGenerator.dereplaceVars(new_rule['rewrite'], new_rule_mapping)
+
+        return new_rule
+    
     RuleGeneralizations = {
         'generalize_tables': generalize_tables,
         'generalize_columns' : generalize_columns,
         'generalize_literals' : generalize_literals,
-        'generalize_subtrees': generalize_subtrees
+        'generalize_subtrees': generalize_subtrees,
+        'generalize_variables': generalize_variables
     }
 
     # Generate a general rule given a rewriting pair q0 -> q1

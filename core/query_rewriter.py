@@ -278,6 +278,11 @@ class QueryRewriter:
         if len(query_node) == 0 and len(rule_node) == 0:
             return True
 
+        # corner case
+        # 
+        if len(rule_node) == 1 and QueryRewriter.is_varList(rule_node[0]):
+            return QueryRewriter.match_node(query_node, rule_node[0], rule, memo)
+
         # - Part-1) Constants in rule_node should match constants in query_node
         # 
         # 1.1) Find constants and remaining in rule_node
@@ -322,11 +327,6 @@ class QueryRewriter:
                         for key in set(memo.keys()) - set(memo_keys_snapshot):
                             del memo[key]
 
-            # TODO - short-cut match the entire remaining list of query list if rule_element is a VarList,
-            #        come up with a better way to combine this case with the exaustive combination loop
-            # 
-            if QueryRewriter.is_varList(rule_element):
-                return QueryRewriter.match_node(remaining_in_query, rule_element, rule, memo)
         return False
 
     # Check if a given node in AST is a Var

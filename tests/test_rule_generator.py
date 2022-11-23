@@ -1129,6 +1129,176 @@ def test_variablize_subtrees_1():
     assert len(children) == 7
 
 
+def test_variable_lists_1():
+    pattern = '''
+        SELECT <x18>, <x17>, <x16>, <x15>, <x14>
+        FROM <x1>
+        INNER JOIN <x2> ON <x13>
+        INNER JOIN <x3> ON <x2>.<x4> = <x3>.<x4>
+        WHERE <x12>
+        AND <x3>.<x4> = <x10>
+        ORDER BY <x1>.<x9> ASC
+        LIMIT <x11>
+    '''
+    rewrite = '''
+        SELECT <x18>, <x17>, <x16>, <x15>, <x14>
+        FROM <x1>
+        INNER JOIN <x2> ON <x13>
+        WHERE <x12>
+        AND <x2>.<x4> = <x10>
+        ORDER BY <x1>.<x9> ASC
+        LIMIT <x11>
+    '''
+    variable_lists = [['V011'], ['V001', 'V005', 'V003', 'V004', 'V002']]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_variable_lists = RuleGenerator.variable_lists(pattern_json, rewrite_json)
+    assert set(map(lambda t: ','.join(sorted(t)), test_variable_lists)) == set(map(lambda t: ','.join(sorted(t)), variable_lists))
+
+
+def test_variable_lists_2():
+    pattern = '''
+        SELECT <x11>
+        FROM <x1>
+        INNER JOIN <x2> ON <x9>
+        INNER JOIN <x3> ON <x2>.<x4> = <x3>.<x4>
+        WHERE <x8>
+        AND <x3>.<x4> = <x7>
+    '''
+    rewrite = '''
+        SELECT <x11>
+        FROM <x1>
+        INNER JOIN <x2> ON <x9>
+        WHERE <x2>.<x4> = <x7>
+        AND <x8>
+    '''
+    variable_lists = [['V007'], ['V001']]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_variable_lists = RuleGenerator.variable_lists(pattern_json, rewrite_json)
+    assert set(map(lambda t: ','.join(sorted(t)), test_variable_lists)) == set(map(lambda t: ','.join(sorted(t)), variable_lists))
+
+
+def test_variable_lists_3():
+    pattern = '''
+        SELECT <x19>, <x18>, <x17>, <x16>, <x15>, <x14>
+        FROM <x1>
+        LEFT OUTER JOIN <x2> ON <x13>
+        LEFT OUTER JOIN <x3> ON <x2>.<x11> = <x3>.<x4>
+        WHERE <x3>.<x4> = <x12>
+    '''
+    rewrite = '''
+        SELECT <x19>, <x18>, <x17>, <x16>, <x15>, <x14>
+        FROM <x1>
+        LEFT OUTER JOIN <x2> ON <x13>
+        WHERE <x2>.<x11> = <x12>
+    '''
+    variable_lists = [['V001', 'V002', 'V003', 'V004', 'V005', 'V006']]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_variable_lists = RuleGenerator.variable_lists(pattern_json, rewrite_json)
+    assert set(map(lambda t: ','.join(sorted(t)), test_variable_lists)) == set(map(lambda t: ','.join(sorted(t)), variable_lists))
+
+
+def test_merge_variable_list_1():
+
+    rule = {
+        'pattern': '''
+            SELECT <x18>, <x17>, <x16>, <x15>, <x14>
+            FROM <x1>
+            INNER JOIN <x2> ON <x13>
+            INNER JOIN <x3> ON <x2>.<x4> = <x3>.<x4>
+            WHERE <x12>
+            AND <x3>.<x4> = <x10>
+            ORDER BY <x1>.<x9> ASC
+            LIMIT <x11>
+        ''',
+        'rewrite': '''
+            SELECT <x18>, <x17>, <x16>, <x15>, <x14>
+            FROM <x1>
+            INNER JOIN <x2> ON <x13>
+            WHERE <x12>
+            AND <x2>.<x4> = <x10>
+            ORDER BY <x1>.<x9> ASC
+            LIMIT <x11>
+        '''
+    }
+    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
+    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
+    
+    rule = RuleGenerator.merge_variable_list(rule, ['V001', 'V005', 'V003', 'V004', 'V002'])
+    assert StringUtil.strim(rule['pattern']) == StringUtil.strim('''
+            SELECT <<y1>>
+            FROM <x1>
+            INNER JOIN <x2> ON <x13>
+            INNER JOIN <x3> ON <x2>.<x4> = <x3>.<x4>
+            WHERE <x12>
+            AND <x3>.<x4> = <x10>
+            ORDER BY <x1>.<x9> ASC
+            LIMIT <x11>
+        ''')
+    assert StringUtil.strim(rule['rewrite']) == StringUtil.strim('''
+            SELECT <<y1>>
+            FROM <x1>
+            INNER JOIN <x2> ON <x13>
+            WHERE <x12>
+            AND <x2>.<x4> = <x10>
+            ORDER BY <x1>.<x9> ASC
+            LIMIT <x11>
+        ''')
+
+
+def test_merge_variable_list_2():
+
+    rule = {
+        'pattern': '''
+            SELECT <x18>, <x17>, <x16>, <x15>, <x14>
+            FROM <x1>
+            INNER JOIN <x2> ON <x13>
+            INNER JOIN <x3> ON <x2>.<x4> = <x3>.<x4>
+            WHERE <x12>
+            AND <x3>.<x4> = <x10>
+            ORDER BY <x1>.<x9> ASC
+            LIMIT <x11>
+        ''',
+        'rewrite': '''
+            SELECT <x18>, <x17>, <x16>, <x15>, <x14>
+            FROM <x1>
+            INNER JOIN <x2> ON <x13>
+            WHERE <x12>
+            AND <x2>.<x4> = <x10>
+            ORDER BY <x1>.<x9> ASC
+            LIMIT <x11>
+        '''
+    }
+    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
+    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
+    
+    rule = RuleGenerator.merge_variable_list(rule, ['V011'])
+    assert StringUtil.strim(rule['pattern']) == StringUtil.strim('''
+            SELECT <x18>, <x17>, <x16>, <x15>, <x14>
+            FROM <x1>
+            INNER JOIN <x2> ON <x13>
+            INNER JOIN <x3> ON <x2>.<x4> = <x3>.<x4>
+            WHERE <<y1>>
+            AND <x3>.<x4> = <x10>
+            ORDER BY <x1>.<x9> ASC
+            LIMIT <x11>
+        ''')
+    assert StringUtil.strim(rule['rewrite']) == StringUtil.strim('''
+            SELECT <x18>, <x17>, <x16>, <x15>, <x14>
+            FROM <x1>
+            INNER JOIN <x2> ON <x13>
+            WHERE <<y1>>
+            AND <x2>.<x4> = <x10>
+            ORDER BY <x1>.<x9> ASC
+            LIMIT <x11>
+        ''')
+
+
 def test_generate_rule_graph_0():
     q0 = "CAST(created_at AS DATE)"
     q1 = "created_at"
@@ -1414,22 +1584,22 @@ def test_generate_general_rule_6():
     assert type(rule) is dict
 
     assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
-        SELECT     <x11>
+        SELECT     <<y2>>
         FROM       <x1>
         INNER JOIN <x2>
         ON         <x9>
         INNER JOIN <x3>
-        ON         <x2>.<x4> = <x3>.<x4>
-        WHERE      <x8>
-        AND        <x3>.<x4> = <x7>
+        ON         <x2>.<x5> = <x3>.<x5>
+        WHERE      <<y1>>
+        AND        <x3>.<x5> = <x7>
     '''))
     assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
-        SELECT     <x11>
+        SELECT     <<y2>>
         FROM       <x1>
         INNER JOIN <x2>
         ON         <x9>
-        WHERE      <x2>.<x4> = <x7>
-        AND        <x8>
+        WHERE      <x2>.<x5> = <x7>
+        AND        <<y1>>
     '''))
 
 
@@ -1452,14 +1622,14 @@ def test_generate_general_rule_7():
     assert type(rule) is dict
 
     assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
-        SELECT     <x1>.<x3>
+        SELECT     <x1>.<x4>
         FROM       <x1>
         INNER JOIN <x2>
-        ON         <x1>.<x3> = <x2>.<x5>
+        ON         <x1>.<x4> = <x2>.<x3>
         WHERE      <x7>
     '''))
     assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
-        SELECT <x2>.<x5>
+        SELECT <x2>.<x3>
         FROM   <x2>
         WHERE  <x7>
     '''))
