@@ -82,6 +82,23 @@ def explore_rules() -> None:
     '''
     print_sql_str('Rule #3 -> rewrite', sqlStr)
 
+    # Rule #3' -> pattern
+    sqlStr = '''
+        SELECT s
+          FROM t1, t2
+         WHERE t1.a1 = t2.a2
+           AND p
+    '''
+    print_sql_str('Rule #3\' -> pattern', sqlStr)
+
+    # Rule #3' -> rewrite
+    sqlStr = '''
+        SELECT s
+          FROM t1
+         WHERE p
+    '''
+    print_sql_str('Rule #3\' -> rewrite', sqlStr)
+
 def explore_ast():
     sqlStr = '''
         SELECT * FROM t0 WHERE CAST(e AS DATE)
