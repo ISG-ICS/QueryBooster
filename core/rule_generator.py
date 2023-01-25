@@ -384,8 +384,11 @@ class RuleGenerator:
             #   path = ['sort']
             elif len(path) >= 1 and path[-1] == 'sort':
                 pass
-            # ignore '*'
-            elif astJson != '*':
+            # treat '*' as a column for now
+            # # ignore '*'
+            # elif astJson != '*':
+            #     res.add(astJson)
+            else:
                 res.add(astJson)
         
         # Case-4: dot expression
@@ -421,10 +424,12 @@ class RuleGenerator:
                 # skip case: e1.<a1>
                 #
                 if not QueryRewriter.is_var(candidate) and not QueryRewriter.is_varList(candidate):
-                    # ignore e1.* in SELECT clause
-                    #
-                    if candidate != '*':
-                        res.add(candidate)
+                    # treat '*' as a column for now
+                    # # ignore e1.* in SELECT clause
+                    # #
+                    # if candidate != '*':
+                    #     res.add(candidate)
+                    res.add(candidate)
         
         return res
     
@@ -1549,13 +1554,355 @@ class RuleGenerator:
                     return varList
         
         return astJson
+    
+    # transformation function - drop branches in a rule
+    #   generate a list of child rules 
+    # 
+    # note: we find common branches (starting from root) with variables 
+    #       in pattern and rewrite and drop each branch
+    # 
+    # note: branches are defined as follows:
+    #       (1) it must start from pattern's or rewrite's root
+    #       (2) it does not have any un-variablized leaves, un-variablized subtrees, or un-merged variable sets
+    #       (2) it has exact the same occurrences in both the pattern and rewrite of the rule
+    #
+    @staticmethod
+    def drop_branches(rule: dict) -> list:
+
+        Profiler.onFunctionStart('drop_branches')
+
+        res = []
+
+        # 1. Get candidate branches from rule
+        #
+        branches = RuleGenerator.branches(rule['pattern_json'], rule['rewrite_json'])
+
+        # 2. Traverse candidate branches, drop one of them, and generate a new rule
+        #
+        for branch in branches:
+            res.append(RuleGenerator.drop_branch(rule, branch))
+        
+        Profiler.onFunctionEnd('drop_branches')
+
+        return res
+    
+    # get list of common branches (starting from root) in a seed rule's pattern_json and rewrite_json
+    #
+    @staticmethod
+    def branches(pattern_json: str, rewrite_json: str) -> list:
+        
+        patternASTJson = json.loads(pattern_json)
+        rewriteASTJson = json.loads(rewrite_json)
+
+        # traverse the AST jsons to get all branches (starting from root)
+        patternBranches = RuleGenerator.branchesOfASTJson(patternASTJson, [])
+        rewriteBranches = RuleGenerator.branchesOfASTJson(rewriteASTJson, [])
+
+        # find the common branches (starting from root) in pattern and rewrite
+        #
+        ans = []
+        while len(patternBranches) > 0:
+            patternBranch = patternBranches.pop()
+            for rewriteBranch in rewriteBranches:
+                if patternBranch['key'] == rewriteBranch['key']:
+                    if RuleGenerator.sameBranch(patternBranch['value'], rewriteBranch['value']):
+                        rewriteBranches.remove(rewriteBranch)
+                        ans.append(patternBranch)
+                        break
+
+        return ans
+    
+    # check if the given two branches are the same
+    #   recursively traverse the entire branches
+    #
+    @staticmethod
+    def sameBranch(left: Any, right: Any) -> bool:
+        # Case-1: both branches are dict
+        #
+        if QueryRewriter.is_dict(left) and QueryRewriter.is_dict(right):
+            return RuleGenerator.sameBranchDict(left, right)
+        
+        # Case-2: both nodes are list
+        #
+        if QueryRewriter.is_list(left) and QueryRewriter.is_list(right):
+            return RuleGenerator.sameBranchList(left, right)
+        
+        # Case-3: both nodes are constants
+        # 
+        if QueryRewriter.is_constant(left) and QueryRewriter.is_constant(right):
+            return RuleGenerator.sameBranchConstant(left, right)
+        
+        # Case-4: both nodes are dot expressions
+        # 
+        if QueryRewriter.is_dot_expression(left) and QueryRewriter.is_dot_expression(right):
+            return RuleGenerator.sameBranchDotExpression(left, right)
+        
+        # Case-5: both nodes are Vars
+        # 
+        if QueryRewriter.is_var(left) and QueryRewriter.is_var(right):
+            return left == right
+        
+        # Case-6: both nodes are VarLists
+        # 
+        if QueryRewriter.is_varList(left) and QueryRewriter.is_varList(right):
+            return left == right
+        
+        # Other cases: return False
+        return False
+    
+    # check if the given two dict branches are the same
+    # 
+    @staticmethod
+    def sameBranchDict(left: dict, right: dict) -> bool:
+        # if they have different keys, return False
+        #
+        if set(left.keys()) != set(right.keys()):
+            return False
+        
+        # otherwise, traverse the keys,
+        #   return False if any two child branches are not the same
+        # 
+        for k in left.keys():
+            leftChild = left.get(k)
+            rightChild = right.get(k)
+            if not RuleGenerator.sameBranch(leftChild, rightChild):
+                return False
+        
+        return True
+    
+    # check if the given two list branches are the same
+    # 
+    @staticmethod
+    def sameBranchList(left: list, right: list) -> bool:
+        # if they have different length, return False
+        #
+        if len(left) != len(right):
+            return False
+        
+        # otherwise, traverse the elements in left,
+        #   for each element, find its same branch element in right 
+        # 
+        remainingInRight = right.copy()
+        for leftChild in left:
+            find = False
+            for rightChild in remainingInRight:
+                # if found same branch for leftChild
+                #
+                if RuleGenerator.sameBranch(leftChild, rightChild):
+                    remainingInRight.remove(rightChild)
+                    find = True
+                    break
+            if not find:
+                return False
+        
+        return True
+    
+    # check if the given two constant branches are the same
+    #
+    @staticmethod
+    def sameBranchConstant(left: Any, right: Any) -> bool:
+        if QueryRewriter.is_string(left) and QueryRewriter.is_string(right):
+            return RuleGenerator.sameBranchString(left, right)
+        if QueryRewriter.is_number(left) and QueryRewriter.is_number(right):
+            return RuleGenerator.sameBranchNumber(left, right)
+        return False
+    
+    # check if the given two string branches are the same
+    #
+    @staticmethod
+    def sameBranchString(left: str, right: str) -> bool:
+        if left.lower() == right.lower():
+            return True
+        return False
+    
+    # check if the given two number branches are the same
+    #
+    @staticmethod
+    def sameBranchNumber(left: numbers, right: numbers) -> bool:
+        if left == right:
+            return True
+        return False
+    
+    # check if the given two dot expression branches are the same
+    #
+    @staticmethod
+    def sameBranchDotExpression(left: str, right: str) -> bool:
+        leftChildren = left.split('.')
+        rightChildren = right.split('.')
+        # if they have different length
+        if len(leftChildren) != 2 or len(rightChildren) != 2:
+            return False
+        
+        if not RuleGenerator.sameBranchString(leftChildren[0], rightChildren[0]):
+            return False
+        if not RuleGenerator.sameBranchString(leftChildren[1], rightChildren[1]):
+            return False
+        
+        return True
+    
+    # get set of branches (starting from root) in a rule pattern/rewrite's AST Json
+    #   output format: [{'key': key, 'value': value}, ...]
+    @staticmethod
+    def branchesOfASTJson(astJson: Any, path: list) -> list:
+        res = []
+
+        # Case-1: dict
+        #
+        # a branch only occurs in a dict
+        if QueryRewriter.is_dict(astJson):
+
+            # special case: there is only one key in the AST Json, and the value is a list
+            #   e.g., {'and': [{'gt': [...]}, {'eq':[...]}]}
+            #
+            if len(astJson.keys()) == 1:
+                key = list(astJson.keys())[0]
+                children = astJson[key]
+                if QueryRewriter.is_list(children):
+                    # each element in the children list is a branch
+                    #
+                    for child in children:
+                        if RuleGenerator.isBranch({key: [child]}):
+                            res.append({'key': key, 'value': child})
+            else:
+                for key, value in astJson.items():
+                    if RuleGenerator.isBranch({key: value}):
+                        res.append({'key': key, 'value': value})
+                
+                # special cases: 
+                #   (1) if {'select': ...} presents, remove {'from': ...} and {'where': ...} branches
+                #   (2) if {'from': ...} presents, remove {'where': ...} branch
+                #
+                if 'select' in astJson.keys():
+                    res = [branch for branch in res if branch['key'] != 'from' and branch['key'] != 'where']
+                if 'from' in astJson.keys():
+                    res = [branch for branch in res if branch['key'] != 'where']
+            
+        
+        return res
+    
+    # check if a subtree (starting from root) in rule pattern/rewrite's AST Json is a branch
+    #   see comments in drop_branches() for the definition of a branch
+    #
+    @staticmethod
+    def isBranch(astJson: dict) -> bool:
+
+        # check if it has un-variablized tables
+        #
+        tables = RuleGenerator.tablesOfASTJson(astJson, [])
+        if len(tables) > 0:
+            return False
+
+        # check if it has un-variablized columns
+        #
+        columns = RuleGenerator.columnsOfASTJson(astJson, [])
+        if len(columns) > 0:
+            return False
+        
+        # check if it has un-variablized literals
+        #
+        literals = RuleGenerator.literalsOfASTJson(astJson, [])
+        if len(literals) > 0:
+            return False
+        
+        # ignore this check for now
+        # check if it has un-variablized subtrees
+        #
+        # subtrees = RuleGenerator.subtreesOfASTJson(astJson, [])
+        # if len(subtrees) > 0:
+        #     return False
+
+        # check if it has un-merged variable lists
+        #
+        variableLists = RuleGenerator.variableListsOfASTJson(astJson, [])
+        if len(variableLists) > 0:
+            return False
+
+        return True
+    
+    # drop the given branch in given rule and generate a new rule
+    #
+    @staticmethod
+    def drop_branch(rule: dict, branch: dict) -> dict:
+
+        # create a new rule based on rule
+        new_rule = copy.deepcopy(rule)
+
+        # Drop given branch in new rule
+        #
+        new_rule_pattern_json = json.loads(new_rule['pattern_json'])
+        new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
+        new_rule_pattern_json = RuleGenerator.dropBranchOfASTJson(new_rule_pattern_json, [], branch)
+        new_rule_rewrite_json = RuleGenerator.dropBranchOfASTJson(new_rule_rewrite_json, [], branch)
+        new_rule['pattern_json'] = json.dumps(new_rule_pattern_json)
+        new_rule['rewrite_json'] = json.dumps(new_rule_rewrite_json)
+
+        # Deparse new rule's pattern_json/rewrite_json into pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.deparse(new_rule_pattern_json)
+        new_rule['rewrite'] = RuleGenerator.deparse(new_rule_rewrite_json)
+
+        # Dereplace vars from new rule's pattern/rewrite strings
+        #
+        new_rule_mapping = json.loads(new_rule['mapping'])
+        new_rule['pattern'] = RuleGenerator.dereplaceVars(new_rule['pattern'], new_rule_mapping)
+        new_rule['rewrite'] = RuleGenerator.dereplaceVars(new_rule['rewrite'], new_rule_mapping)
+
+        return new_rule
+    
+    # drop given branch in a rule's pattern/rewrite AST Json
+    #
+    @staticmethod
+    def dropBranchOfASTJson(astJson: Any, path: list, branch: dict) -> Any:
+        
+        # Case-1: dict
+        #
+        if QueryRewriter.is_dict(astJson):
+            # if there are > 2 keys in the AST Json
+            #   remove the branch key directly
+            #
+            if len(astJson.keys()) > 1:
+                del astJson[branch['key']]
+
+                # special case: after removing the branch, the root has only one child which is not a list
+                #   e.g., {'where': {'gt': [{'strpos': [{'lower': 'V1'}, {'literal': 'V2'}]}, 0]}}
+                #   we should remove the root as well
+                #
+                if len(astJson.keys()) == 1:
+                    key = list(astJson.keys())[0]
+                    if not QueryRewriter.is_list(astJson[key]):
+                        astJson = astJson[key]
+
+            # special case: there is only one key in the AST Json
+            #   e.g., {'and': [{'gt': [...]}, {'eq':[...]}]}
+            #   remove the branch value from the children list
+            # 
+            elif len(astJson.keys()) == 1:
+                children = astJson[branch['key']]
+                if QueryRewriter.is_list(children):
+                    astJson[branch['key']] = [value for value in children if not RuleGenerator.sameBranch(value, branch['value'])]
+                
+                    # special case: after removing the branch, the chidlren list has only one element
+                    #   e.g., {'and': [{'gt': [{'strpos': [{'lower': 'V1'}, {'literal': 'V2'}]}, 0] }] }
+                    #   we should remove the root as well
+                    #
+                    if len(astJson[branch['key']]) == 1:
+                        astJson = astJson[branch['key']][0]
+
+                # this case should not happen
+                #   astJson has only one key and the value of the key is not a list
+                #
+                else:
+                    raise 'Exception: astJson has only one key and its value is not a list'
+        
+        return astJson
 
     RuleTransformations = {
         'variablize_tables': variablize_tables,
         'variablize_columns' : variablize_columns,
         'variablize_literals' : variablize_literals,
         'variablize_subtrees' : variablize_subtrees,
-        'merge_variables': merge_variables
+        'merge_variables': merge_variables,
+        'drop_branches': drop_branches,
     }
 
     # Generate the candidate rule graph for a given rewriting pair q0 -> q1

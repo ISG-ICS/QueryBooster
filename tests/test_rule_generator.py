@@ -313,7 +313,7 @@ def test_columns_5():
         WHERE e1.age > 17
         AND e1.salary > 35000;
     '''
-    columns = ["id", "age", "salary"]
+    columns = ["*", "id", "age", "salary"]
 
     pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
 
@@ -336,7 +336,7 @@ def test_columns_6():
         where emp.workdept = dept.deptno 
         and dept.deptname = 'OPERATIONS';
     '''
-    columns = ["workdept", "deptno", "deptname"]
+    columns = ["*", "workdept", "deptno", "deptname"]
 
     pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
 
@@ -363,7 +363,7 @@ def test_columns_7():
                         allroles1_.admin_permission_id
         WHERE  allroles1_.admin_role_id = 1
     '''
-    columns = ["admin_permission_id", "admin_role_id"]
+    columns = ["*", "admin_permission_id", "admin_role_id"]
 
     pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
 
@@ -1299,6 +1299,105 @@ def test_merge_variable_list_2():
         ''')
 
 
+def test_branches_1():
+    pattern = "SELECT <<x>> FROM <t> WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'"
+    rewrite = "SELECT <<x>> FROM <t> WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+    branches = [{'key': 'select', 'value': {'value': 'VL001'}}]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_branches = RuleGenerator.branches(pattern_json, rewrite_json)
+    assert set(map(lambda t: json.dumps(t), test_branches)) == set(map(lambda t: json.dumps(t), branches))
+
+
+def test_branches_2():
+    pattern = "FROM <t> WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'"
+    rewrite = "FROM <t> WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+    branches = [{'key': 'from', 'value': 'V001'}]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_branches = RuleGenerator.branches(pattern_json, rewrite_json)
+    assert set(map(lambda t: json.dumps(t), test_branches)) == set(map(lambda t: json.dumps(t), branches))
+
+
+def test_branches_3():
+    pattern = "CAST(created_at AS DATE) = TIMESTAMP '<x>'"
+    rewrite = "created_at = TIMESTAMP '<x>'"
+    branches = [{'key': 'eq', 'value': {'timestamp': {'literal': 'V001'}}}]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_branches = RuleGenerator.branches(pattern_json, rewrite_json)
+    assert set(map(lambda t: json.dumps(t), test_branches)) == set(map(lambda t: json.dumps(t), branches))
+
+
+def test_drop_branch_1():
+
+    rule = {
+        'pattern': '''
+            SELECT <<x>> FROM <t> WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'
+        ''',
+        'rewrite': '''
+            SELECT <<x>> FROM <t> WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'
+        '''
+    }
+    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
+    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
+    
+    rule = RuleGenerator.drop_branch(rule, {'key': 'select', 'value': {'value': 'VL001'}})
+    assert StringUtil.strim(rule['pattern']) == StringUtil.strim('''
+            FROM <t> WHERE CAST(created_at AS DATE) = TIMESTAMP('2016-10-01 00:00:00.000')
+        ''')
+    assert StringUtil.strim(rule['rewrite']) == StringUtil.strim('''
+            FROM <t> WHERE created_at = TIMESTAMP('2016-10-01 00:00:00.000')
+        ''')
+
+
+def test_drop_branch_2():
+
+    rule = {
+        'pattern': '''
+            FROM <t> WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'
+        ''',
+        'rewrite': '''
+            FROM <t> WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'
+        '''
+    }
+    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
+    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
+    
+    rule = RuleGenerator.drop_branch(rule, {'key': 'from', 'value': 'V001'})
+    assert StringUtil.strim(rule['pattern']) == StringUtil.strim('''
+            CAST(created_at AS DATE) = TIMESTAMP('2016-10-01 00:00:00.000')
+        ''')
+    assert StringUtil.strim(rule['rewrite']) == StringUtil.strim('''
+            created_at = TIMESTAMP('2016-10-01 00:00:00.000')
+        ''')
+
+
+def test_drop_branch_3():
+
+    rule = {
+        'pattern': '''
+            CAST(created_at AS DATE) = TIMESTAMP '<x>'
+        ''',
+        'rewrite': '''
+            created_at = TIMESTAMP '<x>'
+        '''
+    }
+    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
+    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
+    
+    rule = RuleGenerator.drop_branch(rule, {'key': 'eq', 'value': {'timestamp': {'literal': 'V001'}}})
+    assert StringUtil.strim(rule['pattern']) == StringUtil.strim('''
+            CAST(created_at AS DATE)
+        ''')
+    assert StringUtil.strim(rule['rewrite']) == StringUtil.strim('''
+            created_at
+        ''')
+
+
 def test_generate_rule_graph_0():
     q0 = "CAST(created_at AS DATE)"
     q1 = "created_at"
@@ -1322,9 +1421,9 @@ def test_generate_rule_graph_1():
     assert type(rootRule) is dict
 
     children = rootRule['children']
-    assert len(children) == 3
+    assert len(children) == 4
 
-    childRule = children[1]
+    childRule = children[2]
     assert childRule['pattern'] == "SELECT * FROM t WHERE CAST(<x1> AS DATE) = TIMESTAMP('2016-10-01 00:00:00.000')"
     assert childRule['rewrite'] == "SELECT * FROM t WHERE <x1> = TIMESTAMP('2016-10-01 00:00:00.000')"
 
@@ -1383,7 +1482,7 @@ def test_generate_rule_graph_4():
 
     rootRule = RuleGenerator.generate_rule_graph(q0, q1)
     children = rootRule['children']
-    assert len(children) == 6
+    assert len(children) == 7
 
 
 def test_generate_rules_graph_1():
