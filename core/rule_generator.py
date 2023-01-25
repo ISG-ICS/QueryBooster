@@ -286,13 +286,21 @@ class RuleGenerator:
         #   e.g., we want to treat these two generated rules as the same rule:
         #         rule 1: SELECT e1.<x1>, e1.<x2> FROM employee e1 WHERE e1.<x1> > 17 AND e1.<x2> > 35000
         #         rule 2: SELECT e1.<x2>, e1.<x1> FROM employee e1 WHERE e1.<x2> > 17 AND e1.<x1> > 35000
-        return RuleGenerator._fingerPrint(rule['pattern'])
+        # return RuleGenerator._fingerPrint(rule['pattern'])
+        return RuleGenerator._fingerPrint2(rule['pattern_json'])
     
     @staticmethod
     def _fingerPrint(fingerPrint: str) -> str:
         #   get rid of the numbers inside each var/varList
         fingerPrint = re.sub(r"<x(\d+)>", "<x>", fingerPrint)
         fingerPrint = re.sub(r"<<y(\d+)>>", "<<y>>", fingerPrint)
+        return fingerPrint
+    
+    @staticmethod
+    def _fingerPrint2(fingerPrint: str) -> str:
+        #   get rid of the numbers inside each var/varList
+        fingerPrint = re.sub(r"V(\d+)>", "V", fingerPrint)
+        fingerPrint = re.sub(r"VL(\d+)", "VL", fingerPrint)
         return fingerPrint
 
     # transformation function - variablize columns in a rule
@@ -1647,6 +1655,11 @@ class RuleGenerator:
         if QueryRewriter.is_varList(left) and QueryRewriter.is_varList(right):
             return left == right
         
+        # Case-7: both nodes are None (special case for removing parent only)
+        #
+        if left is None and right is None:
+            return True
+        
         # Other cases: return False
         return False
     
@@ -1751,18 +1764,28 @@ class RuleGenerator:
         # a branch only occurs in a dict
         if QueryRewriter.is_dict(astJson):
 
-            # special case: there is only one key in the AST Json, and the value is a list
-            #   e.g., {'and': [{'gt': [...]}, {'eq':[...]}]}
+            # special case: there is only one key in the AST Json
             #
             if len(astJson.keys()) == 1:
                 key = list(astJson.keys())[0]
                 children = astJson[key]
+
+                # special case (a): the value is a list
+                #   e.g., {'and': [{'gt': [...]}, {'eq':[...]}]}
+                #
                 if QueryRewriter.is_list(children):
                     # each element in the children list is a branch
                     #
                     for child in children:
                         if RuleGenerator.isBranch({key: [child]}):
                             res.append({'key': key, 'value': child})
+                # special case (b): the value is not a list
+                #   e.g., {'select': {'gt': [{'strpos': [{'lower': 'V1'}, {'literal': 'V2'}]}, 0]}}
+                #     we should remove the parent 'select' 
+                #       by adding a branch {key: select, value: None}
+                #
+                else:
+                    res.append({'key': key, 'value': None})
             else:
                 for key, value in astJson.items():
                     if RuleGenerator.isBranch({key: value}):
@@ -1867,17 +1890,20 @@ class RuleGenerator:
                 #   e.g., {'where': {'gt': [{'strpos': [{'lower': 'V1'}, {'literal': 'V2'}]}, 0]}}
                 #   we should remove the root as well
                 #
-                if len(astJson.keys()) == 1:
-                    key = list(astJson.keys())[0]
-                    if not QueryRewriter.is_list(astJson[key]):
-                        astJson = astJson[key]
+                # if len(astJson.keys()) == 1:
+                #     key = list(astJson.keys())[0]
+                #     if not QueryRewriter.is_list(astJson[key]):
+                #         astJson = astJson[key]
 
             # special case: there is only one key in the AST Json
-            #   e.g., {'and': [{'gt': [...]}, {'eq':[...]}]}
-            #   remove the branch value from the children list
             # 
             elif len(astJson.keys()) == 1:
                 children = astJson[branch['key']]
+
+                # special case (a): the value is a list
+                #   e.g., {'and': [{'gt': [...]}, {'eq':[...]}]}
+                #   remove the branch value from the children list
+                #
                 if QueryRewriter.is_list(children):
                     astJson[branch['key']] = [value for value in children if not RuleGenerator.sameBranch(value, branch['value'])]
                 
@@ -1888,11 +1914,12 @@ class RuleGenerator:
                     if len(astJson[branch['key']]) == 1:
                         astJson = astJson[branch['key']][0]
 
-                # this case should not happen
-                #   astJson has only one key and the value of the key is not a list
+                # special case (b): the value is not a list
+                #   e.g., {'select': {'gt': [{'strpos': [{'lower': 'V1'}, {'literal': 'V2'}]}, 0]}}
+                #     we should remove the parent 'select' 
                 #
                 else:
-                    raise 'Exception: astJson has only one key and its value is not a list'
+                    astJson = children
         
         return astJson
 
@@ -2360,12 +2387,60 @@ class RuleGenerator:
 
         return new_rule
     
+    # generalization function - generalize branches in a rule
+    #
+    @staticmethod
+    def generalize_branches(rule: dict) -> dict:
+
+        # 1. Get candidate branches from rule
+        #
+        branches = RuleGenerator.branches(rule['pattern_json'], rule['rewrite_json'])
+
+        # 2. Drop all candidate branches, and generate a new rule
+        #
+        return RuleGenerator.drop_all_branches(rule, branches)
+    
+    # drop all the given branches in given rule and generate a new rule
+    #
+    @staticmethod
+    def drop_all_branches(rule: dict, branches: list) -> dict:
+
+        # create a new rule based on rule
+        new_rule = copy.deepcopy(rule)
+        new_rule_mapping = json.loads(new_rule['mapping'])
+        new_rule_pattern_json = json.loads(new_rule['pattern_json'])
+        new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
+
+        for branch in branches:
+
+            # Drop given branch in new rule
+            #
+            new_rule_pattern_json = RuleGenerator.dropBranchOfASTJson(new_rule_pattern_json, [], branch)
+            new_rule_rewrite_json = RuleGenerator.dropBranchOfASTJson(new_rule_rewrite_json, [], branch)
+
+        new_rule['mapping'] = json.dumps(new_rule_mapping)
+        new_rule['pattern_json'] = json.dumps(new_rule_pattern_json)
+        new_rule['rewrite_json'] = json.dumps(new_rule_rewrite_json)
+        
+        # Deparse new rule's pattern_json/rewrite_json into pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.deparse(new_rule_pattern_json)
+        new_rule['rewrite'] = RuleGenerator.deparse(new_rule_rewrite_json)
+
+        # Dereplace vars from new rule's pattern/rewrite strings
+        #
+        new_rule['pattern'] = RuleGenerator.dereplaceVars(new_rule['pattern'], new_rule_mapping)
+        new_rule['rewrite'] = RuleGenerator.dereplaceVars(new_rule['rewrite'], new_rule_mapping)
+
+        return new_rule
+    
     RuleGeneralizations = {
         'generalize_tables': generalize_tables,
         'generalize_columns' : generalize_columns,
         'generalize_literals' : generalize_literals,
         'generalize_subtrees': generalize_subtrees,
-        'generalize_variables': generalize_variables
+        'generalize_variables': generalize_variables,
+        'generalize_branches': generalize_branches
     }
 
     # Generate a general rule given a rewriting pair q0 -> q1

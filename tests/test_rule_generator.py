@@ -1322,6 +1322,17 @@ def test_branches_2():
 
 
 def test_branches_3():
+    pattern = "WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'"
+    rewrite = "WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+    branches = [{'key': 'where', 'value': None}]
+
+    pattern_json, rewrite_json, mapping = RuleParser.parse(pattern, rewrite)
+
+    test_branches = RuleGenerator.branches(pattern_json, rewrite_json)
+    assert set(map(lambda t: json.dumps(t), test_branches)) == set(map(lambda t: json.dumps(t), branches))
+
+
+def test_branches_4():
     pattern = "CAST(created_at AS DATE) = TIMESTAMP '<x>'"
     rewrite = "created_at = TIMESTAMP '<x>'"
     branches = [{'key': 'eq', 'value': {'timestamp': {'literal': 'V001'}}}]
@@ -1369,6 +1380,28 @@ def test_drop_branch_2():
     
     rule = RuleGenerator.drop_branch(rule, {'key': 'from', 'value': 'V001'})
     assert StringUtil.strim(rule['pattern']) == StringUtil.strim('''
+            WHERE CAST(created_at AS DATE) = TIMESTAMP('2016-10-01 00:00:00.000')
+        ''')
+    assert StringUtil.strim(rule['rewrite']) == StringUtil.strim('''
+            WHERE created_at = TIMESTAMP('2016-10-01 00:00:00.000')
+        ''')
+
+
+def test_drop_branch_3():
+
+    rule = {
+        'pattern': '''
+            WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'
+        ''',
+        'rewrite': '''
+            WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'
+        '''
+    }
+    rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
+    rule['constraints'], rule['constraints_json'], rule['actions'], rule['actions_json'] = '', '[]', '', '[]'
+    
+    rule = RuleGenerator.drop_branch(rule, {'key': 'where', 'value': None})
+    assert StringUtil.strim(rule['pattern']) == StringUtil.strim('''
             CAST(created_at AS DATE) = TIMESTAMP('2016-10-01 00:00:00.000')
         ''')
     assert StringUtil.strim(rule['rewrite']) == StringUtil.strim('''
@@ -1376,7 +1409,7 @@ def test_drop_branch_2():
         ''')
 
 
-def test_drop_branch_3():
+def test_drop_branch_4():
 
     rule = {
         'pattern': '''
@@ -1559,8 +1592,8 @@ def test_generate_general_rule_1():
     rule = RuleGenerator.generate_general_rule(q0, q1)
     assert type(rule) is dict
 
-    assert rule['pattern'] == "SELECT CAST(<x1> AS DATE)"
-    assert rule['rewrite'] == "SELECT <x1>"
+    assert rule['pattern'] == "CAST(<x1> AS DATE)"
+    assert rule['rewrite'] == "<x1>"
 
 
 def test_generate_general_rule_2():
@@ -1570,8 +1603,8 @@ def test_generate_general_rule_2():
     rule = RuleGenerator.generate_general_rule(q0, q1)
     assert type(rule) is dict
 
-    assert rule['pattern'] == "SELECT STRPOS(LOWER(<x1>), '<x2>') > 0"
-    assert rule['rewrite'] == "SELECT ILIKE(<x1>, '%<x2>%')"
+    assert rule['pattern'] == "STRPOS(LOWER(<x1>), '<x2>') > 0"
+    assert rule['rewrite'] == "ILIKE(<x1>, '%<x2>%')"
 
 
 def test_generate_general_rule_3():
@@ -1592,6 +1625,20 @@ def test_generate_general_rule_3():
 
     rule = RuleGenerator.generate_general_rule(q0, q1)
     assert type(rule) is dict
+
+    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT <<y1>>, <x2>.<x3>
+        FROM   <x1>, <x2>
+        WHERE  <x1>.<x4> = <x2>.<x4>
+        AND    <<y2>>
+        AND    <x2>.<x3> > <x5>
+    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT <<y1>>, <x1>.<x3>
+        FROM   <x1>
+        WHERE  <<y2>>
+        AND    <x1>.<x3> > <x5>
+    '''))
 
 
 def test_generate_general_rule_4():
@@ -1616,6 +1663,21 @@ def test_generate_general_rule_4():
 
     rule = RuleGenerator.generate_general_rule(q0, q1)
     assert type(rule) is dict
+
+    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        FROM       <x1>
+        INNER JOIN <x2>
+        ON         <x9>
+        INNER JOIN <x3>
+        ON         <x2>.<x5> = <x3>.<x5>
+        WHERE      <x3>.<x5> = <x7>
+    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        FROM       <x1>
+        INNER JOIN <x2>
+        ON         <x9>
+        WHERE      <x2>.<x5> = <x7>
+    '''))
 
 
 def test_generate_general_rule_5():
@@ -1655,6 +1717,23 @@ def test_generate_general_rule_5():
     rule = RuleGenerator.generate_general_rule(q0, q1)
     assert type(rule) is dict
 
+    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        FROM       <x1>
+        INNER JOIN <x2>
+        ON         <x9>
+        INNER JOIN <x3>
+        ON         <x2>.<x5> = <x3>.<x5>
+        WHERE      <<y1>>
+        AND        <x3>.<x5> = <x7>
+    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        FROM       <x1>
+        INNER JOIN <x2>
+        ON         <x9>
+        WHERE      <<y1>>
+        AND        <x2>.<x5> = <x7>
+    '''))
+
 
 def test_generate_general_rule_6():
 
@@ -1683,7 +1762,6 @@ def test_generate_general_rule_6():
     assert type(rule) is dict
 
     assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
-        SELECT     <<y2>>
         FROM       <x1>
         INNER JOIN <x2>
         ON         <x9>
@@ -1693,7 +1771,6 @@ def test_generate_general_rule_6():
         AND        <x3>.<x5> = <x7>
     '''))
     assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
-        SELECT     <<y2>>
         FROM       <x1>
         INNER JOIN <x2>
         ON         <x9>
@@ -1731,4 +1808,130 @@ def test_generate_general_rule_7():
         SELECT <x2>.<x3>
         FROM   <x2>
         WHERE  <x7>
+    '''))
+
+
+def test_generate_general_rule_8():
+
+    q0 = '''
+        SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'
+    '''
+    q1 = '''
+        SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'
+    '''
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        CAST(<x1> AS DATE)
+    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        <x1>
+    '''))
+
+
+def test_generate_general_rule_9():
+
+    q0 = '''
+        SELECT  SUM(1),
+                  CAST(state_name AS TEXT)
+            FROM  tweets 
+           WHERE  CAST(DATE_TRUNC('QUARTER', 
+                                  CAST(created_at AS DATE)) 
+                       AS DATE) IN 
+                      ((TIMESTAMP '2016-10-01 00:00:00.000'), 
+                       (TIMESTAMP '2017-01-01 00:00:00.000'), 
+                       (TIMESTAMP '2017-04-01 00:00:00.000'))
+             AND  (STRPOS(LOWER(text), 'iphone') > 0)
+           GROUP  BY 2
+    '''
+    q1 = '''
+        SELECT  SUM(1),
+                CAST(state_name AS TEXT)
+          FROM  tweets 
+         WHERE  CAST(DATE_TRUNC('QUARTER', 
+                                CAST(created_at AS DATE)) 
+                AS DATE) IN 
+                    ((TIMESTAMP '2016-10-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-01-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-04-01 00:00:00.000'))
+           AND  text ILIKE '%iphone%'
+         GROUP  BY 2
+    '''
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        STRPOS(LOWER(<x1>), '<x2>') > 0
+    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        ILIKE(<x1>, '%<x2>%')
+    '''))
+
+
+def test_generate_general_rule_10():
+
+    q0 = '''
+        select *
+        from employee
+        where workdept in
+            (select deptno
+                from department
+                where deptname = 'OPERATIONS')
+    '''
+    q1 = '''
+        select distinct *
+        from employee, department
+        where employee.workdept = department.deptno 
+        and department.deptname = 'OPERATIONS'
+    '''
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT <x3> 
+        FROM   <x1> 
+        WHERE  <x6> IN (SELECT <x5> 
+                        FROM   <x2> 
+                        WHERE  <x4> = <x8>)
+    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT DISTINCT <x3> 
+        FROM   <x1>, <x2> 
+        WHERE  <x1>.<x6> = <x2>.<x5> 
+        AND    <x2>.<x4> = <x8>
+    '''))
+
+
+def test_generate_general_rule_11():
+
+    q0 = '''
+        SELECT Count(*)
+        FROM   (SELECT 1 AS one
+                FROM   group_histories
+                WHERE  group_histories.group_id = 2578
+                    AND group_histories.action = 2
+                ORDER  BY group_histories.created_at DESC
+                LIMIT  25 offset 0) subquery_for_count 
+    '''
+    q1 = '''
+        SELECT Count(*)
+        FROM   (SELECT 1 AS one
+                FROM   group_histories
+                WHERE  group_histories.group_id = 2578
+                    AND group_histories.action = 2
+                LIMIT  25 offset 0) AS subquery_for_count 
+    '''
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        WHERE <x16> ORDER BY <x1>.<x5> DESC
+    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        WHERE <x16>
     '''))

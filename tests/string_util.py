@@ -29,3 +29,14 @@ if __name__ == '__main__':
             AND        adminrolei2_.admin_role_id = 1
     '''
     print(StringUtil.strim(input))
+
+    input = '''
+        SELECT <x3> 
+        FROM   <x1> 
+        WHERE  <x6> IN (
+            SELECT <x5> 
+            FROM   <x2> 
+            WHERE  <x4> = <x8>
+        )
+    '''
+    print(StringUtil.strim(input))
