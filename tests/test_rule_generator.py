@@ -1937,7 +1937,7 @@ def test_generate_general_rule_11():
     '''))
 
 
-def test_suggest_rules_1():
+def test_suggest_rules_bf_1():
     examples = [
         {
             "q0":"SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
@@ -1949,7 +1949,7 @@ def test_suggest_rules_1():
         }
     ]
 
-    suggestRules = RuleGenerator.suggest_rules(examples)
+    suggestRules = RuleGenerator.suggest_rules(examples, exp='bf')
     assert type(suggestRules) is list
     assert len(suggestRules) == 1
 
@@ -1963,7 +1963,7 @@ def test_suggest_rules_1():
     '''))
 
 
-def test_suggest_rules_2():
+def test_suggest_rules_bf_2():
     examples = [
         {
             "q0":"SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
@@ -1979,7 +1979,7 @@ def test_suggest_rules_2():
         }
     ]
 
-    suggestRules = RuleGenerator.suggest_rules(examples)
+    suggestRules = RuleGenerator.suggest_rules(examples, exp='bf')
     assert type(suggestRules) is list
     assert len(suggestRules) == 1
 
@@ -1990,4 +1990,205 @@ def test_suggest_rules_2():
     '''))
     assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
         SELECT * FROM t WHERE <x1> = TIMESTAMP('<x2>')
+    '''))
+
+
+def test_suggest_rules_bf_3():
+    examples = [
+        {
+            "q0":"SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
+            "q1":"SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+        },
+        {
+            "q0":"SELECT CAST(deleted_at AS DATE) FROM s",
+            "q1":"SELECT deleted_at FROM s"
+        }
+    ]
+
+    suggestRules = RuleGenerator.suggest_rules(examples, exp='bf')
+    assert type(suggestRules) is list
+    assert len(suggestRules) == 1
+
+    suggestRule = suggestRules[0]
+
+    assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        CAST(<x1> AS DATE)
+    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        <x1>
+    '''))
+
+
+def test_suggest_rules_khn_k1_1():
+    examples = [
+        {
+            "q0":"SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
+            "q1":"SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+        },
+        {
+            "q0":"SELECT * FROM t WHERE CAST(deleted_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
+            "q1":"SELECT * FROM t WHERE deleted_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+        }
+    ]
+
+    suggestRules = RuleGenerator.suggest_rules(examples, exp='khn', k=1)
+    assert type(suggestRules) is list
+    assert len(suggestRules) == 1
+
+    suggestRule = suggestRules[0]
+
+    assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT * FROM t WHERE CAST(<x1> AS DATE) = TIMESTAMP('2016-10-01 00:00:00.000')
+    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT * FROM t WHERE <x1> = TIMESTAMP('2016-10-01 00:00:00.000')
+    '''))
+
+
+def test_suggest_rules_khn_k1_2():
+    examples = [
+        {
+            "q0":"SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
+            "q1":"SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+        },
+        {
+            "q0":"SELECT * FROM t WHERE CAST(deleted_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
+            "q1":"SELECT * FROM t WHERE deleted_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+        },
+        {
+            "q0":"SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2018-10-01 00:00:00.000'",
+            "q1":"SELECT * FROM t WHERE created_at = TIMESTAMP '2018-10-01 00:00:00.000'"
+        }
+    ]
+
+    suggestRules = RuleGenerator.suggest_rules(examples, exp='khn', k=1)
+    assert type(suggestRules) is list
+    assert len(suggestRules) == 1
+
+    suggestRule = suggestRules[0]
+
+    assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT * FROM t WHERE CAST(<x1> AS DATE) = TIMESTAMP('<x2>')
+    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT * FROM t WHERE <x1> = TIMESTAMP('<x2>')
+    '''))
+
+
+def test_suggest_rules_khn_k1_3():
+    examples = [
+        {
+            "q0":"SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
+            "q1":"SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+        },
+        {
+            "q0":"SELECT * FROM s WHERE CAST(deleted_at AS DATE) = TIMESTAMP '2018-10-01 00:00:00.000'",
+            "q1":"SELECT * FROM s WHERE deleted_at = TIMESTAMP '2018-10-01 00:00:00.000'"
+        }
+    ]
+
+    suggestRules = RuleGenerator.suggest_rules(examples, exp='khn', k=1)
+    assert type(suggestRules) is list
+    assert len(suggestRules) == 2
+
+    assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRules[0]['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP('2016-10-01 00:00:00.000')
+    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRules[0]['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT * FROM t WHERE created_at = TIMESTAMP('2016-10-01 00:00:00.000')
+    '''))
+
+    assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRules[1]['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT * FROM s WHERE CAST(deleted_at AS DATE) = TIMESTAMP('2018-10-01 00:00:00.000')
+    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRules[1]['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT * FROM s WHERE deleted_at = TIMESTAMP('2018-10-01 00:00:00.000')
+    '''))
+
+
+def test_suggest_rules_khn_k2_1():
+    examples = [
+        {
+            "q0":"SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
+            "q1":"SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+        },
+        {
+            "q0":"SELECT * FROM s WHERE CAST(deleted_at AS DATE) = TIMESTAMP '2018-10-01 00:00:00.000'",
+            "q1":"SELECT * FROM s WHERE deleted_at = TIMESTAMP '2018-10-01 00:00:00.000'"
+        }
+    ]
+
+    suggestRules = RuleGenerator.suggest_rules(examples, exp='khn', k=2)
+    assert type(suggestRules) is list
+    assert len(suggestRules) == 1
+
+    suggestRule = suggestRules[0]
+
+    assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT * FROM <x3> WHERE CAST(<x1> AS DATE) = TIMESTAMP('<x2>')
+    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT * FROM <x3> WHERE <x1> = TIMESTAMP('<x2>')
+    '''))
+
+
+def test_suggest_rules_khn_k2_2():
+    examples = [
+        {
+            "q0":"SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
+            "q1":"SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+        },
+        {
+            "q0":"SELECT CAST(deleted_at AS DATE) FROM s WHERE text ILIKE '%iphone%'",
+            "q1":"SELECT deleted_at FROM s WHERE text ILIKE '%iphone%'"
+        }
+    ]
+
+    suggestRules = RuleGenerator.suggest_rules(examples, exp='khn', k=2)
+    assert type(suggestRules) is list
+    assert len(suggestRules) == 2
+
+    assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRules[0]['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP('2016-10-01 00:00:00.000')
+    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRules[0]['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT * FROM t WHERE created_at = TIMESTAMP('2016-10-01 00:00:00.000')
+    '''))
+
+    assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRules[1]['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT CAST(deleted_at AS DATE) FROM s WHERE ILIKE(text, '%iphone%')
+    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRules[1]['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT deleted_at FROM s WHERE ILIKE(text, '%iphone%')
+    '''))
+
+
+def test_suggest_rules_khn_k4_1():
+    examples = [
+        {
+            "q0":"SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
+            "q1":"SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+        },
+        {
+            "q0":"SELECT CAST(deleted_at AS DATE) FROM s",
+            "q1":"SELECT deleted_at FROM s"
+        }
+    ]
+
+    suggestRules = RuleGenerator.suggest_rules(examples, exp='khn', k=4)
+    assert type(suggestRules) is list
+    assert len(suggestRules) == 2
+
+    assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRules[0]['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP('2016-10-01 00:00:00.000')
+    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRules[0]['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT * FROM t WHERE created_at = TIMESTAMP('2016-10-01 00:00:00.000')
+    '''))
+
+    assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRules[1]['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT CAST(deleted_at AS DATE) FROM s
+    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRules[1]['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        SELECT deleted_at FROM s
     '''))

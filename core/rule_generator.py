@@ -2485,7 +2485,7 @@ class RuleGenerator:
     #                         ]
     #
     @staticmethod
-    def suggest_rules(examples: list, exp: str='bf') -> list:
+    def suggest_rules(examples: list, exp: str='bf', k: int=1) -> list:
         ans = []
 
         # Initialize original examples's seed rules as the answer
@@ -2497,7 +2497,7 @@ class RuleGenerator:
 
             # Explore candidates based on current answer
             #
-            candidates = RuleGenerator.explore_candidates(ans, exp)
+            candidates = RuleGenerator.explore_candidates(ans, exp, k)
 
             delta_lengths = [0] * len(candidates)
             to_be_replaced_rules = [[] for i in range(len(candidates))]
@@ -2655,9 +2655,11 @@ class RuleGenerator:
     # explore candidate rules for a given list of base rules
     #
     @staticmethod
-    def explore_candidates(baseRules: list, exp: str) -> list:
+    def explore_candidates(baseRules: list, exp: str, k: int) -> list:
         if exp == 'bf':
             return RuleGenerator.explore_candidates_bf(baseRules)
+        elif exp == 'khn':
+            return RuleGenerator.explore_candidates_khn(baseRules, k)
         
         return RuleGenerator.explore_candidates_bf(baseRules)
     
@@ -2682,6 +2684,9 @@ class RuleGenerator:
                 baseRule['fingerPrint'] = RuleGenerator.fingerPrint(baseRule)
             visited[baseRule['fingerPrint']] = baseRule
             queue.append(baseRule)
+            # put base rules in the candidate set as a corner case
+            #
+            ans.append(baseRule)
         
         # Breadth First Search
         #
@@ -2721,6 +2726,78 @@ class RuleGenerator:
                     if childRule['fingerPrint'] not in visited.keys():
                         visited[childRule['fingerPrint']] = childRule
                         queue.append(childRule)
+                        ans.append(childRule)
+        
+        return ans
+    
+    # explore candidate rules for a given list of base rules
+    #   (2) k-hop neighbors 
+    #
+    @staticmethod
+    def explore_candidates_khn(baseRules: list, k: int) -> list:
+
+        ans = []
+
+        # Generate the candidate rules' graphs starting from all base rules
+        #
+        # Initialize queue with all the base rules
+        #
+        queue = []
+        visited = {}
+        for baseRule in baseRules:
+            # Cache finger print in rule
+            #
+            if 'fingerPrint' not in baseRule.keys():
+                baseRule['fingerPrint'] = RuleGenerator.fingerPrint(baseRule)
+            visited[baseRule['fingerPrint']] = baseRule
+            # the format is (hop, rule)
+            #
+            queue.append((0, baseRule))
+            # put base rules in the candidate set as a corner case
+            #
+            ans.append(baseRule)
+        
+        # Breadth First Search
+        #   stop when reaching a hop > k
+        #
+        while len(queue) > 0:
+            hop, baseRule = queue.pop(0)
+            if hop > k:
+                break
+            # First time transform a rule
+            #
+            if 'transformed' not in baseRule.keys() or not baseRule['transformed']:
+                baseRule['children'] = []
+                # generate children from the baseRule
+                #   by applying each transformation on baseRule
+                #
+                for transform in RuleGenerator.RuleTransformations.keys():
+                    childrenRules = getattr(RuleGenerator, transform)(baseRule)
+                    for childRule in childrenRules:
+                        # Cache finger print in rule
+                        #
+                        childRule['fingerPrint'] = RuleGenerator.fingerPrint(childRule)
+                        # if childRule has not been visited
+                        #
+                        if childRule['fingerPrint'] not in visited.keys():
+                            visited[childRule['fingerPrint']] = childRule
+                            queue.append((hop + 1, childRule))
+                            baseRule['children'].append(childRule)
+                            ans.append(childRule)
+                        # else childRule has been visited (generated from an ealier baseRule)
+                        #
+                        else:
+                            baseRule['children'].append(visited[childRule['fingerPrint']])
+                baseRule['transformed'] = True
+            # Rule already transformed
+            #
+            else:
+                childrenRules = baseRule['children']
+                for childRule in childrenRules:
+                    # if childRule has not been visited
+                    if childRule['fingerPrint'] not in visited.keys():
+                        visited[childRule['fingerPrint']] = childRule
+                        queue.append((hop + 1, childRule))
                         ans.append(childRule)
         
         return ans
