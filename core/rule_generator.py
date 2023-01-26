@@ -2676,29 +2676,51 @@ class RuleGenerator:
         queue = []
         visited = {}
         for baseRule in baseRules:
-            baseRuleFingerPrint = RuleGenerator.fingerPrint(baseRule)
-            visited[baseRuleFingerPrint] = baseRule
+            # Cache finger print in rule
+            #
+            if 'fingerPrint' not in baseRule.keys():
+                baseRule['fingerPrint'] = RuleGenerator.fingerPrint(baseRule)
+            visited[baseRule['fingerPrint']] = baseRule
             queue.append(baseRule)
+        
         # Breadth First Search
         #
         while len(queue) > 0:
             baseRule = queue.pop(0)
-            baseRule['children'] = []
-            # generate children from the baseRule
-            #   by applying each transformation on baseRule
+            # First time transform a rule
             #
-            for transform in RuleGenerator.RuleTransformations.keys():
-                childrenRules = getattr(RuleGenerator, transform)(baseRule)
+            if 'transformed' not in baseRule.keys() or not baseRule['transformed']:
+                baseRule['children'] = []
+                # generate children from the baseRule
+                #   by applying each transformation on baseRule
+                #
+                for transform in RuleGenerator.RuleTransformations.keys():
+                    childrenRules = getattr(RuleGenerator, transform)(baseRule)
+                    for childRule in childrenRules:
+                        # Cache finger print in rule
+                        #
+                        childRule['fingerPrint'] = RuleGenerator.fingerPrint(childRule)
+                        # if childRule has not been visited
+                        #
+                        if childRule['fingerPrint'] not in visited.keys():
+                            visited[childRule['fingerPrint']] = childRule
+                            queue.append(childRule)
+                            baseRule['children'].append(childRule)
+                            ans.append(childRule)
+                        # else childRule has been visited (generated from an ealier baseRule)
+                        #
+                        else:
+                            baseRule['children'].append(visited[childRule['fingerPrint']])
+                baseRule['transformed'] = True
+            # Rule already transformed
+            #
+            else:
+                childrenRules = baseRule['children']
                 for childRule in childrenRules:
-                    childRuleFingerPrint = RuleGenerator.fingerPrint(childRule)
                     # if childRule has not been visited
-                    if childRuleFingerPrint not in visited.keys():
-                        visited[childRuleFingerPrint] = childRule
+                    if childRule['fingerPrint'] not in visited.keys():
+                        visited[childRule['fingerPrint']] = childRule
                         queue.append(childRule)
-                        baseRule['children'].append(childRule)
                         ans.append(childRule)
-                    # else childRule has been visited (generated from an ealier baseRule)
-                    else:
-                        baseRule['children'].append(visited[childRuleFingerPrint])
         
         return ans
