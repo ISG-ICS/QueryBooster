@@ -26,11 +26,21 @@ class RuleGenerator:
         q0ASTJson = mosql.parse(q0)
         q1ASTJson = mosql.parse(q1)
 
-        # 4. Extract subtree from AST json based on scope
+        # Extract subtree from AST json based on scope
         patternASTJson = RuleParser.extractASTSubtree(q0ASTJson, q0Scope)
         rewriteASTJson = RuleParser.extractASTSubtree(q1ASTJson, q1Scope)
 
-        return {'pattern': RuleGenerator.deparse(patternASTJson), 'rewrite': RuleGenerator.deparse(rewriteASTJson)}
+        seedRule = {'pattern': RuleGenerator.deparse(patternASTJson), 'rewrite': RuleGenerator.deparse(rewriteASTJson)}
+
+        # Parse seedRule's pattern and rewrite into SQL AST json
+        #
+        seedRule['pattern_json'], seedRule['rewrite_json'], seedRule['mapping'] = RuleParser.parse(seedRule['pattern'], seedRule['rewrite'])
+        
+        # Initially, seedRule has no constraints and actions
+        #
+        seedRule['constraints'], seedRule['constraints_json'], seedRule['actions'], seedRule['actions_json'] = '', '[]', '', '[]'
+
+        return seedRule
 
     # Generate the seed rule for a given rewriting pair q0 -> q1
     #
@@ -1945,14 +1955,6 @@ class RuleGenerator:
         #
         seedRule = RuleGenerator.initialize_seed_rule(q0, q1)
 
-        # Parse seedRule's pattern and rewrite into SQL AST json
-        #
-        seedRule['pattern_json'], seedRule['rewrite_json'], seedRule['mapping'] = RuleParser.parse(seedRule['pattern'], seedRule['rewrite'])
-        
-        # Initially, seedRule has no constraints and actions
-        #
-        seedRule['constraints'], seedRule['constraints_json'], seedRule['actions'], seedRule['actions_json'] = '', '[]', '', '[]'
-
         # Generate the candidate rule graph starting from seedRule
         #   Breadth First Search
         #
@@ -2456,14 +2458,6 @@ class RuleGenerator:
         #
         seedRule = RuleGenerator.initialize_seed_rule(q0, q1)
 
-        # Parse seedRule's pattern and rewrite into SQL AST json
-        #
-        seedRule['pattern_json'], seedRule['rewrite_json'], seedRule['mapping'] = RuleParser.parse(seedRule['pattern'], seedRule['rewrite'])
-        
-        # Initially, seedRule has no constraints and actions
-        #
-        seedRule['constraints'], seedRule['constraints_json'], seedRule['actions'], seedRule['actions_json'] = '', '[]', '', '[]'
-
         # Generalize the seedRule by applying all possible transformations 
         #   recursively until no more differences
         #
@@ -2480,3 +2474,231 @@ class RuleGenerator:
         
         return generalRule
 
+    # Suggest rules for a given set of examples
+    #   e.g., a example set = [
+    #                            {'q0': "SELECT * FROM tweets WHERE STRPOS(UPPER(text), 'iphone') > 0", 
+    #                             'q1': "SELECT * FROM tweets WHERE text ILIKE '%iphone%'"
+    #                            },
+    #                            {'q0': "SELECT * FROM tweets WHERE STRPOS(UPPER(state_name), 'iphone') > 0", 
+    #                             'q1': "SELECT * FROM tweets WHERE state_name ILIKE '%iphone%'"
+    #                            }
+    #                         ]
+    #
+    @staticmethod
+    def suggest_rules(examples: list, exp: str='bf') -> list:
+        ans = []
+
+        # Initialize original examples's seed rules as the answer
+        #
+        for example in examples:
+            ans.append(RuleGenerator.initialize_seed_rule(example['q0'], example['q1']))
+
+        while True:
+
+            # Explore candidates based on current answer
+            #
+            candidates = RuleGenerator.explore_candidates(ans, exp)
+
+            delta_lengths = [0] * len(candidates)
+            to_be_replaced_rules = [[] for i in range(len(candidates))]
+
+            for i in range(len(candidates)):
+
+                candidate = candidates[i]
+
+                # find rules in answer that can be replaced by candidate
+                #
+                to_be_replaced_rules[i] = RuleGenerator.coveredRules(candidate, ans, examples)
+
+                # compute the length reduction if 'candidate' replace 'to_be_replaced' rules
+                #
+                delta_lengths[i] = sum([RuleGenerator.description_length(r) for r in to_be_replaced_rules[i]]) - RuleGenerator.description_length(candidate)
+            
+            # stop when no more reduction possible
+            #
+            if max(delta_lengths) <= 0:
+                break
+
+            # choose the candidate rule with the most length reduction
+            #
+            imax = delta_lengths.index(max(delta_lengths))
+            icandidate = candidates[imax]
+
+            ans = [r for r in ans if r not in to_be_replaced_rules[imax]]
+            ans.append(icandidate)
+        
+        return ans
+    
+    # Compute a list of rules in the given baseRules 
+    #   that can be covered by the given rule on the given examples
+    #
+    @staticmethod
+    def coveredRules(rule: dict, baseRules: list, examples: list) -> list:
+
+        # compute the covered examples indexes for each base rule
+        #
+        for baseRule in baseRules:
+            if 'coveredExamples' not in baseRule.keys():
+                baseRule['coveredExamples'] = RuleGenerator.coveredExamples(baseRule, examples)
+        
+        # compute the covered examples indexes for the given rule
+        #
+        if 'coveredExamples' not in rule.keys():
+            rule['coveredExamples'] = RuleGenerator.coveredExamples(rule, examples)
+        
+        ans = []
+
+        # compute the covered base rules:
+        #   the covered examples indexes of a base rule is a subset of the covered examples indexes of the rule
+        # 
+        for baseRule in baseRules:
+             if set(baseRule['coveredExamples']).issubset(set(rule['coveredExamples'])):
+                ans.append(baseRule)
+        
+        return ans
+    
+    # Compute the description length of a given rule
+    #
+    @staticmethod
+    def description_length(rule: dict) -> float:
+        
+        # the base length of a rule
+        #
+        base = 100.0
+
+        # the weight of a Var
+        #
+        w_var = 10.0
+
+        # the weight of a VarList
+        #
+        w_varList = 30.0
+
+        # count Vars
+        #
+        cnt_var = RuleGenerator.countVars(rule)
+
+        # count VarLists
+        #
+        cnt_varList = RuleGenerator.countVarLists(rule)
+
+        # count Invariables
+        #
+        cnt_invars = RuleGenerator.countInvariables(rule)
+
+        length = base + (cnt_var * w_var + cnt_varList * w_varList) / cnt_invars
+
+        return length
+    
+    # Count the Vars in a rule
+    #
+    @staticmethod
+    def countVars(rule: dict) -> int:
+        ans = 0
+        for key, value in json.loads(rule['mapping']).items():
+            if QueryRewriter.is_var(value):
+                ans += 1
+        return ans
+    
+    # Count the VarLists in a rule
+    #
+    @staticmethod
+    def countVarLists(rule: dict) -> int:
+        ans = 0
+        for key, value in json.loads(rule['mapping']).items():
+            if QueryRewriter.is_varList(value):
+                ans += 1
+        return ans
+    
+    # Count the invariables in a rule
+    #   invariables include: keywords, constants, fixed table and column names, etc. 
+    #   (In other words, all strings that are not Var or VarList)
+    #
+    @staticmethod
+    def countInvariables(rule: dict) -> int:
+        return RuleGenerator.countInvariablesASTJson(json.loads(rule['pattern_json'])) + RuleGenerator.countInvariablesASTJson(json.loads(rule['rewrite_json']))
+    
+    # Recursively count the invariables in a rule's pattern/rewrite's AST Json
+    #
+    @staticmethod
+    def countInvariablesASTJson(astJson: Any) -> int:
+
+        # Case-1: dict
+        #
+        if QueryRewriter.is_dict(astJson):
+            cnt = 0
+            for key, value in astJson.items():
+                cnt += RuleGenerator.countInvariablesASTJson(key) + RuleGenerator.countInvariablesASTJson(value)
+            return cnt
+
+        # Case-2: list
+        # 
+        if QueryRewriter.is_list(astJson):
+            cnt = 0
+            for child in astJson:
+                cnt += RuleGenerator.countInvariablesASTJson(child)
+            return cnt
+
+        # Case-3: constant
+        if QueryRewriter.is_constant(astJson):
+            return 1
+        
+        # Case-4: dot expression
+        if QueryRewriter.is_dot_expression(astJson):
+            parts = astJson.split('.')
+            return RuleGenerator.countInvariablesASTJson(parts[0]) + RuleGenerator.countInvariablesASTJson(parts[1])
+        
+        # Other cases: Var or VarList
+        #
+        return 0
+    
+    # explore candidate rules for a given list of base rules
+    #
+    @staticmethod
+    def explore_candidates(baseRules: list, exp: str) -> list:
+        if exp == 'bf':
+            return RuleGenerator.explore_candidates_bf(baseRules)
+        
+        return RuleGenerator.explore_candidates_bf(baseRules)
+    
+    # explore candidate rules for a given list of base rules
+    #   (1) Brute-Force 
+    #
+    @staticmethod
+    def explore_candidates_bf(baseRules: list) -> list:
+
+        ans = []
+
+        # Generate the candidate rules' graphs starting from all base rules
+        #
+        # Initialize queue with all the base rules
+        #
+        queue = []
+        visited = {}
+        for baseRule in baseRules:
+            baseRuleFingerPrint = RuleGenerator.fingerPrint(baseRule)
+            visited[baseRuleFingerPrint] = baseRule
+            queue.append(baseRule)
+        # Breadth First Search
+        #
+        while len(queue) > 0:
+            baseRule = queue.pop(0)
+            baseRule['children'] = []
+            # generate children from the baseRule
+            #   by applying each transformation on baseRule
+            #
+            for transform in RuleGenerator.RuleTransformations.keys():
+                childrenRules = getattr(RuleGenerator, transform)(baseRule)
+                for childRule in childrenRules:
+                    childRuleFingerPrint = RuleGenerator.fingerPrint(childRule)
+                    # if childRule has not been visited
+                    if childRuleFingerPrint not in visited.keys():
+                        visited[childRuleFingerPrint] = childRule
+                        queue.append(childRule)
+                        baseRule['children'].append(childRule)
+                        ans.append(childRule)
+                    # else childRule has been visited (generated from an ealier baseRule)
+                    else:
+                        baseRule['children'].append(visited[childRuleFingerPrint])
+        
+        return ans
