@@ -2801,3 +2801,488 @@ class RuleGenerator:
                         ans.append(childRule)
         
         return ans
+    
+    # explore candidate rules for a given list of base rules
+    #   (3) k-promising neighbors 
+    #
+    @staticmethod
+    def explore_candidates_kpn(baseRules: list, k: int) -> list:
+
+        import queue as Q
+
+        ans = []
+
+        # Generate the candidate rules' graphs starting from all base rules
+        #
+        # Initialize queue with all the base rules
+        #
+        queue = Q.PriorityQueue()
+        visited = {}
+        for baseRule in baseRules:
+            # Cache finger print in rule
+            #
+            if 'fingerPrint' not in baseRule.keys():
+                baseRule['fingerPrint'] = RuleGenerator.fingerPrint(baseRule)
+            visited[baseRule['fingerPrint']] = baseRule
+            # the format is (-promising_score, rule)
+            #
+            queue.put((-RuleGenerator.promisingScore(baseRule, baseRules), baseRule))
+            # put base rules in the candidate set as a corner case
+            #
+            ans.append(baseRule)
+        
+        # Best First Search
+        #   stop when reaching a |ans| >= k
+        #
+        while len(ans) < k:
+            _, baseRule = queue.get()
+            
+            # First time transform a rule
+            #
+            if 'transformed' not in baseRule.keys() or not baseRule['transformed']:
+                baseRule['children'] = []
+                # generate children from the baseRule
+                #   by applying each transformation on baseRule
+                #
+                for transform in RuleGenerator.RuleTransformations.keys():
+                    childrenRules = getattr(RuleGenerator, transform)(baseRule)
+                    for childRule in childrenRules:
+                        # Cache finger print in rule
+                        #
+                        childRule['fingerPrint'] = RuleGenerator.fingerPrint(childRule)
+                        # if childRule has not been visited
+                        #
+                        if childRule['fingerPrint'] not in visited.keys():
+                            visited[childRule['fingerPrint']] = childRule
+                            queue.put((-RuleGenerator.promisingScore(childRule, baseRules), childRule))
+                            baseRule['children'].append(childRule)
+                            ans.append(childRule)
+                        # else childRule has been visited (generated from an ealier baseRule)
+                        #
+                        else:
+                            baseRule['children'].append(visited[childRule['fingerPrint']])
+                baseRule['transformed'] = True
+            # Rule already transformed
+            #
+            else:
+                childrenRules = baseRule['children']
+                for childRule in childrenRules:
+                    # if childRule has not been visited
+                    if childRule['fingerPrint'] not in visited.keys():
+                        visited[childRule['fingerPrint']] = childRule
+                        queue.put((-RuleGenerator.promisingScore(childRule, baseRules), childRule))
+                        ans.append(childRule)
+        
+        return ans
+    
+    # Compute the promising score of a given rule on the given set of base rules
+    #
+    @staticmethod
+    def promisingScore(rule: dict, baseRules: list) -> float:
+        ans = 0.0
+
+        for baseRule in baseRules:
+            ans += RuleGenerator.description_length(baseRule) / max(RuleGenerator.cntTransformations(rule, baseRule), 1)
+        
+        ans += 1.0 / RuleGenerator.description_length(rule)
+
+        return ans
+    
+    # Count the number of transformations to transform the given left rule to cover the given right rule
+    #
+    @staticmethod
+    def cntTransformations(left: dict, right: dict) -> int:
+        # The right rule is like a query pair. 
+        #   We want the left rule pattern matches the pairs' original query,
+        #     and rewrites it to the pair's rewritten query.
+        # However, to transform the left rule to a more general form that covers the pair,
+        #   one kind of transformations can be the drop_branch().
+        #     Thus, we also need to enumerate possible subtrees of the left rule,
+        #       count the transformations starting with the subtrees,
+        #         and add up the drop_branch() operations to count the total transformations.
+        # 
+        # Note: TODO - We only check the patterns between left and right for now. 
+        #
+        min_cnt_transformations = numbers.Integer.MAX_VALUE
+        left_rule_pattern = json.loads(left['pattern_json'])
+        right_rule_pattern = json.loads(right['pattern_json'])
+        cnt_transformations = RuleGenerator.cntTransformationsASTJson(left_rule_pattern, right_rule_pattern)
+        min_cnt_transformations = min(min_cnt_transformations, cnt_transformations)
+        if type(left_rule_pattern) is dict:
+            for child in left_rule_pattern.values():
+                cnt_transformations = RuleGenerator.cntTransformationsASTJson(child, right_rule_pattern)
+                min_cnt_transformations = min(min_cnt_transformations, cnt_transformations)
+        elif type(left_rule_pattern) is list:
+            for child in left_rule_pattern:
+                cnt_transformations = RuleGenerator.cntTransformationsASTJson(child, right_rule_pattern)
+                min_cnt_transformations = min(min_cnt_transformations, cnt_transformations)
+        return min_cnt_transformations
+    
+    # Count the number of transformations to transform the given left pattern AST Json to cover the given right pattern AST Json
+    #
+    @staticmethod
+    def cntTransformationsASTJson(left_node: Any, right_node: Any) -> int:
+        # Similar to QueryRewriter's match function:
+        # Breadth-First-Search on the right pattern AST Json
+        # 
+        queue = [right_node]
+        min_cnt_transformations = numbers.Integer.MAX_VALUE
+        while len(queue) > 0:
+            curr_node = queue.pop(0)
+            cnt_transformations = RuleGenerator.cntTransformationsASTJsonNode(left_node, curr_node)
+            min_cnt_transformations = min(min_cnt_transformations, cnt_transformations)
+            if type(curr_node) is dict:
+                for child in curr_node.values():
+                    queue.append(child)
+            elif type(curr_node) is list:
+                for child in curr_node:
+                    queue.append(child)
+        return min_cnt_transformations
+    
+    # Recursively count the number of transformations to transform 
+    #   the given left pattern AST Json node to cover the given right pattern AST Json node
+    #
+    @staticmethod
+    def cntTransformationsASTJsonNode(left_node: Any, right_node: Any) -> int:
+        # Refer to QueryRewriter.match_node()
+        #
+        
+        # Special case for value of 'select' and 'from':
+        #   e.g., right_node = [{"value": "e1.name"}, {"value": "e1.age"}, {"value": "e2.salary"}]
+        #         left_node = {"value": "VL1"}
+        #   The idea is escalate the "VL1" from inside {"value": "VL1"} to outside
+        # 
+        if QueryRewriter.is_dict(left_node) and 'value' in left_node.keys() and QueryRewriter.is_varList(left_node['value']):
+            return 0
+        
+        # Case-1: left_node is a Var
+        # 
+        if QueryRewriter.is_var(left_node):
+            return RuleGenerator.cntTransformationsASTJsonVar(left_node, right_node)
+        
+        # Case-2: left_node is a VarList
+        # 
+        if QueryRewriter.is_varList(left_node):
+            return RuleGenerator.cntTransformationsASTJsonVarList(left_node, right_node)
+        
+        # Case-3: left_node is a constant
+        if QueryRewriter.is_constant(left_node):
+            return RuleGenerator.cntTransformationsASTJsonConstant(left_node, right_node)
+        
+        # Case-4: left_node is a dict
+        # 
+        if QueryRewriter.is_dict(left_node):
+            return RuleGenerator.cntTransformationsASTJsonDict(left_node, right_node)
+                
+        # Case-5: left_node is a list
+        # 
+        if QueryRewriter.is_list(left_node):
+            return RuleGenerator.cntTransformationsASTJsonList(left_node, right_node)
+            
+        # Case-6: left_node is a dot expression
+        #
+        if QueryRewriter.is_dot_expression(left_node):
+            return RuleGenerator.cntTransformationsASTJsonDotExpression(left_node, right_node)
+
+        return 0
+
+    # Count the number of transformations to transform 
+    #   the given left pattern AST Json Var to cover the given right pattern AST Json node
+    #
+    @staticmethod
+    def cntTransformationsASTJsonVar(left_node: str, right_node: Any) -> int:
+
+        # Case-1: right_node is a Var
+        # 
+        if QueryRewriter.is_var(right_node):
+            return 0
+        
+        # Case-2: right_node is a VarList
+        # 
+        if QueryRewriter.is_varList(right_node):
+            # 1 transformation: <left> --[merge_variables]--> <<left>>
+            return 1
+        
+        # Case-3: right_node is a constant
+        if QueryRewriter.is_constant(right_node):
+            return 0
+        
+        # Case-4: right_node is a dict
+        # 
+        if QueryRewriter.is_dict(right_node):
+            return 0
+                
+        # Case-5: right_node is a list
+        # 
+        if QueryRewriter.is_list(right_node):
+            # 1 transformation: <left> --[merge_variables]--> <<left>>
+            return 1
+            
+        # Case-6: right_node is a dot expression
+        #
+        if QueryRewriter.is_dot_expression(right_node):
+            return 0
+
+        return 0
+    
+    # Count the number of transformations to transform 
+    #   the given left pattern AST Json VarList to cover the given right pattern AST Json node
+    #
+    @staticmethod
+    def cntTransformationsASTJsonVarList(left_node: str, right_node: Any) -> int:
+
+        # VarList matches everything
+        #
+        return 0
+    
+    # Count the number of transformations to transform 
+    #   the given left pattern AST Json Constant to cover the given right pattern AST Json node
+    #
+    @staticmethod
+    def cntTransformationsASTJsonConstant(left_node: str or numbers.Number, right_node: Any) -> int:
+
+        # Case-1: right_node is a Var
+        # 
+        if QueryRewriter.is_var(right_node):
+            # 1 transformation: 'left' --[variablize_a_leaf]--> <left>
+            return 1
+        
+        # Case-2: right_node is a VarList
+        # 
+        if QueryRewriter.is_varList(right_node):
+            # 2 transformations: 'left' --[variablize_a_leaf]--> <left> --[merge_variables]--> <<left>>
+            return 2
+        
+        # Case-3: right_node is a constant
+        if QueryRewriter.is_constant(right_node):
+            if QueryRewriter.is_string(left_node) and \
+                QueryRewriter.is_string(right_node) and \
+                    str(left_node).lower() == str(right_node).lower():
+                return 0
+            elif QueryRewriter.is_number(left_node) and \
+                QueryRewriter.is_number(right_node) and \
+                    left_node == right_node:
+                return 0
+            else:
+                # 1 transformation: 'left' --[variablize_a_leaf]--> <left>
+                return 1
+
+        # Case-4: right_node is a dict
+        # 
+        if QueryRewriter.is_dict(right_node):
+            # 1 transformation: 'left' --[variablize_a_leaf]--> <left>
+            return 1
+                
+        # Case-5: right_node is a list
+        # 
+        if QueryRewriter.is_list(right_node):
+            # 2 transformations: 'left' --[variablize_a_leaf]--> <left> --[merge_variables]--> <<left>>
+            return 2
+            
+        # Case-6: right_node is a dot expression
+        #
+        if QueryRewriter.is_dot_expression(right_node):
+            # 1 transformation: 'left' --[variablize_a_leaf]--> <left>
+            return 1
+
+        return 0
+    
+    # Recursively count the number of transformations to transform 
+    #   the given left pattern AST Json Dict to cover the given right pattern AST Json node
+    #
+    @staticmethod
+    def cntTransformationsASTJsonDict(left_node: dict, right_node: Any) -> int:
+
+        # Case-1: right_node is a Var
+        # 
+        if QueryRewriter.is_var(right_node):
+            # 1 ([variablize_a_leaf]) + height_of_left ([variablize_subtrees])
+            return 1 + RuleGenerator.heightOf(left_node)
+        
+        # Case-2: right_node is a VarList
+        # 
+        if QueryRewriter.is_varList(right_node):
+            # 1 ([variablize_a_leaf]) + height_of_left ([variablize_subtrees]) + 1 ([merge_variables])
+            return 1 + RuleGenerator.heightOf(left_node) + 1
+        
+        # Case-3: right_node is a constant
+        if QueryRewriter.is_constant(right_node):
+            # 1 ([variablize_a_leaf]) + height_of_left ([variablize_subtrees])
+            return 1 + RuleGenerator.heightOf(left_node)
+        
+        # Case-4: right_node is a dict
+        # 
+        if QueryRewriter.is_dict(right_node):
+            # if keys can match
+            if set(left_node.keys()) == set(right_node.keys()):
+                ans = 0
+                # recursively count each value matching node
+                for key in left_node.keys():
+                    ans += RuleGenerator.cntTransformationsASTJsonNode(left_node[key], right_node[key])
+                return ans
+            # otherwise
+            else:
+                # 1 ([variablize_a_leaf]) + height_of_left ([variablize_subtrees])
+                return 1 + RuleGenerator.heightOf(left_node)
+                
+        # Case-5: right_node is a list
+        # 
+        if QueryRewriter.is_list(right_node):
+            # 1 ([variablize_a_leaf]) + height_of_left ([variablize_subtrees]) + 1 ([merge_variables])
+            return 1 + RuleGenerator.heightOf(left_node) + 1
+            
+        # Case-6: right_node is a dot expression
+        #
+        if QueryRewriter.is_dot_expression(right_node):
+            # 1 ([variablize_a_leaf]) + height_of_left ([variablize_subtrees])
+            return 1 + RuleGenerator.heightOf(left_node)
+
+        return 0
+    
+    # Recursively count the number of transformations to transform 
+    #   the given left pattern AST Json List to cover the given right pattern AST Json node
+    #
+    @staticmethod
+    def cntTransformationsASTJsonList(left_node: list, right_node: Any) -> int:
+
+        # First count the basic transformations from List to a VarList
+        #  
+        ans = 0
+        for child in left_node:
+            # each child of left_node should be variablized
+            #
+            ans += RuleGenerator.cntTransformationsASTJsonNode(child, 'V001')
+        # + 1 transformation: [merge_variables]
+        ans += 1
+
+        # Case-1: right_node is a Var
+        # 
+        if QueryRewriter.is_var(right_node):
+            return ans
+        
+        # Case-2: right_node is a VarList
+        # 
+        if QueryRewriter.is_varList(right_node):
+            return ans
+        
+        # Case-3: right_node is a constant
+        if QueryRewriter.is_constant(right_node):
+            return ans
+        
+        # Case-4: right_node is a dict
+        # 
+        if QueryRewriter.is_dict(right_node):
+            return ans
+                
+        # Case-5: right_node is a list
+        # 
+        if QueryRewriter.is_list(right_node):
+            if len(left_node) == len(right_node):
+                # recursively count each child in left_node matching a child in right_node
+                #   and choose the min
+                min_ans = numbers.Integer.MAX_VALUE
+                for left_child in left_node:
+                    for right_child in right_node:
+                        ans = RuleGenerator.cntTransformationsASTJsonNode(left_child, right_child)
+                        if len(left_node) - 1 == 1:
+                            ans += RuleGenerator.cntTransformationsASTJsonNode([cl for cl in left_node if cl != left_child][0], [cr for cr in right_node if cr != right_child][0])
+                        else:
+                            ans += RuleGenerator.cntTransformationsASTJsonList([cl for cl in left_node if cl != left_child], [cr for cr in right_node if cr != right_child])
+                        min_ans = min(min_ans, ans)
+                return min_ans
+            else:
+                return ans
+
+        # Case-6: right_node is a dot expression
+        #
+        if QueryRewriter.is_dot_expression(right_node):
+            return ans
+
+        return 0
+    
+    # Count the number of transformations to transform 
+    #   the given left pattern AST Json dot expression to cover the given right pattern AST Json node
+    #
+    @staticmethod
+    def cntTransformationsASTJsonDotExpression(left_node: Any, right_node: Any) -> int:
+
+        # First count the basic transformations from dot expression to a Var
+        #  
+        # split the dot expression into two parts
+        # 
+        _table = '.'.join(left_node.split('.')[0:-1])
+        _column = left_node.split('.')[-1]
+        ans = 0
+        if not QueryRewriter.is_var(_table):
+            # 1 transformation: [variablize_a_leaf]
+            ans += 1
+        if not QueryRewriter.is_var(_column): 
+            # 1 transformation: [variablize_a_leaf]
+            ans += 1
+        # + 1 transformation: [variablize_subtree]
+        ans += 1
+
+        # Case-1: right_node is a Var
+        # 
+        if QueryRewriter.is_var(right_node):
+            return ans
+        
+        # Case-2: right_node is a VarList
+        # 
+        if QueryRewriter.is_varList(right_node):
+            # + 1 transformation: [merge_variables]
+            return ans + 1
+        
+        # Case-3: right_node is a constant
+        if QueryRewriter.is_constant(right_node):
+            return ans
+        
+        # Case-4: right_node is a dict
+        # 
+        if QueryRewriter.is_dict(right_node):
+            return ans
+                
+        # Case-5: right_node is a list
+        # 
+        if QueryRewriter.is_list(right_node):
+            # + 1 transformation: [merge_variables]
+            return ans + 1
+            
+        # Case-6: right_node is a dot expression
+        #
+        if QueryRewriter.is_dot_expression(right_node):
+            _table2 = '.'.join(right_node.split('.')[0:-1])
+            _column2 = right_node.split('.')[-1]
+            ans = 0
+            if not QueryRewriter.is_var(_table) and _table != _table2:
+                # 1 transformation: [variablize_a_leaf]
+                ans += 1
+            if not QueryRewriter.is_var(_column) and _column != _column2:
+                 # 1 transformation: [variablize_a_leaf]
+                ans += 1
+            return ans
+
+        return 0
+    
+    # Recursively compute the height of the given left pattern AST Json node
+    #
+    @staticmethod
+    def heightOf(node: Any) -> int:
+        ans = 0
+        if QueryRewriter.is_var(node):
+            ans = max(ans, 1)
+        elif QueryRewriter.is_varList(node):
+            ans = max(ans, 1)
+        elif QueryRewriter.is_constant(node):
+            ans = max(ans, 1)
+        elif QueryRewriter.is_dict(node):
+            for child in node.values():
+                ans = max(ans, RuleGenerator.heightOf(child))
+            ans += 1
+        elif QueryRewriter.is_list(node):
+            for child in node:
+                ans = max(ans, RuleGenerator.heightOf(child))
+            ans += 1
+        elif QueryRewriter.is_dot_expression(node):
+            ans = max(ans, 1)
+        return ans
