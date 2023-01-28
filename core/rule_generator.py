@@ -8,8 +8,27 @@ import mo_sql_parsing as mosql
 import numbers
 import re
 
+MAX_INT = 2147483647
 
 class RuleGenerator:
+
+    # Copy the given rule to a new rule
+    #
+    @staticmethod
+    def copy_a_rule(rule: dict) -> dict:
+        
+        # create a new rule based on rule
+        new_rule = copy.deepcopy(rule)
+
+        # cleanup attributes
+        if 'fingerPrint' in new_rule:
+            del new_rule['fingerPrint']
+        if 'children' in new_rule:
+            del new_rule['children']
+        if 'promisingScore' in new_rule:
+            del new_rule['promisingScore']
+
+        return new_rule
 
     # Initialize the seed rule for a given rewriting pair q0 -> q1
     #
@@ -458,7 +477,7 @@ class RuleGenerator:
     def variablize_column(rule: dict, column: str) -> dict:
 
         # create a new rule based on rule
-        new_rule = copy.deepcopy(rule)
+        new_rule = RuleGenerator.copy_a_rule(rule)
 
         # Find a variable name for the given column
         #
@@ -708,7 +727,7 @@ class RuleGenerator:
     def variablize_literal(rule: dict, literal: Union[str, numbers.Number]) -> dict:
 
         # create a new rule based on rule
-        new_rule = copy.deepcopy(rule)
+        new_rule = RuleGenerator.copy_a_rule(rule)
 
         # Find a variable name for the given literal
         #
@@ -938,7 +957,7 @@ class RuleGenerator:
     def variablize_table(rule: dict, table: dict) -> dict:
 
         # create a new rule based on rule
-        new_rule = copy.deepcopy(rule)
+        new_rule = RuleGenerator.copy_a_rule(rule)
 
         # Find a variable name for the given table
         #
@@ -1274,7 +1293,7 @@ class RuleGenerator:
     def variablize_subtree(rule: dict, subtree: dict) -> dict:
 
         # create a new rule based on rule
-        new_rule = copy.deepcopy(rule)
+        new_rule = RuleGenerator.copy_a_rule(rule)
 
         # Find a variable name for the given subtree
         #
@@ -1456,7 +1475,7 @@ class RuleGenerator:
     def merge_variable_list(rule: dict, variableList: list) -> dict:
 
         # create a new rule based on rule
-        new_rule = copy.deepcopy(rule)
+        new_rule = RuleGenerator.copy_a_rule(rule)
 
         # Find a VarList name for the given variable list
         #
@@ -1802,12 +1821,12 @@ class RuleGenerator:
                         res.append({'key': key, 'value': value})
                 
                 # special cases: 
-                #   (1) if {'select': ...} presents, remove {'from': ...} and {'where': ...} branches
-                #   (2) if {'from': ...} presents, remove {'where': ...} branch
+                #   (1) if {'select': ...} and {'where': ...} present, remove {'from': ...} branch
+                #   (2) if only {'from': ...} presents, remove {'where': ...} branch
                 #
-                if 'select' in astJson.keys():
-                    res = [branch for branch in res if branch['key'] != 'from' and branch['key'] != 'where']
-                if 'from' in astJson.keys():
+                if 'select' in astJson.keys() and 'where' in astJson.keys():
+                    res = [branch for branch in res if branch['key'] != 'from']
+                if 'select' not in astJson.keys() and 'from' in astJson.keys():
                     res = [branch for branch in res if branch['key'] != 'where']
             
         
@@ -1858,7 +1877,7 @@ class RuleGenerator:
     def drop_branch(rule: dict, branch: dict) -> dict:
 
         # create a new rule based on rule
-        new_rule = copy.deepcopy(rule)
+        new_rule = RuleGenerator.copy_a_rule(rule)
 
         # Drop given branch in new rule
         #
@@ -2148,7 +2167,7 @@ class RuleGenerator:
     def variablize_all_columns(rule: dict, columns: list) -> dict:
 
         # create a new rule based on rule
-        new_rule = copy.deepcopy(rule)
+        new_rule = RuleGenerator.copy_a_rule(rule)
         new_rule_mapping = json.loads(new_rule['mapping'])
         new_rule_pattern_json = json.loads(new_rule['pattern_json'])
         new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
@@ -2202,7 +2221,7 @@ class RuleGenerator:
     def variablize_all_literals(rule: dict, literals: list) -> dict:
 
         # create a new rule based on rule
-        new_rule = copy.deepcopy(rule)
+        new_rule = RuleGenerator.copy_a_rule(rule)
         new_rule_mapping = json.loads(new_rule['mapping'])
         new_rule_pattern_json = json.loads(new_rule['pattern_json'])
         new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
@@ -2256,7 +2275,7 @@ class RuleGenerator:
     def variablize_all_tables(rule: dict, tables: list) -> dict:
 
         # create a new rule based on rule
-        new_rule = copy.deepcopy(rule)
+        new_rule = RuleGenerator.copy_a_rule(rule)
         new_rule_mapping = json.loads(new_rule['mapping'])
         new_rule_pattern_json = json.loads(new_rule['pattern_json'])
         new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
@@ -2308,7 +2327,7 @@ class RuleGenerator:
     def variablize_all_subtrees(rule: dict, subtrees: list) -> dict:
 
         # create a new rule based on rule
-        new_rule = copy.deepcopy(rule)
+        new_rule = RuleGenerator.copy_a_rule(rule)
         new_rule_mapping = json.loads(new_rule['mapping'])
         new_rule_pattern_json = json.loads(new_rule['pattern_json'])
         new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
@@ -2358,7 +2377,7 @@ class RuleGenerator:
     def merge_all_variable_lists(rule: dict, variableLists: list) -> dict:
 
         # create a new rule based on rule
-        new_rule = copy.deepcopy(rule)
+        new_rule = RuleGenerator.copy_a_rule(rule)
         new_rule_mapping = json.loads(new_rule['mapping'])
         new_rule_pattern_json = json.loads(new_rule['pattern_json'])
         new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
@@ -2408,7 +2427,7 @@ class RuleGenerator:
     def drop_all_branches(rule: dict, branches: list) -> dict:
 
         # create a new rule based on rule
-        new_rule = copy.deepcopy(rule)
+        new_rule = RuleGenerator.copy_a_rule(rule)
         new_rule_mapping = json.loads(new_rule['mapping'])
         new_rule_pattern_json = json.loads(new_rule['pattern_json'])
         new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
@@ -2568,11 +2587,11 @@ class RuleGenerator:
 
         # the weight of a Var
         #
-        w_var = 10.0
+        w_var = 2.0
 
         # the weight of a VarList
         #
-        w_varList = 30.0
+        w_varList = 5.0
 
         # count Vars
         #
@@ -2660,6 +2679,8 @@ class RuleGenerator:
             return RuleGenerator.explore_candidates_bf(baseRules)
         elif exp == 'khn':
             return RuleGenerator.explore_candidates_khn(baseRules, k)
+        elif exp == 'kpn':
+            return RuleGenerator.explore_candidates_kpn(baseRules, k)
         
         return RuleGenerator.explore_candidates_bf(baseRules)
     
@@ -2766,7 +2787,7 @@ class RuleGenerator:
                 break
             # First time transform a rule
             #
-            if 'transformed' not in baseRule.keys() or not baseRule['transformed']:
+            if 'children' not in baseRule.keys():
                 baseRule['children'] = []
                 # generate children from the baseRule
                 #   by applying each transformation on baseRule
@@ -2808,15 +2829,12 @@ class RuleGenerator:
     @staticmethod
     def explore_candidates_kpn(baseRules: list, k: int) -> list:
 
-        import queue as Q
-
         ans = []
 
         # Generate the candidate rules' graphs starting from all base rules
         #
-        # Initialize queue with all the base rules
+        # Initialize ans with all the base rules
         #
-        queue = Q.PriorityQueue()
         visited = {}
         for baseRule in baseRules:
             # Cache finger print in rule
@@ -2824,22 +2842,37 @@ class RuleGenerator:
             if 'fingerPrint' not in baseRule.keys():
                 baseRule['fingerPrint'] = RuleGenerator.fingerPrint(baseRule)
             visited[baseRule['fingerPrint']] = baseRule
-            # the format is (-promising_score, rule)
+            # Cache promising score in rule
             #
-            queue.put((-RuleGenerator.promisingScore(baseRule, baseRules), baseRule))
-            # put base rules in the candidate set as a corner case
+            if 'promisingScore' not in baseRule.keys():
+                baseRule['promisingScore'] = RuleGenerator.promisingScore(baseRule, baseRules)
+            # Put base rule in the candidate set
             #
             ans.append(baseRule)
         
         # Best First Search
         #   stop when reaching a |ans| >= k
         #
+        explored = []
         while len(ans) < k:
-            _, baseRule = queue.get()
+            # Find the base rule in ans that has not been explored and has the max promising score
+            #
+            unexplored_ans = [r for r in ans if r['fingerPrint'] not in explored]
+            # Corner case that all neighbors have been explored
+            #
+            if len(unexplored_ans) == 0:
+                break
+            # Sort the unexplored ans rules by promising score descending
+            #
+            unexplored_ans = sorted(unexplored_ans, key=lambda x:x['promisingScore'], reverse=True)
+            # Pick the first unexplored ans rule (max promising score)
+            #
+            baseRule = unexplored_ans[0]
+            explored.append(baseRule['fingerPrint'])
             
             # First time transform a rule
             #
-            if 'transformed' not in baseRule.keys() or not baseRule['transformed']:
+            if 'children' not in baseRule.keys():
                 baseRule['children'] = []
                 # generate children from the baseRule
                 #   by applying each transformation on baseRule
@@ -2854,7 +2887,10 @@ class RuleGenerator:
                         #
                         if childRule['fingerPrint'] not in visited.keys():
                             visited[childRule['fingerPrint']] = childRule
-                            queue.put((-RuleGenerator.promisingScore(childRule, baseRules), childRule))
+                            # Cache promising score in rule
+                            #
+                            if 'promisingScore' not in childRule.keys():
+                                childRule['promisingScore'] = RuleGenerator.promisingScore(childRule, baseRules)
                             baseRule['children'].append(childRule)
                             ans.append(childRule)
                         # else childRule has been visited (generated from an ealier baseRule)
@@ -2870,7 +2906,10 @@ class RuleGenerator:
                     # if childRule has not been visited
                     if childRule['fingerPrint'] not in visited.keys():
                         visited[childRule['fingerPrint']] = childRule
-                        queue.put((-RuleGenerator.promisingScore(childRule, baseRules), childRule))
+                        # Cache promising score in rule
+                        #
+                        if 'promisingScore' not in childRule.keys():
+                            childRule['promisingScore'] = RuleGenerator.promisingScore(childRule, baseRules)
                         ans.append(childRule)
         
         return ans
@@ -2882,7 +2921,7 @@ class RuleGenerator:
         ans = 0.0
 
         for baseRule in baseRules:
-            ans += RuleGenerator.description_length(baseRule) / max(RuleGenerator.cntTransformations(rule, baseRule), 1)
+            ans += RuleGenerator.description_length(baseRule) / (RuleGenerator.cntTransformations(rule, baseRule) + 1)
         
         ans += 1.0 / RuleGenerator.description_length(rule)
 
@@ -2895,38 +2934,26 @@ class RuleGenerator:
         # The right rule is like a query pair. 
         #   We want the left rule pattern matches the pairs' original query,
         #     and rewrites it to the pair's rewritten query.
-        # However, to transform the left rule to a more general form that covers the pair,
-        #   one kind of transformations can be the drop_branch().
-        #     Thus, we also need to enumerate possible subtrees of the left rule,
-        #       count the transformations starting with the subtrees,
-        #         and add up the drop_branch() operations to count the total transformations.
         # 
         # Note: TODO - We only check the patterns between left and right for now. 
         #
-        min_cnt_transformations = numbers.Integer.MAX_VALUE
-        left_rule_pattern = json.loads(left['pattern_json'])
-        right_rule_pattern = json.loads(right['pattern_json'])
-        cnt_transformations = RuleGenerator.cntTransformationsASTJson(left_rule_pattern, right_rule_pattern)
-        min_cnt_transformations = min(min_cnt_transformations, cnt_transformations)
-        if type(left_rule_pattern) is dict:
-            for child in left_rule_pattern.values():
-                cnt_transformations = RuleGenerator.cntTransformationsASTJson(child, right_rule_pattern)
-                min_cnt_transformations = min(min_cnt_transformations, cnt_transformations)
-        elif type(left_rule_pattern) is list:
-            for child in left_rule_pattern:
-                cnt_transformations = RuleGenerator.cntTransformationsASTJson(child, right_rule_pattern)
-                min_cnt_transformations = min(min_cnt_transformations, cnt_transformations)
-        return min_cnt_transformations
+        leftRulePatternASTJson = json.loads(left['pattern_json'])
+        rightRulePatternASTJson = json.loads(right['pattern_json'])
+        ans = RuleGenerator.cntTransformationsASTJson(leftRulePatternASTJson, rightRulePatternASTJson)
+        return ans
     
-    # Count the number of transformations to transform the given left pattern AST Json to cover the given right pattern AST Json
+    # Recursively count the number of transformations to transform the given left pattern AST Json to cover the given right pattern AST Json
     #
     @staticmethod
     def cntTransformationsASTJson(left_node: Any, right_node: Any) -> int:
+
+        # Case-1: treate left_node as the rule
+        #
         # Similar to QueryRewriter's match function:
-        # Breadth-First-Search on the right pattern AST Json
+        #   Breadth-First-Search on the right pattern AST Json
         # 
         queue = [right_node]
-        min_cnt_transformations = numbers.Integer.MAX_VALUE
+        min_cnt_transformations = MAX_INT
         while len(queue) > 0:
             curr_node = queue.pop(0)
             cnt_transformations = RuleGenerator.cntTransformationsASTJsonNode(left_node, curr_node)
@@ -2937,6 +2964,46 @@ class RuleGenerator:
             elif type(curr_node) is list:
                 for child in curr_node:
                     queue.append(child)
+        
+        # Case-2: try dropping branch on left_node
+        # 
+        # However, to transform the left rule to a more general form that covers the pair,
+        #   one kind of transformations can be the drop_branch().
+        #     Thus, we also need to enumerate possible subtrees of the left rule,
+        #       count the transformations starting with the subtrees,
+        #         and add up the drop_branch() operations to count the total transformations.
+        #
+        if type(left_node) is dict:
+            for child in left_node.values():
+                # Count if using this child to match the right_node (which means all other children are dropped as branches)
+                #
+                cnt_transformations = RuleGenerator.cntTransformationsASTJson(child, right_node)
+                # Count all other branches in left_node should transform to match a Var
+                #   such that it can be a branch to be dropped
+                #
+                cnt_remaining_transformations = 0
+                for remaining_child in left_node.values():
+                    if remaining_child != child:
+                        # each remaining child should match a Var and then +1 transformation of dropping it as a branch
+                        #
+                        cnt_remaining_transformations += RuleGenerator.cntTransformationsASTJsonNode(remaining_child, 'V001') + 1
+                min_cnt_transformations = min(min_cnt_transformations, cnt_transformations + cnt_remaining_transformations)
+        elif type(left_node) is list:
+            for child in left_node:
+                # Count if using this child to match the right_node (which means all other children are dropped as branches)
+                #
+                cnt_transformations = RuleGenerator.cntTransformationsASTJson(child, right_node)
+                # Count all other branches in left_node should transform to match a Var
+                #   such that it can be a branch to be dropped
+                #
+                cnt_remaining_transformations = 0
+                for remaining_child in left_node:
+                    if remaining_child != child:
+                        # each remaining child should match a Var and then +1 transformation of dropping it as a branch
+                        #
+                        cnt_remaining_transformations += RuleGenerator.cntTransformationsASTJsonNode(remaining_child, 'V001') + 1
+                min_cnt_transformations = min(min_cnt_transformations, cnt_transformations + cnt_remaining_transformations)
+
         return min_cnt_transformations
     
     # Recursively count the number of transformations to transform 
@@ -3180,7 +3247,7 @@ class RuleGenerator:
             if len(left_node) == len(right_node):
                 # recursively count each child in left_node matching a child in right_node
                 #   and choose the min
-                min_ans = numbers.Integer.MAX_VALUE
+                min_ans = MAX_INT
                 for left_child in left_node:
                     for right_child in right_node:
                         ans = RuleGenerator.cntTransformationsASTJsonNode(left_child, right_child)
