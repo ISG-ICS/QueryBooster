@@ -2276,7 +2276,7 @@ def test_suggest_rules_kpn_k10_3():
     '''))
 
 
-def test_suggest_rules_kpn_k40_4():
+def test_suggest_rules_kpn_k10_4():
     examples = [
         {
             "q0":"SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
@@ -2288,7 +2288,7 @@ def test_suggest_rules_kpn_k40_4():
         }
     ]
 
-    suggestRules = RuleGenerator.suggest_rules(examples, exp='kpn', k=40)
+    suggestRules = RuleGenerator.suggest_rules(examples, exp='kpn', k=10)
     assert type(suggestRules) is list
     assert len(suggestRules) == 1
 
