@@ -7,6 +7,8 @@ import json
 import mo_sql_parsing as mosql
 import numbers
 import re
+import time
+
 
 MAX_INT = 2147483647
 
@@ -2504,7 +2506,10 @@ class RuleGenerator:
     #                         ]
     #
     @staticmethod
-    def suggest_rules(examples: list, exp: str='bf', k: int=1) -> list:
+    def suggest_rules(examples: list, exp: str='bf', k: int=1, profile: dict={}) -> list:
+
+        start = time.time()
+
         ans = []
 
         # Initialize original examples's seed rules as the answer
@@ -2512,11 +2517,15 @@ class RuleGenerator:
         for example in examples:
             ans.append(RuleGenerator.initialize_seed_rule(example['q0'], example['q1']))
 
+        cnt_iterations = 0
+        cnts_candidates = []
         while True:
 
             # Explore candidates based on current answer
             #
             candidates = RuleGenerator.explore_candidates(ans, exp, k)
+            cnt_iterations += 1
+            cnts_candidates.append(len(candidates))
 
             delta_lengths = [0] * len(candidates)
             to_be_replaced_rules = [[] for i in range(len(candidates))]
@@ -2545,6 +2554,11 @@ class RuleGenerator:
 
             ans = [r for r in ans if r not in to_be_replaced_rules[imax]]
             ans.append(icandidate)
+        
+        end = time.time()
+        profile['time'] = end - start
+        profile['cnt_iterations'] = cnt_iterations
+        profile['cnts_candidates'] = cnts_candidates
         
         return ans
     
