@@ -176,7 +176,7 @@ def read_examples_file(examples_file: str, num_optimal_rules: int):
 
 if __name__ == '__main__':
 
-    exps = ['bf', 'khn', 'kpn']
+    exps = ['bf', 'khn', 'mpn']
 
     num_optimal_rules = 1
     examples_files = ['tweets_cast_2q.csv', 'tweets_cast_3q.csv', 'tweets_cast_4q.csv', 'tweets_cast_5q.csv']

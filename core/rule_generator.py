@@ -2506,7 +2506,7 @@ class RuleGenerator:
     #                         ]
     #
     @staticmethod
-    def suggest_rules(examples: list, exp: str='bf', k: int=1, profile: dict={}) -> list:
+    def suggest_rules(examples: list, exp: str='bf', k: int=1, m: int=5, profile: dict={}) -> list:
 
         start = time.time()
 
@@ -2523,7 +2523,7 @@ class RuleGenerator:
 
             # Explore candidates based on current answer
             #
-            candidates = RuleGenerator.explore_candidates(ans, exp, k)
+            candidates = RuleGenerator.explore_candidates(baseRules=ans, exp=exp, k=k, m=m)
             cnt_iterations += 1
             cnts_candidates.append(len(candidates))
 
@@ -2688,13 +2688,13 @@ class RuleGenerator:
     # explore candidate rules for a given list of base rules
     #
     @staticmethod
-    def explore_candidates(baseRules: list, exp: str, k: int) -> list:
+    def explore_candidates(baseRules: list, exp: str, k: int, m: int) -> list:
         if exp == 'bf':
             return RuleGenerator.explore_candidates_bf(baseRules)
         elif exp == 'khn':
-            return RuleGenerator.explore_candidates_khn(baseRules, k)
-        elif exp == 'kpn':
-            return RuleGenerator.explore_candidates_kpn(baseRules, k)
+            return RuleGenerator.explore_candidates_khn(baseRules, k=k)
+        elif exp == 'mpn':
+            return RuleGenerator.explore_candidates_mpn(baseRules, m=m)
         
         return RuleGenerator.explore_candidates_bf(baseRules)
     
@@ -2838,10 +2838,10 @@ class RuleGenerator:
         return ans
     
     # explore candidate rules for a given list of base rules
-    #   (3) k-promising neighbors 
+    #   (3) m-promising neighbors 
     #
     @staticmethod
-    def explore_candidates_kpn(baseRules: list, k: int) -> list:
+    def explore_candidates_mpn(baseRules: list, m: int) -> list:
 
         ans = []
 
@@ -2865,10 +2865,10 @@ class RuleGenerator:
             ans.append(baseRule)
         
         # Best First Search
-        #   stop when reaching a |ans| >= k
+        #   stop when reaching a |ans| >= m
         #
         explored = []
-        while len(ans) < k:
+        while len(ans) < m:
             # Find the base rule in ans that has not been explored and has the max promising score
             #
             unexplored_ans = [r for r in ans if r['fingerPrint'] not in explored]

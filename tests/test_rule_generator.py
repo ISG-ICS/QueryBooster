@@ -2299,7 +2299,7 @@ def test_suggest_rules_khn_k4_4():
     '''))
 
 
-def test_suggest_rules_kpn_k5_1():
+def test_suggest_rules_mpn_m5_1():
     examples = [
         {
             "q0":"SELECT * FROM tweets WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
@@ -2311,7 +2311,7 @@ def test_suggest_rules_kpn_k5_1():
         }
     ]
 
-    suggestRules = RuleGenerator.suggest_rules(examples, exp='kpn', k=5)
+    suggestRules = RuleGenerator.suggest_rules(examples, exp='mpn', m=5)
     assert type(suggestRules) is list
     assert len(suggestRules) == 1
 
@@ -2325,7 +2325,7 @@ def test_suggest_rules_kpn_k5_1():
     '''))
 
 
-def test_suggest_rules_kpn_k10_2():
+def test_suggest_rules_mpn_m10_2():
     examples = [
         {
             "q0":"SELECT * FROM tweets WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
@@ -2341,7 +2341,7 @@ def test_suggest_rules_kpn_k10_2():
         }
     ]
 
-    suggestRules = RuleGenerator.suggest_rules(examples, exp='kpn', k=10)
+    suggestRules = RuleGenerator.suggest_rules(examples, exp='mpn', m=10)
     assert type(suggestRules) is list
     assert len(suggestRules) == 1
 
@@ -2355,7 +2355,7 @@ def test_suggest_rules_kpn_k10_2():
     '''))
 
 
-def test_suggest_rules_kpn_k15_3():
+def test_suggest_rules_mpn_m15_3():
     examples = [
         {
             "q0":"SELECT * FROM tweets WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
@@ -2375,7 +2375,7 @@ def test_suggest_rules_kpn_k15_3():
         }
     ]
 
-    suggestRules = RuleGenerator.suggest_rules(examples, exp='kpn', k=15)
+    suggestRules = RuleGenerator.suggest_rules(examples, exp='mpn', m=15)
     assert type(suggestRules) is list
     assert len(suggestRules) == 1
 
@@ -2389,7 +2389,7 @@ def test_suggest_rules_kpn_k15_3():
     '''))
 
 
-def test_suggest_rules_kpn_k20_4():
+def test_suggest_rules_mpn_m20_4():
     examples = [
         {
             "q0":"SELECT * FROM tweets WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
@@ -2413,7 +2413,7 @@ def test_suggest_rules_kpn_k20_4():
         }
     ]
 
-    suggestRules = RuleGenerator.suggest_rules(examples, exp='kpn', k=20)
+    suggestRules = RuleGenerator.suggest_rules(examples, exp='mpn', m=20)
     assert type(suggestRules) is list
     assert len(suggestRules) == 1
 
@@ -2427,7 +2427,7 @@ def test_suggest_rules_kpn_k20_4():
     '''))
 
 
-def test_suggest_rules_kpn_k10_5():
+def test_suggest_rules_mpn_m10_5():
     examples = [
         {
             "q0":"SELECT * FROM tweets WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
@@ -2439,7 +2439,7 @@ def test_suggest_rules_kpn_k10_5():
         }
     ]
 
-    suggestRules = RuleGenerator.suggest_rules(examples, exp='kpn', k=10)
+    suggestRules = RuleGenerator.suggest_rules(examples, exp='mpn', m=10)
     assert type(suggestRules) is list
     assert len(suggestRules) == 1
 
