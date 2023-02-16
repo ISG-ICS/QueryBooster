@@ -261,6 +261,37 @@ class QueryRewriter:
                     return False
             else:
                 return False
+        
+        # TODO - currently this logic is only for dict
+        #
+        # Complement the existence matching logic:
+        #   In the matching process, as long as the key set in the rule_node is a subset of that in the query_node,
+        #   the two nodes match.
+        #     e.g., If the rule_node is "FROM <t> WHERE <x> = <y>" and the query_node is "SELECT * FROM emp WHERE id = 99",
+        #           then the rule_node matches the query_node.
+        #   However, to make the rewritten query correct, we need to add the additional branch "SELECT *" in query_node 
+        #     to the rule_node, because the rewritten query is instantiated based on the rule_node's rewrite part.
+        #   
+        #   ** Basically, a rule_node dict can partially match a query_node dict, and the additional branches in query_node 
+        #        needs to be carried out as they are to the rule_node
+        #   
+        #   Implementation: 
+        #     Since the rewritten query is instantiated based on the 'rewrite_json' in the rule 
+        #       but not the current rule_node (which is a decedent under the 'pattern_json" in the rule),
+        #       we memorize the additional set of key-value pairs from the matched query_node inside the memo.
+        #       Also, since the 'rewrite_json' and 'pattern_json' of a rule has no one-to-one mapping relation, 
+        #       we use a fuzzy mapping way. We use the matched set of keys in rule_node as the key in the memo 
+        #       and store the additional set of key-value pairs as the value.
+        #         e.g., for the above example, we add one entry {'FROM,WHERE': {'SELECT': '*'}} into the memo
+        #               to memorize that for the rule_node dict with 'FROM' and 'WHERE' keys inside, we should add the 
+        #               additional set of key-value pairs {'SELECT':'*'} into the rule_node.
+        #
+        memo_key = ','.join(sorted(rule_node.keys()))
+        memo_additional_key_value_pairs = {}
+        for key in query_node.keys():
+            if key not in rule_node.keys():
+                memo_additional_key_value_pairs[key] = query_node[key]
+        memo[memo_key] = memo_additional_key_value_pairs
         return True
     
     # Check if the two lists of query_node and rule_node match each other
@@ -505,6 +536,14 @@ class QueryRewriter:
         if QueryRewriter.is_dict(query):
             for key, child in query.items():
                 query[key] = QueryRewriter.replace(child, rule, memo)
+            # Complement the existence matching logic:
+            #   See comments in def match_dict()
+            #
+            memo_key = ','.join(sorted(query.keys()))
+            if memo_key in memo.keys():
+                memo_additional_key_value_pairs = memo[memo_key]
+                for key, value in memo_additional_key_value_pairs.items():
+                    query[key] = value
         if QueryRewriter.is_list(query):
             ans = []
             for child in query:

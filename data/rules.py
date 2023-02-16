@@ -184,6 +184,79 @@ rules = [
     },
 
     {
+        'id': 52,
+        'key': 'join_to_filter_partial1',
+        'name': 'Join To Filter Partial1',
+        'pattern': '''
+            FROM       <x1>
+            INNER JOIN <x2>
+            ON         <x9>
+            INNER JOIN <x3>
+            ON         <x2>.<x5> = <x3>.<x5>
+            WHERE      <x3>.<x5> = <x7>
+        ''',
+        'constraints': '',
+        'rewrite': '''
+            FROM       <x1>
+            INNER JOIN <x2>
+            ON         <x9>
+            WHERE      <x2>.<x5> = <x7>
+        ''',
+        'actions': '',
+        'database': 'postgresql'
+    },
+
+    {
+        'id': 53,
+        'key': 'join_to_filter_partial2',
+        'name': 'Join To Filter Partial2',
+        'pattern': '''
+            FROM       <x1>
+            INNER JOIN <x2>
+            ON         <x9>
+            INNER JOIN <x3>
+            ON         <x2>.<x5> = <x3>.<x5>
+            WHERE      <<y1>>
+            AND        <x3>.<x5> = <x7>
+        ''',
+        'constraints': '',
+        'rewrite': '''
+            FROM       <x1>
+            INNER JOIN <x2>
+            ON         <x9>
+            WHERE      <<y1>>
+            AND        <x2>.<x5> = <x7>
+        ''',
+        'actions': '',
+        'database': 'postgresql'
+    },
+
+    {
+        'id': 54,
+        'key': 'join_to_filter_partial3',
+        'name': 'Join To Filter Partial3',
+        'pattern': '''
+            FROM       <x1>
+            INNER JOIN <x2>
+            ON         <x9>
+            INNER JOIN <x3>
+            ON         <x2>.<x5> = <x3>.<x5>
+            WHERE      <<y1>>
+            AND        <x3>.<x5> = <x7>
+        ''',
+        'constraints': '',
+        'rewrite': '''
+            FROM       <x1>
+            INNER JOIN <x2>
+            ON         <x9>
+            WHERE      <x2>.<x5> = <x7>
+            AND        <<y1>>
+        ''',
+        'actions': '',
+        'database': 'postgresql'
+    },
+
+    {
         'id': 8090,
         'key': 'test_rule_wetune_90',
         'name': 'Test Rule Wetune 90',
