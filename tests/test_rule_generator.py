@@ -1446,19 +1446,26 @@ def test_drop_branch_4():
 #     assert childRule['rewrite'] == "<x1>"
 
 
-# def test_generate_rule_graph_1():
-#     q0 = "SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'"
-#     q1 = "SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+def test_generate_rule_graph_1():
+    q0 = "SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'"
+    q1 = "SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
 
-#     rootRule = RuleGenerator.generate_rule_graph(q0, q1)
-#     assert type(rootRule) is dict
+    rootRule = RuleGenerator.generate_rule_graph(q0, q1)
+    assert type(rootRule) is dict
 
-#     children = rootRule['children']
-#     assert len(children) == 4
+    children = rootRule['children']
+    assert len(children) == 4
 
-#     childRule = children[2]
-#     assert childRule['pattern'] == "SELECT * FROM t WHERE CAST(<x1> AS DATE) = TIMESTAMP('2016-10-01 00:00:00.000')"
-#     assert childRule['rewrite'] == "SELECT * FROM t WHERE <x1> = TIMESTAMP('2016-10-01 00:00:00.000')"
+    targetChildRule = {
+        'pattern': "SELECT * FROM t WHERE CAST(<x1> AS DATE) = TIMESTAMP('2016-10-01 00:00:00.000')",
+        'rewrite': "SELECT * FROM t WHERE <x1> = TIMESTAMP('2016-10-01 00:00:00.000')"
+    }
+    targetExists = False
+    for childRule in children:
+        if StringUtil.strim(RuleGenerator._fingerPrint(childRule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint(targetChildRule['pattern'])) \
+            and StringUtil.strim(RuleGenerator._fingerPrint(childRule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint(targetChildRule['rewrite'])):
+            targetExists = True
+    assert targetExists
 
 
 # def test_generate_rule_graph_2():
