@@ -1,0 +1,75 @@
+q0,q1
+"SELECT adminpermi0_.admin_permission_id AS admin_pe1_4_
+FROM   blc_admin_permission adminpermi0_
+       INNER JOIN blc_admin_role_permission_xref allroles1_
+               ON adminpermi0_.admin_permission_id =
+                  allroles1_.admin_permission_id
+       INNER JOIN blc_admin_role adminrolei2_
+               ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+WHERE  adminpermi0_.is_friendly = 1
+       AND adminrolei2_.admin_role_id = 1
+ORDER  BY adminpermi0_.description ASC
+LIMIT  50 ","SELECT adminpermi0_.admin_permission_id AS admin_pe1_4_
+FROM   blc_admin_permission adminpermi0_
+       INNER JOIN blc_admin_role_permission_xref allroles1_
+               ON adminpermi0_.admin_permission_id =
+                  allroles1_.admin_permission_id
+WHERE  adminpermi0_.is_friendly = 1
+       AND allroles1_.admin_role_id = 1
+ORDER  BY adminpermi0_.description ASC
+LIMIT  50 "
+"SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+FROM   blc_admin_permission adminpermi0_
+       INNER JOIN blc_admin_role_permission_xref allroles1_
+               ON adminpermi0_.admin_permission_id =
+                  allroles1_.admin_permission_id
+       INNER JOIN blc_admin_role adminrolei2_
+               ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+WHERE  adminpermi0_.is_friendly = 1
+       AND adminrolei2_.admin_role_id = 1 ","SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+FROM   blc_admin_permission AS adminpermi0_
+       INNER JOIN blc_admin_role_permission_xref AS allroles1_
+               ON adminpermi0_.admin_permission_id =
+                  allroles1_.admin_permission_id
+WHERE  allroles1_.admin_role_id = 1
+       AND adminpermi0_.is_friendly = 1 "
+"SELECT 1 AS one
+FROM   people
+       INNER JOIN blocks
+               ON people.id = blocks.person_id
+WHERE  blocks.user_id = 1
+       AND people.id = 1
+LIMIT  1 ","SELECT 1 AS one
+FROM   blocks
+WHERE  blocks.person_id = 1
+       AND blocks.user_id = 1
+LIMIT  1 "
+"SELECT role0_.id          AS id1_16_
+FROM   role role0_
+       LEFT OUTER JOIN users_roles users1_
+                    ON role0_.id = users1_.role_id
+       LEFT OUTER JOIN USER user2_
+                    ON users1_.user_id = user2_.id
+WHERE  user2_.id = 1 ","SELECT     role0_.id          AS id1_16_
+FROM       role               AS role0_
+LEFT OUTER JOIN users_roles        AS users1_
+ON         role0_.id = users1_.role_id
+WHERE      users1_.user_id = 1"
+"SELECT Min(users.id)
+FROM   users
+       INNER JOIN identities
+               ON identities.user_id = users.id
+WHERE  ( identities.provider LIKE 'ldap%' ) ","SELECT Min(identities.user_id)
+FROM   identities
+WHERE  identities.provider LIKE 'ldap%' "
+"SELECT spree_orders.*
+FROM   spree_orders
+       LEFT OUTER JOIN spree_users
+                    ON spree_users.id = spree_orders.user_id
+WHERE  spree_users.id = 32
+ORDER  BY spree_orders.number DESC
+LIMIT  25 offset 0 ","SELECT spree_orders.*
+FROM   spree_orders
+WHERE  spree_orders.user_id = 32
+ORDER  BY spree_orders.number DESC
+LIMIT  25 offset 0 "

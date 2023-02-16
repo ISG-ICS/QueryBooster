@@ -227,7 +227,7 @@ class QueryRewriter:
     # 
     @staticmethod
     def match_number(query_node: Any, rule_node: Any) -> bool:
-        return type(query_node) is numbers and type(rule_node) is numbers and query_node == rule_node
+        return isinstance(query_node, numbers.Number) and isinstance(rule_node, numbers.Number) and query_node == rule_node
 
     # Check if the two constants of query_node and rule_node match each other
     # 
@@ -438,7 +438,7 @@ class QueryRewriter:
                                 return target['name']
         
         # sub_ast is a number
-        if type(sub_ast) == numbers.Number:
+        if isinstance(sub_ast, numbers.Number):
             if str(sub_ast) == source:
                 return target
         

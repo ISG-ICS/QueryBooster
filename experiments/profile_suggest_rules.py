@@ -8,11 +8,11 @@ from core.rule_generator import RuleGenerator
 from tests.string_util import StringUtil
 
 MAX_KHN_K = 10
-MAX_KPN_K = 100
+MAX_MPN_M = 100
 
 
 # Profile RuleGenerator.suggest_rules()
-#   exp - explore_candidates approach: 'bf', 'khn', 'kpn'
+#   exp - explore_candidates approach: 'bf', 'khn', 'mpn'
 #   examples - list of input rewriting examples
 #   optimal_rules - list of optimal rules for the given examples
 #
@@ -21,8 +21,8 @@ def profile_suggest_rules(exp: str, examples: list, optimal_rules: list) -> dict
         return profile_suggest_rules_bf(examples, optimal_rules)
     elif exp == 'khn':
         return profile_suggest_rules_khn(examples, optimal_rules)
-    elif exp == 'kpn':
-        return profile_suggest_rules_kpn(examples, optimal_rules)
+    elif exp == 'mpn':
+        return profile_suggest_rules_mpn(examples, optimal_rules)
     else:
         return {'success': False}
 
@@ -79,22 +79,22 @@ def profile_suggest_rules_khn(examples: list, optimalRules: list) -> dict:
     return profile
 
 
-# Profile RuleGenerator.sugest_rules(exp='kpn')
-#   Start with k=5, and increase k by 5 each time, until the suggestRules are optimal
+# Profile RuleGenerator.sugest_rules(exp='mpn')
+#   Start with m=5, and increase m by 5 each time, until the suggestRules are optimal
 #
-def profile_suggest_rules_kpn(examples: list, optimalRules: list) -> dict:
+def profile_suggest_rules_mpn(examples: list, optimalRules: list) -> dict:
 
     print('Start profiling suggest rules using K-Promising Neighbors ...')
 
-    for k in range(5, MAX_KPN_K + 5, 5):
+    for m in range(5, MAX_MPN_M + 5, 5):
 
-        print('    Try K = ' + str(k) + ' ...')
+        print('    Try K = ' + str(m) + ' ...')
 
         profile = {}
 
-        # suggest rules from examples using exp='khn'
+        # suggest rules from examples using exp='mpn'
         #
-        suggestRules = RuleGenerator.suggest_rules(examples, exp='kpn', k=k, profile=profile)
+        suggestRules = RuleGenerator.suggest_rules(examples, exp='mpn', m=m, profile=profile)
 
         # verify suggestRules == optimalRules
         #

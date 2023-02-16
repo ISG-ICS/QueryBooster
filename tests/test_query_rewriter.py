@@ -884,6 +884,41 @@ def test_rewrite_rule_test_rule_wetune_90():
     assert format(parse(q1)) == format(parse(_q1))
 
 
+def test_rewrite_rule_query_rule_wetune_90():
+    q0 = '''
+        SELECT adminpermi0_.admin_permission_id AS admin_pe1_4_,
+            adminpermi0_.description AS descript2_4_,
+            adminpermi0_.is_friendly AS is_frien3_4_,
+            adminpermi0_.name AS name4_4_,
+            adminpermi0_.permission_type AS permissi5_4_
+        FROM blc_admin_permission adminpermi0_
+        INNER JOIN blc_admin_role_permission_xref allroles1_ ON adminpermi0_.admin_permission_id = allroles1_.admin_permission_id
+        INNER JOIN blc_admin_role adminrolei2_ ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE adminpermi0_.is_friendly = 1
+        AND adminrolei2_.admin_role_id = 1
+        ORDER  BY adminpermi0_.description ASC
+        LIMIT 50
+    '''
+    q1 = '''
+        SELECT adminpermi0_.admin_permission_id AS admin_pe1_4_,
+            adminpermi0_.description AS descript2_4_,
+            adminpermi0_.is_friendly AS is_frien3_4_,
+            adminpermi0_.name AS name4_4_,
+            adminpermi0_.permission_type AS permissi5_4_
+        FROM blc_admin_permission adminpermi0_
+        INNER JOIN blc_admin_role_permission_xref allroles1_ ON adminpermi0_.admin_permission_id = allroles1_.admin_permission_id
+        WHERE adminpermi0_.is_friendly = 1
+        AND allroles1_.admin_role_id = 1
+        ORDER  BY adminpermi0_.description ASC
+        LIMIT 50
+    '''
+    rule_keys = ['query_rule_wetune_90']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
 # TODO - TBI
 # 
 def test_rewrite_postgresql():

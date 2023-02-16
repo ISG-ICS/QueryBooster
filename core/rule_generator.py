@@ -2098,7 +2098,9 @@ class RuleGenerator:
             q0 = example['q0']
             q1 = example['q1']
             q1_test, _ = QueryRewriter.rewrite(q0, [parsed_rule])
-            if mosql.format(mosql.parse(q1)) == q1_test:
+            formatted_q1 = mosql.format(mosql.parse(q1))
+            formatted_q1_test = mosql.format(mosql.parse(q1_test))
+            if formatted_q1 == formatted_q1_test:
                 ans.append(index)
         
         return ans
