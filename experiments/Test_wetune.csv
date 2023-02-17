@@ -1,0 +1,554 @@
+q0,q1
+"SELECT adminpermi0_.admin_permission_id AS admin_pe1_4_,
+       adminpermi0_.description         AS descript2_4_,
+       adminpermi0_.is_friendly         AS is_frien3_4_,
+       adminpermi0_.name                AS name4_4_,
+       adminpermi0_.permission_type     AS permissi5_4_
+FROM   blc_admin_permission adminpermi0_
+       INNER JOIN blc_admin_role_permission_xref allroles1_
+               ON adminpermi0_.admin_permission_id =
+                  allroles1_.admin_permission_id
+       INNER JOIN blc_admin_role adminrolei2_
+               ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+WHERE  adminpermi0_.is_friendly = 1
+       AND adminrolei2_.admin_role_id = 1
+ORDER  BY adminpermi0_.description ASC
+LIMIT  50 ","SELECT adminpermi0_.admin_permission_id AS admin_pe1_4_,
+       adminpermi0_.description         AS descript2_4_,
+       adminpermi0_.is_friendly         AS is_frien3_4_,
+       adminpermi0_.name                AS name4_4_,
+       adminpermi0_.permission_type     AS permissi5_4_
+FROM   blc_admin_permission adminpermi0_
+       INNER JOIN blc_admin_role_permission_xref allroles1_
+               ON adminpermi0_.admin_permission_id =
+                  allroles1_.admin_permission_id
+WHERE  adminpermi0_.is_friendly = 1
+       AND allroles1_.admin_role_id = 1
+ORDER  BY adminpermi0_.description ASC
+LIMIT  50 "
+"SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+FROM   blc_admin_permission adminpermi0_
+       INNER JOIN blc_admin_role_permission_xref allroles1_
+               ON adminpermi0_.admin_permission_id =
+                  allroles1_.admin_permission_id
+       INNER JOIN blc_admin_role adminrolei2_
+               ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+WHERE  adminpermi0_.is_friendly = 1
+       AND adminrolei2_.admin_role_id = 1 ","SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+FROM   blc_admin_permission AS adminpermi0_
+       INNER JOIN blc_admin_role_permission_xref AS allroles1_
+               ON adminpermi0_.admin_permission_id =
+                  allroles1_.admin_permission_id
+WHERE  allroles1_.admin_role_id = 1
+       AND adminpermi0_.is_friendly = 1 "
+"SELECT staticasse0_.static_asset_id AS STATIC_A1_171,
+       staticasse0_.alt_text        AS ALT_TEXT2_171_,
+       staticasse0_.created_by      AS CREATED_3_171_,
+       staticasse0_.date_created    AS DATE_CRE4_171_,
+       staticasse0_.date_updated    AS DATE_UPD5_171_,
+       staticasse0_.updated_by      AS UPDATED_6_171_,
+       staticasse0_.file_extention  AS FILE_EXT7_171_,
+       staticasse0_.file_size       AS FILE_SIZ8_171_,
+       staticasse0_.full_url        AS FULL_URL9_171_,
+       staticasse0_.mime_type       AS MIME_TY10_171_,
+       staticasse0_.name            AS NAME11_171_,
+       staticasse0_.storage_type    AS STORAGE12_171_,
+       staticasse0_.title           AS TITLE13_171_,
+       staticasse0_1_.height        AS HEIGHT1_77_,
+       staticasse0_1_.width         AS WIDTH2_77_,
+       CASE
+         WHEN staticasse0_1_.static_asset_id IS NOT NULL THEN 1
+         WHEN staticasse0_.static_asset_id IS NOT NULL THEN 0
+       end                          AS clazz_
+FROM   blc_static_asset staticasse0_
+       LEFT OUTER JOIN blc_img_static_asset staticasse0_1_
+                    ON staticasse0_.static_asset_id =
+                       staticasse0_1_.static_asset_id
+WHERE  1 = 1
+ORDER  BY staticasse0_.static_asset_id ASC
+LIMIT  50; ","SELECT *
+FROM   blc_static_asset staticasse0_
+       LEFT OUTER JOIN blc_img_static_asset staticasse0_1_
+                    ON staticasse0_.static_asset_id =
+                       staticasse0_1_.static_asset_id
+WHERE  1 = 1
+ORDER  BY staticasse0_.static_asset_id ASC
+LIMIT  50; "
+"SELECT o_auth_applications.id
+FROM   o_auth_applications
+       INNER JOIN authorizations
+               ON o_auth_applications.id = authorizations.o_auth_application_id
+WHERE  authorizations.user_id = 1465 ","SELECT authorizations.o_auth_application_id 
+FROM   authorizations
+WHERE  authorizations.user_id = 1465 "
+"SELECT 1 AS one
+FROM   people
+       INNER JOIN blocks
+               ON people.id = blocks.person_id
+WHERE  blocks.user_id = 1
+       AND people.id = 1
+LIMIT  1 ","SELECT 1 AS one
+FROM   blocks
+WHERE  blocks.person_id = 1
+       AND blocks.user_id = 1
+LIMIT  1 "
+"SELECT DISTINCT people.*
+FROM   people
+       INNER JOIN profiles
+               ON profiles.person_id = people.id
+       INNER JOIN contacts contacts_people
+               ON contacts_people.person_id = people.id
+       LEFT OUTER JOIN contacts
+                    ON contacts.user_id = 515
+                       AND contacts.person_id = people.id
+WHERE  ( profiles.searchable = true
+          OR contacts.user_id = 515 )
+       AND ( profiles.full_name LIKE '%a% contact%'
+              OR people.diaspora_handle LIKE 'acontact%' )
+       AND people.closed_account = false
+       AND contacts.user_id = 515
+       AND contacts.receiving = true
+LIMIT  15 offset 0 ","SELECT DISTINCT people.*
+FROM   people
+       INNER JOIN profiles
+               ON profiles.person_id = people.id
+       INNER JOIN contacts contacts_people
+               ON contacts_people.person_id = people.id
+       INNER JOIN contacts
+                    ON contacts.user_id = 515
+                       AND contacts.person_id = people.id
+WHERE  ( profiles.searchable = true
+          OR contacts.user_id = 515 )
+       AND ( profiles.full_name LIKE '%a% contact%'
+              OR people.diaspora_handle LIKE 'acontact%' )
+       AND people.closed_account = false
+       AND contacts.user_id = 515
+       AND contacts.receiving = true
+LIMIT  15 offset 0 "
+"SELECT Count(DISTINCT contacts.id)
+FROM   contacts
+       LEFT OUTER JOIN people
+                    ON people.id = contacts.person_id
+       LEFT OUTER JOIN profiles
+                    ON profiles.person_id = people.id
+       INNER JOIN aspect_memberships
+               ON aspect_memberships.aspect_id = 250
+                  AND aspect_memberships.contact_id =
+                      contacts.id
+WHERE  contacts.user_id = 332 ","SELECT Count(DISTINCT contacts.id)
+FROM   contacts
+       INNER JOIN aspect_memberships
+               ON aspect_memberships.aspect_id = 250
+                  AND aspect_memberships.contact_id =
+                      contacts.id
+WHERE  contacts.user_id = 332 "
+"SELECT Count(*)
+FROM   tags
+       INNER JOIN tag_followings
+               ON tags.id = tag_followings.tag_id
+WHERE  tag_followings.user_id = 1 ","SELECT Count(*)
+FROM   tag_followings
+WHERE  tag_followings.user_id = 1"
+"SELECT Count(*)
+FROM   contacts
+       INNER JOIN aspect_memberships
+               ON contacts.id =
+                  aspect_memberships.contact_id
+WHERE  aspect_memberships.aspect_id = 3 ","SELECT Count(*)
+FROM   aspect_memberships
+WHERE  aspect_memberships.aspect_id = 3 "
+"SELECT Count(DISTINCT contacts.id)
+FROM   contacts
+       LEFT OUTER JOIN people
+                    ON people.id = contacts.person_id
+       LEFT OUTER JOIN profiles
+                    ON profiles.person_id = people.id
+WHERE  contacts.user_id = 1945 ","SELECT Count(DISTINCT contacts.id)
+FROM   contacts
+WHERE  contacts.user_id = 1945 "
+"SELECT Count(DISTINCT people.id)
+FROM   people
+       INNER JOIN profiles
+               ON profiles.person_id = people.id
+       LEFT OUTER JOIN contacts
+                    ON contacts.user_id = 452
+                       AND contacts.person_id = people.id
+WHERE  ( profiles.searchable = true
+          OR contacts.user_id = 452 )
+       AND ( profiles.full_name LIKE '%closed%'
+              OR people.diaspora_handle LIKE 'closed%' )
+       AND people.closed_account = false ","SELECT Count(DISTINCT people.id)
+FROM   people
+       INNER JOIN profiles
+               ON profiles.person_id = people.id
+       INNER JOIN contacts
+                    ON contacts.user_id = 452
+                       AND contacts.person_id = people.id
+WHERE  ( profiles.searchable = true
+          OR contacts.user_id = 452 )
+       AND ( profiles.full_name LIKE '%closed%'
+              OR people.diaspora_handle LIKE 'closed%' )
+       AND people.closed_account = false "
+"SELECT Count(*)
+FROM   people
+       INNER JOIN conversation_visibilities
+               ON people.id =
+                  conversation_visibilities.person_id
+WHERE  conversation_visibilities.conversation_id = 239 ","SELECT Count(*)
+FROM   conversation_visibilities
+WHERE  conversation_visibilities.conversation_id = 239 "
+"SELECT Count(*)
+FROM   people
+       INNER JOIN profiles
+               ON profiles.person_id = people.id
+       INNER JOIN taggings
+               ON taggings.taggable_id = profiles.id
+                  AND taggings.taggable_type = 'profile'
+                  AND taggings.context = 'tags'
+       INNER JOIN tags
+               ON tags.id = taggings.tag_id
+WHERE  tags.name = 'cats'
+       AND ( profiles.searchable IS TRUE ) ","SELECT Count(*)
+FROM    profiles
+       INNER JOIN taggings
+               ON taggings.taggable_id = profiles.id
+                  AND taggings.taggable_type = 'profile'
+                  AND taggings.context = 'tags'
+       INNER JOIN tags
+               ON tags.id = taggings.tag_id
+WHERE  tags.name = 'cats'
+       AND ( profiles.searchable IS TRUE ) "
+"SELECT people.id
+FROM   people
+       INNER JOIN roles
+               ON roles.person_id = people.id
+WHERE  roles.name = 'spotlight' ","SELECT roles.person_id
+FROM    roles
+WHERE  roles.name = 'spotlight' "
+"SELECT 1 AS one
+FROM   people
+       INNER JOIN conversation_visibilities
+               ON people.id =
+                  conversation_visibilities.person_id
+WHERE  conversation_visibilities.conversation_id = 98
+       AND people.id = 3
+LIMIT  1 ","SELECT 1 AS one
+FROM  conversation_visibilities
+WHERE  conversation_visibilities.conversation_id = 98
+       AND conversation_visibilities.person_id = 3
+LIMIT  1 "
+"SELECT DISTINCT posts.*
+FROM   posts
+       LEFT OUTER JOIN participations
+                    ON participations.target_id = posts.id
+                       AND participations.target_type = 'post'
+WHERE  ( participations.author_id = 1047
+          OR posts.author_id = 1047 )
+       AND ( posts.interacted_at < '2020-04-28 06:05:28' )
+       AND posts.type IN ( 'statusmessage', 'reshare' )
+ORDER  BY posts.interacted_at DESC,
+          posts.id DESC
+LIMIT  15 ","SELECT DISTINCT posts.*
+FROM   posts
+       INNER JOIN participations
+                    ON participations.target_id = posts.id
+                       AND participations.target_type = 'post'
+WHERE  ( participations.author_id = 1047
+          OR posts.author_id = 1047 )
+       AND ( posts.interacted_at < '2020-04-28 06:05:28' )
+       AND posts.type IN ( 'statusmessage', 'reshare' )
+ORDER  BY posts.interacted_at DESC,
+          posts.id DESC
+LIMIT  15 "
+"SELECT DISTINCT posts.*
+FROM   posts
+       LEFT OUTER JOIN participations
+                    ON participations.target_id = posts.id
+                       AND participations.target_type = 'post'
+WHERE  ( participations.author_id = 1047
+          OR posts.author_id = 1047 )
+       AND ( posts.interacted_at < '2020-04-28 06:05:28' )
+       AND posts.type IN ( 'statusmessage', 'reshare' )
+       AND ( posts.interacted_at < '2021-04-28T06:05:27.000z' )
+ORDER  BY posts.interacted_at DESC,
+          posts.id DESC
+LIMIT  15 ","SELECT DISTINCT posts.*
+FROM   posts
+       INNER JOIN participations
+                    ON participations.target_id = posts.id
+                       AND participations.target_type = 'post'
+WHERE  ( participations.author_id = 1047
+          OR posts.author_id = 1047 )
+       AND ( posts.interacted_at < '2020-04-28 06:05:28' )
+       AND posts.type IN ( 'statusmessage', 'reshare' )
+       AND ( posts.interacted_at < '2021-04-28T06:05:27.000z' )
+ORDER  BY posts.interacted_at DESC,
+          posts.id DESC
+LIMIT  15 "
+"SELECT DISTINCT posts.*
+FROM   posts
+       LEFT OUTER JOIN participations
+                    ON participations.target_id = posts.id
+                       AND participations.target_type = 'post'
+WHERE  ( participations.author_id = 1069
+          OR posts.author_id = 1069 )
+       AND ( posts.interacted_at < '2020-04-28 06:05:33' )
+       AND posts.type IN ( 'statusmessage', 'reshare' )
+       AND posts.public = true
+       AND ( posts.interacted_at < '2021-04-28T06:05:32.000z' )
+ORDER  BY posts.interacted_at DESC,
+          posts.id DESC
+LIMIT  15 ","SELECT DISTINCT posts.*
+FROM   posts
+       INNER JOIN participations
+                    ON participations.target_id = posts.id
+                       AND participations.target_type = 'post'
+WHERE  ( participations.author_id = 1069
+          OR posts.author_id = 1069 )
+       AND ( posts.interacted_at < '2020-04-28 06:05:33' )
+       AND posts.type IN ( 'statusmessage', 'reshare' )
+       AND posts.public = true
+       AND ( posts.interacted_at < '2021-04-28T06:05:32.000z' )
+ORDER  BY posts.interacted_at DESC,
+          posts.id DESC
+LIMIT  15 "
+"SELECT DISTINCT people.id
+FROM   people
+       INNER JOIN contacts
+               ON contacts.person_id = people.id
+       INNER JOIN aspect_memberships
+               ON aspect_memberships.contact_id = contacts.id
+WHERE  1 = 0 ","SELECT DISTINCT contacts.person_id
+FROM   contacts
+       INNER JOIN aspect_memberships
+               ON aspect_memberships.contact_id = contacts.id
+WHERE  1 = 0 "
+"SELECT Count(*)
+FROM   users
+       INNER JOIN people
+               ON people.owner_id = users.id
+       INNER JOIN profiles
+               ON profiles.person_id = people.id
+WHERE  profiles.birthday > '2007-04-29' ","SELECT Count(*)
+FROM   profiles
+WHERE  profiles.birthday > '2007-04-29' "
+"SELECT people.*
+FROM   people
+       INNER JOIN profiles
+               ON profiles.person_id = people.id
+       LEFT OUTER JOIN contacts
+                    ON contacts.user_id = 1
+                       AND contacts.person_id = people.id
+WHERE  ( profiles.full_name LIKE '%korth%'
+          OR people.diaspora_handle LIKE 'korth%' )
+       AND ( profiles.searchable = true
+              OR contacts.user_id = 1 )
+       AND people.closed_account = false
+ORDER  BY contacts.user_id IS NULL,
+          profiles.last_name ASC,
+          profiles.first_name ASC
+LIMIT  15 ","SELECT people.*
+FROM   people
+       INNER JOIN profiles
+               ON profiles.person_id = people.id
+       INNER JOIN contacts
+                    ON contacts.user_id = 1
+                       AND contacts.person_id = people.id
+WHERE  ( profiles.full_name LIKE '%korth%'
+          OR people.diaspora_handle LIKE 'korth%' )
+       AND ( profiles.searchable = true
+              OR contacts.user_id = 1 )
+       AND people.closed_account = false
+ORDER  BY contacts.user_id IS NULL,
+          profiles.last_name ASC,
+          profiles.first_name ASC
+LIMIT  15 "
+"SELECT Count(DISTINCT people.id)
+FROM   people
+WHERE  people.id IN (SELECT people.id
+                     FROM   people
+                            INNER JOIN contacts
+                                    ON contacts.person_id = people.id
+                            INNER JOIN aspect_memberships
+                                    ON aspect_memberships.contact_id =
+                                       contacts.id
+                     WHERE  people.id IN (SELECT people.id
+                                          FROM   people
+                                                 INNER JOIN profiles
+                                                         ON profiles.person_id =
+                                                            people.id
+                            INNER JOIN contacts contacts_people
+                                    ON contacts_people.person_id =
+                                       people.id
+                            INNER JOIN aspect_memberships
+                                    ON
+                            aspect_memberships.contact_id =
+                            contacts_people.id
+                            LEFT OUTER JOIN contacts
+                                         ON contacts.user_id = 488
+                                            AND
+                            contacts.person_id = people.id
+                                          WHERE  ( profiles.searchable = true
+                                                    OR contacts.user_id = 488 )
+                                                 AND (
+                                         profiles.full_name LIKE
+                                         '%my% aspect% contact%'
+                                          OR people.diaspora_handle LIKE
+                                             'myaspectcontact%' )
+                                                 AND people.closed_account =
+                                                     false
+                                                 AND contacts.user_id = 488
+                                                 AND
+                                         aspect_memberships.aspect_id = 321
+                                         )
+                            AND contacts.user_id = 488
+                            AND aspect_memberships.aspect_id = 322) ","SELECT Count(DISTINCT people.id)
+FROM   people
+WHERE  people.id IN (SELECT people.id
+                     FROM   people
+                            INNER JOIN contacts
+                                    ON contacts.person_id = people.id
+                            INNER JOIN aspect_memberships
+                                    ON aspect_memberships.contact_id =
+                                       contacts.id
+                     WHERE  people.id IN (SELECT people.id
+                                          FROM   people
+                                                 INNER JOIN profiles
+                                                         ON profiles.person_id =
+                                                            people.id
+                            INNER JOIN contacts contacts_people
+                                    ON contacts_people.person_id =
+                                       people.id
+                            INNER JOIN aspect_memberships
+                                    ON
+                            aspect_memberships.contact_id =
+                            contacts_people.id
+                            INNER JOIN contacts
+                                         ON contacts.user_id = 488
+                                            AND
+                            contacts.person_id = people.id
+                                          WHERE  ( profiles.searchable = true
+                                                    OR contacts.user_id = 488 )
+                                                 AND (
+                                         profiles.full_name LIKE
+                                         '%my% aspect% contact%'
+                                          OR people.diaspora_handle LIKE
+                                             'myaspectcontact%' )
+                                                 AND people.closed_account =
+                                                     false
+                                                 AND contacts.user_id = 488
+                                                 AND
+                                         aspect_memberships.aspect_id = 321
+                                         )
+                            AND contacts.user_id = 488
+                            AND aspect_memberships.aspect_id = 322) "
+"SELECT people.*
+FROM   people
+       INNER JOIN profiles
+               ON profiles.person_id = people.id
+       LEFT OUTER JOIN contacts
+                    ON contacts.user_id = 1
+                       AND contacts.person_id = people.id
+WHERE  ( profiles.full_name LIKE '%korth%'
+          OR people.diaspora_handle LIKE 'korth%' )
+       AND ( profiles.searchable = true
+              OR contacts.user_id = 1 )
+       AND people.closed_account = false
+ORDER  BY contacts.user_id IS NULL,
+          profiles.last_name ASC,
+          profiles.first_name ASC
+LIMIT  15 offset 0 ","SELECT people.*
+FROM   people
+       INNER JOIN profiles
+               ON profiles.person_id = people.id
+       INNER JOIN contacts
+                    ON contacts.user_id = 1
+                       AND contacts.person_id = people.id
+WHERE  ( profiles.full_name LIKE '%korth%'
+          OR people.diaspora_handle LIKE 'korth%' )
+       AND ( profiles.searchable = true
+              OR contacts.user_id = 1 )
+       AND people.closed_account = false
+ORDER  BY contacts.user_id IS NULL,
+          profiles.last_name ASC,
+          profiles.first_name ASC
+LIMIT  15 offset 0 "
+"SELECT Count(DISTINCT people.id)
+FROM   people
+       INNER JOIN profiles
+               ON profiles.person_id = people.id
+       INNER JOIN contacts contacts_people
+               ON contacts_people.person_id = people.id
+       LEFT OUTER JOIN contacts
+                    ON contacts.user_id = 491
+                       AND contacts.person_id = people.id
+WHERE  ( profiles.searchable = true
+          OR contacts.user_id = 491 )
+       AND ( profiles.full_name LIKE '%a% contact%'
+              OR people.diaspora_handle LIKE 'acontact%' )
+       AND people.closed_account = false
+       AND contacts.user_id = 491 ","SELECT Count(DISTINCT people.id)
+FROM   people
+       INNER JOIN profiles
+               ON profiles.person_id = people.id
+       INNER JOIN contacts contacts_people
+               ON contacts_people.person_id = people.id
+       INNER JOIN contacts
+                    ON contacts.user_id = 491
+                       AND contacts.person_id = people.id
+WHERE  ( profiles.searchable = true
+          OR contacts.user_id = 491 )
+       AND ( profiles.full_name LIKE '%a% contact%'
+              OR people.diaspora_handle LIKE 'acontact%' )
+       AND people.closed_account = false
+       AND contacts.user_id = 491 "
+"SELECT groups.id
+FROM   groups
+       INNER JOIN invited_groups
+               ON groups.id = invited_groups.group_id
+WHERE  invited_groups.invite_id = 1318 ","SELECT invited_groups.group_id
+FROM   invited_groups
+WHERE  invited_groups.invite_id = 1318 "
+"SELECT groups.id
+FROM   groups
+       INNER JOIN category_groups
+               ON groups.id = category_groups.group_id
+WHERE  category_groups.category_id = 3086 ","SELECT category_groups.group_id
+FROM  category_groups
+WHERE  category_groups.category_id = 3086 "
+"SELECT users.id
+FROM   users
+       INNER JOIN ignored_users
+               ON users.id = ignored_users.ignored_user_id
+WHERE  ignored_users.user_id = 155 ","SELECT ignored_users.ignored_user_id
+FROM  ignored_users
+WHERE  ignored_users.user_id = 155 "
+"SELECT Count(*)
+FROM   categories
+       INNER JOIN category_groups
+               ON categories.id = category_groups.category_id
+WHERE  category_groups.group_id = 2378 ","SELECT Count(*)
+FROM   category_groups
+WHERE  category_groups.group_id = 2378 "
+"SELECT group_users.group_id
+FROM   group_users
+WHERE  group_users.group_id IN (SELECT groups.id
+                                FROM   groups
+                                WHERE  ( groups.id > 0 )
+                                ORDER  BY NAME ASC)
+       AND group_users.user_id = 762 ","SELECT group_users.group_id
+FROM   group_users
+WHERE  group_users.group_id > 0 
+       AND group_users.user_id = 762"
+"SELECT Count(*)
+FROM   (SELECT 1 AS one
+        FROM   group_histories
+        WHERE  group_histories.group_id = 2578
+               AND group_histories.action = 2
+        ORDER  BY group_histories.created_at DESC
+        LIMIT  25 offset 0) subquery_for_count ","SELECT Count(*)
+FROM   (SELECT 1 AS one
+        FROM   group_histories
+        WHERE  group_histories.group_id = 2578
+               AND group_histories.action = 2
+        LIMIT  25 offset 0) AS subquery_for_count "

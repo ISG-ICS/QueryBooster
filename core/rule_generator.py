@@ -265,6 +265,9 @@ class RuleGenerator:
         else:
             return leftNode, rightNode
     
+    # TODO - Handle cases where the generalized rule has only 
+    #          "INNER JOIN <x1> ON <x1>.<x2> = <x3>.<x4> AND <x1>.<x5> = <x6>"
+    #
     @staticmethod
     def extendToFullASTJson(node: Any) -> tuple[Any, Scope]:
         # case-1: no SELECT and no FROM and no WHERE

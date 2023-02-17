@@ -183,14 +183,21 @@ if __name__ == '__main__':
     # ks_or_ms = [10, 20, 30, 40, 50, 60]
     # exp = 'mpn'
     # examples_file = 'Train_Remove_1Useless_InnerJoin.csv'
-    # test_file = 'Test_Remove_1Useless_InnerJoin.csv'
+    # test_file = 'Test_wetune.csv'
 
     # Exp-2
     #
     ks_or_ms = [10, 20, 30, 40, 50, 60]
     exp = 'mpn'
     examples_file = 'Train_Remove_1Useless_InnerJoin_Agg.csv'
-    test_file = 'Test_Remove_1Useless_InnerJoin_Agg.csv'
+    test_file = 'Test_wetune.csv'
+
+    # Exp-3
+    #
+    # ks_or_ms = [10, 30, 50, 70, 90]
+    # exp = 'mpn'
+    # examples_file = 'Train_LeftOuterJoin_To_InnerJoin.csv'
+    # test_file = 'Test_wetune.csv'
 
     # read examples file
     #
@@ -198,7 +205,7 @@ if __name__ == '__main__':
 
     # read test file
     #
-    tests = read_examples_file(test_file)
+    tests = read_examples_file('Test_wetune.csv')
     
     # profile suggest_rules on the examples files
     #
