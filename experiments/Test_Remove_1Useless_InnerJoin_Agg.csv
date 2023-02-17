@@ -1,0 +1,38 @@
+q0,q1
+"SELECT Count(*)
+FROM   tags
+       INNER JOIN tag_followings
+               ON tags.id = tag_followings.tag_id
+WHERE  tag_followings.user_id = 1 ","SELECT Count(*)
+FROM   tag_followings
+WHERE  tag_followings.user_id = 1"
+"SELECT Count(*)
+FROM   contacts
+       INNER JOIN aspect_memberships
+               ON contacts.id =
+                  aspect_memberships.contact_id
+WHERE  aspect_memberships.aspect_id = 3 ","SELECT Count(*)
+FROM   aspect_memberships
+WHERE  aspect_memberships.aspect_id = 3 "
+"SELECT Count(*)
+FROM   people
+       INNER JOIN conversation_visibilities
+               ON people.id =
+                  conversation_visibilities.person_id
+WHERE  conversation_visibilities.conversation_id = 239 ","SELECT Count(*)
+FROM   conversation_visibilities
+WHERE  conversation_visibilities.conversation_id = 239 "
+"SELECT Count(*)
+FROM   categories
+       INNER JOIN category_groups
+               ON categories.id = category_groups.category_id
+WHERE  category_groups.group_id = 2378 ","SELECT Count(*)
+FROM   category_groups
+WHERE  category_groups.group_id = 2378 "
+"SELECT Min(users.id)
+FROM   users
+       INNER JOIN identities
+               ON identities.user_id = users.id
+WHERE  ( identities.provider LIKE 'ldap%' ) ","SELECT Min(identities.user_id)
+FROM   identities
+WHERE  identities.provider LIKE 'ldap%' "

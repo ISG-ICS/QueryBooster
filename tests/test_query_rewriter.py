@@ -943,6 +943,26 @@ def test_rewrite_rule_join_to_filter_partial_3():
     assert format(parse(q1)) == format(parse(_q1))
 
 
+def test_rewrite_rule_remove_1useless_innerjoin():
+    q0 = '''
+        SELECT o_auth_applications.id
+        FROM   o_auth_applications
+            INNER JOIN authorizations
+                    ON o_auth_applications.id = authorizations.o_auth_application_id
+        WHERE  authorizations.user_id = 1465 
+    '''
+    q1 = '''
+        SELECT authorizations.o_auth_application_id 
+        FROM   authorizations
+        WHERE  authorizations.user_id = 1465 
+    '''
+    rule_keys = ['remove_1useless_innerjoin']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
 def test_rewrite_rule_test_rule_wetune_90():
     q0 = '''
         SELECT adminpermi0_.admin_permission_id AS admin_pe1_4_,

@@ -2600,6 +2600,7 @@ class RuleGenerator:
         # the base length of a rule
         #
         base = 100.0
+        # base = 500.0
 
         # the weight of a Var
         #

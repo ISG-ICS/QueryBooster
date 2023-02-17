@@ -1,0 +1,29 @@
+q0,q1
+"SELECT Count(*)
+FROM   tags
+       INNER JOIN tag_followings
+               ON tags.id = tag_followings.tag_id
+WHERE  tag_followings.user_id = 1 ","SELECT Count(*)
+FROM   tag_followings
+WHERE  tag_followings.user_id = 1"
+"SELECT Count(1)
+FROM   t
+       INNER JOIN tf
+               ON t.id = tf.tag_id
+WHERE  tf.user_id = 1 ","SELECT Count(1)
+FROM   tf
+WHERE  tf.user_id = 1"
+"SELECT Count(*)
+FROM   tags
+       INNER JOIN tag_followings
+               ON tags.name = tag_followings.tag_name
+WHERE  tag_followings.group_id > 1 ","SELECT Count(*)
+FROM   tag_followings
+WHERE  tag_followings.group_id > 1"
+"SELECT Min(1)
+FROM   tags
+       INNER JOIN tag_followings
+               ON tags.id = tag_followings.tag_id
+WHERE  tag_followings.user_id = 100","SELECT Min(1)
+FROM   tag_followings
+WHERE  tag_followings.user_id = 100"

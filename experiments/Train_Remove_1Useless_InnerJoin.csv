@@ -1,0 +1,29 @@
+q0,q1
+"SELECT app.id
+FROM   app
+       INNER JOIN auth
+               ON app.id = auth.app_id
+WHERE  auth.user_id = 1465 ","SELECT auth.app_id 
+FROM   auth
+WHERE  auth.user_id = 1465 "
+"SELECT app.name
+FROM   app
+       INNER JOIN auth
+               ON app.name = auth.app_name
+WHERE  auth.group_id = 1465 ","SELECT auth.app_name
+FROM   auth
+WHERE  auth.group_id = 1465 "
+"SELECT application.id
+FROM   application
+       INNER JOIN authorization
+               ON application.id = authorization.app_id
+WHERE  authorization.user_id = 789 ","SELECT authorization.app_id 
+FROM   authorization
+WHERE  authorization.user_id = 789 "
+"SELECT app.id
+FROM   app
+       INNER JOIN auth
+               ON app.id = auth.app_id
+WHERE  auth.user_id = 789 ","SELECT auth.app_id
+FROM   auth
+WHERE  auth.user_id = 789 "

@@ -257,6 +257,26 @@ rules = [
     },
 
     {
+        'id': 61,
+        'key': 'remove_1useless_innerjoin',
+        'name': 'Remove 1Useless InnerJoin',
+        'pattern': '''
+            SELECT <x1>.<x2> 
+            FROM <x1> 
+            INNER JOIN <x3> ON <x1>.<x2> = <x3>.<x6> 
+            WHERE <x5>
+        ''',
+        'constraints': '',
+        'rewrite': '''
+            SELECT <x3>.<x6> 
+            FROM <x3> 
+            WHERE <x5>
+        ''',
+        'actions': '',
+        'database': 'postgresql'
+    },
+
+    {
         'id': 8090,
         'key': 'test_rule_wetune_90',
         'name': 'Test Rule Wetune 90',
