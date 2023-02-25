@@ -340,6 +340,35 @@ rules = [
         'database': 'postgresql'
     },
 
+    {
+        'id': 10001,
+        'key': 'test_rule_calcite_testPushMinThroughUnion',
+        'name': 'Test Rule Calcite testPushMinThroughUnion',
+        'pattern': '''
+            SELECT t.<x3>, MIN(t.<x4>)
+            FROM
+            (SELECT <x2>
+            FROM <x1>
+            UNION ALL SELECT <x2>
+            FROM <x1>) AS t
+            GROUP BY t.<x3>
+        ''',
+        'constraints': '',
+        'rewrite': '''
+            SELECT t6.<x3>, MIN(MIN(<x1>.<x4>))
+            FROM
+            (SELECT <x1>.<x3>, MIN(<x1>.<x4>)
+            FROM <x1>
+            GROUP BY <x1>.<x3>
+            UNION ALL SELECT <x1>.<x3>, MIN(<x1>.<x4>)
+            FROM <x1>
+            GROUP BY <x1>.<x3>) AS t6
+            GROUP BY t6.<x3>
+        ''',
+        'actions': '',
+        'database': 'postgresql'
+    },
+
     # MySQL Rules
     # 
     {

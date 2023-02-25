@@ -53,22 +53,40 @@ class QueryRewriter:
     #     }
     # 
     @staticmethod
-    def rewrite(query: str, rules: list) -> tuple[str, list]:
+    def rewrite(query: str, rules: list, iterate=True) -> tuple[str, list]:
         
         query_ast = parse(query)
 
         rewriting_path = []
 
+        # to break rewriting cycles
+        #
+        query_trace = set(query)
+        cycle_found = False
+
         new_query = True
         while new_query is True:
             new_query = False
+            # the current query has occurred before
+            #
+            if format(query_ast) in query_trace:
+                cycle_found = True
+                print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+                print("  [QueryRewriter] Cycle Found")
+                print("rewriting_path:")
+                print(rewriting_path)
+                print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+            # otherwise, remember it
+            else:
+                query_trace.add(format(query_ast))
             for rule in rules:
                 memo = {}  # keep track of the matched substrees of the rule, Vars, and VarLists
                 if QueryRewriter.match(query_ast, rule, memo):
                     query_ast = QueryRewriter.take_actions(query_ast, rule, memo)
                     query_ast = QueryRewriter.replace(query_ast, rule, memo)
                     rewriting_path.append([rule['id'], format(query_ast)])
-                    new_query = True
+                    if not cycle_found and iterate:
+                        new_query = True
                     break
 
         return format(query_ast), rewriting_path
@@ -107,9 +125,15 @@ class QueryRewriter:
         #         rule_node = {"value": "VL1"}
         #   The idea is escalate the "VL1" from inside {"value": "VL1"} to outside
         # 
-        if QueryRewriter.is_dict(rule_node) and 'value' in rule_node.keys() and QueryRewriter.is_varList(rule_node['value']):
-            memo[rule_node['value']] = query_node
-            return True
+        if QueryRewriter.is_dict(rule_node) and 'value' in rule_node.keys():
+            if QueryRewriter.is_varList(rule_node['value']):
+                memo[rule_node['value']] = query_node
+                return True
+            # handle case when query_node = ["*"] and rule_node = {"value": "V001"}
+            #
+            if QueryRewriter.is_var(rule_node['value']) and not QueryRewriter.is_list(query_node): 
+                memo[rule_node['value']] = query_node
+                return True
         
         # Case-1: rule_node is a Var
         # 

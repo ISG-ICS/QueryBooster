@@ -298,6 +298,25 @@ def test_match_rule_test_rule_wetune_90():
     assert QueryRewriter.match(parse(query), rule, memo)
 
 
+def test_match_rule_test_rule_calcite_testPushMinThroughUnion():
+    rule = get_rule('test_rule_calcite_testPushMinThroughUnion')
+    assert rule is not None
+    
+    # match
+    query = '''
+        SELECT t.ENAME,
+            MIN(t.EMPNO)
+        FROM
+        (SELECT *
+        FROM EMP AS EMP
+        UNION ALL SELECT *
+        FROM EMP AS EMP) AS t
+        GROUP BY t.ENAME
+    '''
+    memo = {}
+    assert QueryRewriter.match(parse(query), rule, memo)
+
+
 def test_replace_rule_remove_cast_date():
     rule = get_rule('remove_cast_date')
     assert rule is not None
