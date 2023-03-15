@@ -37,36 +37,61 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         logging.debug("\n[/] request:")
         logging.debug(request)
         
-        # rewrite
         request = json.loads(request, strict=False)
-        original_query = request['query']
-        database = request['db']
-        log_text = ""
-        log_text += "\n=================================================="
-        log_text += "\n    Original query"
-        log_text += "\n--------------------------------------------------"
-        log_text += "\n" + QueryRewriter.beautify(original_query)
-        log_text += "\n--------------------------------------------------"
-        logging.info(log_text)
-        rules = self.rm.fetch_enabled_rules(database)
-        rewritten_query, rewriting_path = QueryRewriter.rewrite(original_query, rules)
-        rewritten_query = QueryPatcher.patch(rewritten_query, database)
-        for rewriting in rewriting_path:
-            rewriting[1] = QueryPatcher.patch(rewriting[1], database)
-        self.ql.log_query(original_query, rewritten_query, rewriting_path)
-        log_text = ""
-        log_text += "\n=================================================="
-        log_text += "\n    Rewritten query"
-        log_text += "\n--------------------------------------------------"
-        log_text += "\n" + QueryRewriter.beautify(rewritten_query)
-        log_text += "\n--------------------------------------------------"
-        logging.info(log_text)
-
-        self.send_response(200)
-        self.end_headers()
-        response = BytesIO()
-        response.write(rewritten_query.encode('utf-8'))
-        self.wfile.write(response.getvalue())
+        cmd = request['cmd']
+        appguid = request['appguid']
+        guid = request['guid']
+        
+        # rewrite
+        if cmd == 'rewrite':
+            original_query = request['query']
+            database = request['db']
+            log_text = ""
+            log_text += "\n=================================================="
+            log_text += "\n    Original query"
+            log_text += "\n--------------------------------------------------"
+            log_text += "\n appguid: " + appguid
+            log_text += "\n" + QueryRewriter.beautify(original_query)
+            log_text += "\n--------------------------------------------------"
+            logging.info(log_text)
+            rules = self.rm.fetch_enabled_rules(database)
+            rewritten_query, rewriting_path = QueryRewriter.rewrite(original_query, rules)
+            rewritten_query = QueryPatcher.patch(rewritten_query, database)
+            for rewriting in rewriting_path:
+                rewriting[1] = QueryPatcher.patch(rewriting[1], database)
+            self.ql.log_query(appguid, guid, original_query, rewritten_query, rewriting_path)
+            log_text = ""
+            log_text += "\n=================================================="
+            log_text += "\n    Rewritten query"
+            log_text += "\n--------------------------------------------------"
+            log_text += "\n appguid: " + appguid
+            log_text += "\n guid: " + guid
+            log_text += "\n" + QueryRewriter.beautify(rewritten_query)
+            log_text += "\n--------------------------------------------------"
+            logging.info(log_text)
+            self.send_response(200)
+            self.end_headers()
+            response = BytesIO()
+            response.write(rewritten_query.encode('utf-8'))
+            self.wfile.write(response.getvalue())
+        # report
+        elif cmd == 'report':
+            query_time_ms = request['queryTimeMs']
+            log_text = ""
+            log_text += "\n=================================================="
+            log_text += "\n    Report query time ms"
+            log_text += "\n--------------------------------------------------"
+            log_text += "\n appguid: " + appguid
+            log_text += "\n guid: " + guid
+            log_text += "\n query_time_ms: " + str(query_time_ms)
+            log_text += "\n--------------------------------------------------"
+            logging.info(log_text)
+            self.ql.report_query(appguid, guid, query_time_ms)
+            self.send_response(200)
+            self.end_headers()
+            response = BytesIO()
+            response.write('true'.encode('utf-8'))
+            self.wfile.write(response.getvalue())
     
     def post_list_rules(self):
         content_length = int(self.headers['Content-Length'])

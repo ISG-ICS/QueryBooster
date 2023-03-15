@@ -32,8 +32,10 @@ CREATE TABLE IF NOT EXISTS internal_rules(
 
 CREATE TABLE IF NOT EXISTS query_logs(
     id INTEGER PRIMARY KEY,
+    appguid TEXT,
+    guid TEXT,
     timestamp TEXT,
-    latency REAL,
+    query_time_ms REAL,
     original_sql TEXT,
     rewritten_sql TEXT
 );

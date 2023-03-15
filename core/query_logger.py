@@ -13,8 +13,11 @@ class QueryLogger:
     def __del__(self):
         del self.dm
     
-    def log_query(self, original_query: str, rewritten_query: str, rewriting_path: list) -> None:
-        self.dm.log_query(original_query, rewritten_query, rewriting_path)
+    def log_query(self, appguid: str, guid: str, original_query: str, rewritten_query: str, rewriting_path: list) -> None:
+        self.dm.log_query(appguid, guid, original_query, rewritten_query, rewriting_path)
+    
+    def report_query(self, appguid: str, guid: str, query_time_ms: int) -> None:
+        self.dm.report_query(appguid, guid, query_time_ms)
 
     def list_queries(self) -> list:
         queries = self.dm.list_queries()
@@ -23,9 +26,11 @@ class QueryLogger:
             res.append({
                 'id': query[0],
                 'timestamp': query[1],
-                'latency': query[2],
-                'original_sql': query[3],
-                'rewritten_sql': query[4]
+                'appguid': query[2],
+                'guid': query[3],
+                'query_time_ms': query[4],
+                'original_sql': query[5],
+                'rewritten_sql': query[6]
             })
         return res
     
