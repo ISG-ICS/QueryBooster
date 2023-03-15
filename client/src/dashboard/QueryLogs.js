@@ -68,7 +68,7 @@ export default function QueryLogs() {
               <TableRow key={query.id} onClick={() => selectQuery(query)}>
                 <TableCell>{query.id}</TableCell>
                 <TableCell>{query.timestamp}</TableCell>
-                <TableCell>{query.latency}</TableCell>
+                <TableCell>{query.query_time_ms/1000}</TableCell>
                 <TableCell>
                   <SyntaxHighlighter language="sql" style={vs} wrapLongLines={true}>
                     {query.original_sql}
