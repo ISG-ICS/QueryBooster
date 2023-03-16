@@ -59,7 +59,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             rewritten_query = QueryPatcher.patch(rewritten_query, database)
             for rewriting in rewriting_path:
                 rewriting[1] = QueryPatcher.patch(rewriting[1], database)
-            self.ql.log_query(appguid, guid, original_query, rewritten_query, rewriting_path)
+            self.ql.log_query(appguid, guid, QueryPatcher.patch(QueryRewriter.reformat(original_query), database), rewritten_query, rewriting_path)
             log_text = ""
             log_text += "\n=================================================="
             log_text += "\n    Rewritten query"

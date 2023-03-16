@@ -127,7 +127,7 @@ class DataManager:
 
             cur.execute('''INSERT INTO query_logs (id, timestamp, appguid, guid, query_time_ms, original_sql, rewritten_sql) 
                                        VALUES (?, ?, ?, ?, ?, ?, ?)''', 
-                        [query_id, datetime.datetime.now(), appguid, guid, -1, original_query, rewritten_query])
+                        [query_id, datetime.datetime.now(), appguid, guid, -1000, original_query, rewritten_query])
             seq = 1
             for rewriting in rewriting_path:
                 cur.execute('''INSERT INTO rewriting_paths (query_id, seq, rule_id, rewritten_sql)
@@ -155,12 +155,13 @@ class DataManager:
             cur = self.db_conn.cursor()
             cur.execute('''SELECT id, 
                                   timestamp, 
-                                  appguid,
-                                  guid,
-                                  query_time_ms, 
-                                  original_sql,
-                                  rewritten_sql
-                           FROM query_logs 
+                                  boosted,
+                                  before_latency,
+                                  after_latency, 
+                                  sql,
+                                  suggestion,
+                                  suggested_latency
+                           FROM queries 
                            ORDER BY id desc''')
             return cur.fetchall()
         except Error as e:

@@ -26,11 +26,12 @@ class QueryLogger:
             res.append({
                 'id': query[0],
                 'timestamp': query[1],
-                'appguid': query[2],
-                'guid': query[3],
-                'query_time_ms': query[4],
-                'original_sql': query[5],
-                'rewritten_sql': query[6]
+                'boosted': query[2],
+                'before_latency': query[3],
+                'after_latency': query[4],
+                'sql': query[5],
+                'suggestion': query[6],
+                'suggested_latency': query[7]
             })
         return res
     

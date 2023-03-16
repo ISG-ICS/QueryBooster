@@ -58,9 +58,12 @@ export default function QueryLogs() {
             <TableRow>
               <TableCell>ID</TableCell>
               <TableCell>Timestamp</TableCell>
-              <TableCell>Latency(s)</TableCell>
-              <TableCell>Original SQL</TableCell>
-              <TableCell>Rewritten SQL</TableCell>
+              <TableCell>Boosted</TableCell>
+              <TableCell>Before Latency(s)</TableCell>
+              <TableCell>After Latency(s)</TableCell>
+              <TableCell>SQL</TableCell>
+              <TableCell>Suggestion</TableCell>
+              <TableCell>Suggested Latency(s)</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -68,17 +71,16 @@ export default function QueryLogs() {
               <TableRow key={query.id} onClick={() => selectQuery(query)}>
                 <TableCell>{query.id}</TableCell>
                 <TableCell>{query.timestamp}</TableCell>
-                <TableCell>{query.query_time_ms/1000}</TableCell>
+                <TableCell>{query.boosted}</TableCell>
+                <TableCell>{query.before_latency/1000}</TableCell>
+                <TableCell>{query.after_latency/1000}</TableCell>
                 <TableCell>
                   <SyntaxHighlighter language="sql" style={vs} wrapLongLines={true}>
-                    {query.original_sql}
+                    {query.sql}
                   </SyntaxHighlighter>
                 </TableCell>
-                <TableCell>
-                  <SyntaxHighlighter language="sql" style={vs} wrapLongLines={true}>
-                    {query.rewritten_sql}
-                  </SyntaxHighlighter>
-                </TableCell>
+                <TableCell>{query.suggestion}</TableCell>
+                <TableCell>{query.suggested_latency/1000}</TableCell>
               </TableRow>
             ))}
           </TableBody>

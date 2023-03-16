@@ -34,6 +34,12 @@ VarListStart = VarTypesInfo[VarType.VarList]['internalBase']
 #
 class QueryRewriter:
 
+    # Reformat a query string to make sure it's consistent globally
+    # 
+    @staticmethod
+    def reformat(query: str) -> str:
+        return format(parse(query))
+
     # Beautify a query string
     # 
     @staticmethod
