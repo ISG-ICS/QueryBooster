@@ -420,8 +420,13 @@ def get_rule(key: str) -> dict:
 # return a list of rules (json attributes are in str)
 # 
 def get_rules() -> list:
+    ans = []
     for rule in rules:
-        rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
-        rule['constraints_json'] = RuleParser.parse_constraints(rule['constraints'], rule['mapping'])
-        rule['actions_json'] = RuleParser.parse_actions(rule['actions'], rule['mapping'])
-    return rules
+        # For demo: populate no rules to the querybooster.db
+        #
+        if rule['id'] in []:
+            rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
+            rule['constraints_json'] = RuleParser.parse_constraints(rule['constraints'], rule['mapping'])
+            rule['actions_json'] = RuleParser.parse_actions(rule['actions'], rule['mapping'])
+            ans.append(rule)
+    return ans
