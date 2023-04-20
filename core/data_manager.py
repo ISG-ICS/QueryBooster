@@ -15,9 +15,9 @@ class DataManager:
         try:
             cur = self.db_conn.cursor()
             schema_path = Path(__file__).parent / "../schema"
-            with open(schema_path / 'rules.sql') as rules_sql_file:
-                rules_sql = rules_sql_file.read()
-                cur.executescript(rules_sql)
+            with open(schema_path / 'schema.sql') as schema_sql_file:
+                schema_sql = schema_sql_file.read()
+                cur.executescript(schema_sql)
         except Error as e:
             print(e)
     
