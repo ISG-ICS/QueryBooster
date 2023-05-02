@@ -422,10 +422,13 @@ def get_rule(key: str) -> dict:
 def get_rules() -> list:
     ans = []
     for rule in rules:
-      rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
-      rule['constraints_json'] = RuleParser.parse_constraints(rule['constraints'], rule['mapping'])
-      rule['actions_json'] = RuleParser.parse_actions(rule['actions'], rule['mapping'])
-      ans.append(rule)
+      # Only populate Tableau rules
+      #
+      if 0 <= rule['id'] < 30 or 100 <= rule['id'] < 130:
+        rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
+        rule['constraints_json'] = RuleParser.parse_constraints(rule['constraints'], rule['mapping'])
+        rule['actions_json'] = RuleParser.parse_actions(rule['actions'], rule['mapping'])
+        ans.append(rule)
     # For demo: populate no rules to the querybooster.db
     #
     # ans = []
