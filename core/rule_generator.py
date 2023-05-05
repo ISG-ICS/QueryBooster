@@ -1,5 +1,6 @@
 from typing import Any, Union
 import copy
+from core.db_manager import DBManager
 from core.profiler import Profiler
 from core.query_rewriter import QueryRewriter
 from core.rule_parser import RuleParser, Scope, VarType, VarTypesInfo
@@ -2509,9 +2510,18 @@ class RuleGenerator:
     #                             'q1': "SELECT * FROM tweets WHERE state_name ILIKE '%iphone%'"
     #                            }
     #                         ]
+    #  workload - a list of queries that can be used to guide the suggestion
+    #  beta - the weight of the desciption_length deduction to guide the suggestion (beta ~ [0, 1])
+    #         when the workload is not None, the heuristic to guide the suggestion is:
+    #           Suppose:
+    #             delta_length_ratio = delta_length / total_length ~ [0, 1]
+    #             delta_query_cost_ratio = Sum_query_cost(workload after rewritten using rules in (ans + candidate - to_be_replaced_rules)) / Sum_query_cost(workload after rewritten using rules in ans)
+    #               Then:
+    #                 benefit = beta * delta_length_ratio + (1 - beta) * delta_query_cost_ratio
+    #                   pick the `icandidate` for max(benefit)
     #
     @staticmethod
-    def suggest_rules(examples: list, exp: str='bf', k: int=1, m: int=5, profile: dict={}) -> list:
+    def suggest_rules(examples: list, exp: str='bf', k: int=1, m: int=5, profile: dict={}, workload: list=None, beta: float=1.0) -> list:
 
         start = time.time()
 
@@ -2528,11 +2538,15 @@ class RuleGenerator:
 
             # Explore candidates based on current answer
             #
-            candidates = RuleGenerator.explore_candidates(baseRules=ans, exp=exp, k=k, m=m)
+            candidates = RuleGenerator.explore_candidates(baseRules=ans, exp=exp, k=k, m=m, workload=workload, beta=beta)
             cnt_iterations += 1
             cnts_candidates.append(len(candidates))
 
+            total_length = sum([RuleGenerator.description_length(r) for r in ans])
             delta_lengths = [0] * len(candidates)
+            total_cost = sum(RuleGenerator.query_cost(q, ans) for q in workload) if workload else -1.0
+            delta_costs = [0] * len(candidates)
+            benefits = [0] * len(candidates)
             to_be_replaced_rules = [[] for i in range(len(candidates))]
 
             for i in range(len(candidates)):
@@ -2546,15 +2560,23 @@ class RuleGenerator:
                 # compute the length reduction if 'candidate' replace 'to_be_replaced' rules
                 #
                 delta_lengths[i] = sum([RuleGenerator.description_length(r) for r in to_be_replaced_rules[i]]) - RuleGenerator.description_length(candidate)
+
+                # compute the query cost reduction if 'candidate' replace 'to_be_replaced' rules
+                #
+                delta_costs[i] = total_cost - sum(RuleGenerator.query_cost(q, [r for r in ans if r not in to_be_replaced_rules[i]] + [candidate]) for q in workload) if workload else 0.0
+
+                # compute the benefit if 'candidate' replace 'to_be_replaced' rules
+                #
+                benefits[i] = beta * (delta_lengths[i] / total_length) + (1 - beta) * (delta_costs[i] / total_cost)
             
-            # stop when no more reduction possible
+            # stop when no more benefit possible
             #
-            if max(delta_lengths) <= 0:
+            if max(benefits) <= 0:
                 break
 
-            # choose the candidate rule with the most length reduction
+            # choose the candidate rule with the most benefit
             #
-            imax = delta_lengths.index(max(delta_lengths))
+            imax = benefits.index(max(benefits))
             icandidate = candidates[imax]
 
             ans = [r for r in ans if r not in to_be_replaced_rules[imax]]
@@ -2694,13 +2716,13 @@ class RuleGenerator:
     # explore candidate rules for a given list of base rules
     #
     @staticmethod
-    def explore_candidates(baseRules: list, exp: str, k: int, m: int) -> list:
+    def explore_candidates(baseRules: list, exp: str, k: int, m: int, workload=None, beta=1.0) -> list:
         if exp == 'bf':
             return RuleGenerator.explore_candidates_bf(baseRules)
         elif exp == 'khn':
             return RuleGenerator.explore_candidates_khn(baseRules, k=k)
         elif exp == 'mpn':
-            return RuleGenerator.explore_candidates_mpn(baseRules, m=m)
+            return RuleGenerator.explore_candidates_mpn(baseRules, m=m, workload=workload, beta=beta)
         
         return RuleGenerator.explore_candidates_bf(baseRules)
     
@@ -2847,7 +2869,7 @@ class RuleGenerator:
     #   (3) m-promising neighbors 
     #
     @staticmethod
-    def explore_candidates_mpn(baseRules: list, m: int) -> list:
+    def explore_candidates_mpn(baseRules: list, m: int, workload=None, beta=1.0) -> list:
 
         ans = []
 
@@ -2865,7 +2887,7 @@ class RuleGenerator:
             # Cache promising score in rule
             #
             if 'promisingScore' not in baseRule.keys():
-                baseRule['promisingScore'] = RuleGenerator.promisingScore(baseRule, baseRules)
+                baseRule['promisingScore'] = RuleGenerator.promisingScore(baseRule, baseRules, workload=workload, beta=beta)
             # Put base rule in the candidate set
             #
             ans.append(baseRule)
@@ -2910,7 +2932,7 @@ class RuleGenerator:
                             # Cache promising score in rule
                             #
                             if 'promisingScore' not in childRule.keys():
-                                childRule['promisingScore'] = RuleGenerator.promisingScore(childRule, baseRules)
+                                childRule['promisingScore'] = RuleGenerator.promisingScore(childRule, baseRules, workload=workload, beta=beta)
                             baseRule['children'].append(childRule)
                             ans.append(childRule)
                         # else childRule has been visited (generated from an ealier baseRule)
@@ -2929,7 +2951,7 @@ class RuleGenerator:
                         # Cache promising score in rule
                         #
                         if 'promisingScore' not in childRule.keys():
-                            childRule['promisingScore'] = RuleGenerator.promisingScore(childRule, baseRules)
+                            childRule['promisingScore'] = RuleGenerator.promisingScore(childRule, baseRules, workload=workload, beta=beta)
                         ans.append(childRule)
         
         return ans
@@ -2937,13 +2959,38 @@ class RuleGenerator:
     # Compute the promising score of a given rule on the given set of base rules
     #
     @staticmethod
-    def promisingScore(rule: dict, baseRules: list) -> float:
+    def promisingScore(rule: dict, baseRules: list, workload=None, beta=1.0) -> float:
         ans = 0.0
 
+        # Compute the promising score for description length (as before)
+        #
+        p_length = 0.0
         for baseRule in baseRules:
-            ans += RuleGenerator.description_length(baseRule) / (RuleGenerator.cntTransformations(rule, baseRule) + 1)
-        
-        ans += 1.0 / RuleGenerator.description_length(rule)
+            p_length += RuleGenerator.description_length(baseRule) / (RuleGenerator.cntTransformations(rule, baseRule) + 1)
+        p_length += 1.0 / RuleGenerator.description_length(rule)
+
+        # Compute the maximum promising score for description length
+        #
+        max_p_length = 0.0
+        for baseRule in baseRules:
+            max_p_length += RuleGenerator.description_length(baseRule)
+        max_p_length += 1.0 / RuleGenerator.description_length(rule)
+    
+        # Normalize promising score for description length
+        #
+        p_length = p_length / max_p_length
+
+        # Compute the promising score for query cost
+        #
+        p_cost = 0.0
+        if workload and len(workload) > 0:
+            total_cost = sum([RuleGenerator.query_cost(q, baseRules) for q in workload])
+            target_cost = sum([RuleGenerator.query_cost(q, [rule] + baseRules) for q in workload])
+            p_cost = (total_cost - target_cost) / total_cost
+
+        # Compute the final promising score, weighted sum of p_length and p_cost
+        # 
+        ans = beta * p_length + (1 - beta) * p_cost 
 
         return ans
     
@@ -3373,3 +3420,30 @@ class RuleGenerator:
         elif QueryRewriter.is_dot_expression(node):
             ans = max(ans, 1)
         return ans
+    
+    # Compute the query cost given a set of rewriting rules
+    #
+    def query_cost(query: str, rules: list) -> float:
+        parsed_rules = []
+        # preprocess rules
+        for rule in rules:
+            parsed_rule = {
+                'id': -1,
+                'pattern': rule['pattern'],
+                'constraints': rule['constraints'],
+                'rewrite': rule['rewrite'],
+                'actions': rule['actions']
+            }
+            parsed_rule['pattern_json'], parsed_rule['rewrite_json'], parsed_rule['mapping'] = RuleParser.parse(parsed_rule['pattern'], parsed_rule['rewrite'])
+            parsed_rule['constraints_json'] = RuleParser.parse_constraints(parsed_rule['constraints'], parsed_rule['mapping'])
+            parsed_rule['actions_json'] = RuleParser.parse_actions(parsed_rule['actions'], parsed_rule['mapping'])
+            parsed_rule['pattern_json'] = json.loads(parsed_rule['pattern_json'])
+            parsed_rule['constraints_json'] = json.loads(parsed_rule['constraints_json'])
+            parsed_rule['rewrite_json'] = json.loads(parsed_rule['rewrite_json'])
+            parsed_rule['actions_json'] = json.loads(parsed_rule['actions_json'])
+            parsed_rule['mapping'] = json.loads(parsed_rule['mapping'])
+            parsed_rules.append(parsed_rule)
+
+        rewritten_query, _ = QueryRewriter.rewrite(query, parsed_rules)
+        
+        return DBManager.query_cost(rewritten_query)
