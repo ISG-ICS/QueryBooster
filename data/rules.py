@@ -431,5 +431,5 @@ def get_rules() -> list:
         ans.append(rule)
     # For demo: populate no rules to the querybooster.db
     #
-    # ans = []
+    ans = []
     return ans
