@@ -1,8 +1,14 @@
+import sys
+# append the path of the parent directory
+sys.path.append("..")
 import datetime
+import json
 import sqlite3
+import traceback
 from sqlite3 import Error
 from pathlib import Path
 from typing import Dict, List
+from data.rules import get_rule
 
 class DataManager:
 
@@ -10,6 +16,7 @@ class DataManager:
         db_path = Path(__file__).parent / "../"
         self.db_conn = sqlite3.connect(db_path / 'querybooster.db')
         self.__init_schema()
+        self.__init_data()
     
     def __init_schema(self) -> None:
         try:
@@ -20,30 +27,62 @@ class DataManager:
                 cur.executescript(schema_sql)
         except Error as e:
             print(e)
+
+    def __init_data(self) -> None:
+        try:
+            # create two users: Alice and Bob
+            #
+            self.update_user({'id': 1, 'email': 'alice@ics.uci.edu'})
+            self.update_user({'id': 2, 'email': 'bob@cs.ucla.edu'})
+            # create one app for Alice
+            #
+            self.update_application({'id': 1, 'name': 'TwitterPg', 'guid': 'Alice-Tableau-Twitter-Pg', 'user_id': 1})
+            # create one app for Bob
+            #
+            self.update_application({'id': 2, 'name': 'TpchPg', 'guid': 'Bob-Tableau-Tpch-Pg', 'user_id': 2})
+            # create one rule for Alice
+            #
+            rule = get_rule('remove_max_distinct')
+            rule['owner_id'] = 1
+            rule['pattern_json'] = json.dumps(rule['pattern_json'])
+            rule['constraints_json'] = json.dumps(rule['constraints_json'])
+            rule['rewrite_json'] = json.dumps(rule['rewrite_json'])
+            rule['actions_json'] = json.dumps(rule['actions_json'])
+            self.update_rule(rule)
+            # enable it for its app
+            #
+            self.enable_rule(rule_id=rule['id'], app_id=1, app_name='TwitterPg')
+            
+        except Error as e:
+            print(e)
     
     def __del__(self):
         if self.db_conn:
             self.db_conn.close()
     
-    def list_rules(self) -> List[Dict]:
+    def list_rules(self, userid: int) -> List[Dict]:
         try:
             cur = self.db_conn.cursor()
-            cur.execute('''SELECT id, 
-                                  key, 
-                                  name, 
-                                  pattern,
-                                  constraints,
-                                  rewrite,
-                                  actions, 
-                                  CASE WHEN disabled is NULL THEN 1 ELSE 0 END AS enabled,
-                                  database
-                           FROM rules LEFT OUTER JOIN disable_rules 
-                                      ON rules.id = disable_rules.rule_id''')
+            cur.execute('''SELECT rules.id, 
+                                  rules.key, 
+                                  rules.name, 
+                                  rules.pattern,
+                                  rules.constraints,
+                                  rules.rewrite,
+                                  rules.actions,
+                                  enabled.application_id,
+                                  applications.name AS application_name
+                           FROM rules LEFT OUTER JOIN enabled 
+                                      ON rules.id = enabled.rule_id
+                                LEFT OUTER JOIN applications
+                                      ON enabled.application_id = applications.id
+                           WHERE rules.owner_id = ?
+                             AND applications.user_id = ?''', [userid, userid])
             return cur.fetchall()
         except Error as e:
             print(e)
     
-    def enabled_rules(self, database: str) -> List[Dict]:
+    def enabled_rules(self, appguid: str) -> List[Dict]:
         try:
             cur = self.db_conn.cursor()
             cur.execute('''SELECT id, 
@@ -53,51 +92,83 @@ class DataManager:
                                   constraints_json,
                                   rewrite_json,
                                   actions_json
-                           FROM rules LEFT JOIN disable_rules ON rules.id = disable_rules.rule_id
+                           FROM rules JOIN enabled ON rules.id = enabled.rule_id
+                                      JOIN applications ON enabled.application_id = applications.id
                                       LEFT JOIN internal_rules ON rules.id = internal_rules.rule_id 
-                           WHERE disable_rules.disabled IS NULL AND rules.database = ? 
-                           ORDER BY rules.id''', [database])
+                           WHERE applications.guid = ? 
+                           ORDER BY rules.id''', [appguid])
             return cur.fetchall()
         except Error as e:
             print(e)
     
-    def switch_rule(self, rule_id: int, enabled: bool) -> bool:
+    def enable_rule(self, rule_id: int, app_id: int, app_name: str) -> bool:
         try:
             cur = self.db_conn.cursor()
-            if enabled:
-                cur.execute('''DELETE FROM disable_rules WHERE rule_id = ?''', [rule_id])
-            else:
-                cur.execute('''INSERT OR IGNORE INTO disable_rules (rule_id, disabled) VALUES (?, 1)''', [rule_id])
+            if not app_id:
+                cur.execute('''SELECT id FROM applications WHERE name = ?''', [app_name])
+                app_id = cur.fetchone()[0]
+            cur.execute('''INSERT OR IGNORE INTO enabled (rule_id, application_id) VALUES (?, ?)''', [rule_id, app_id])
             self.db_conn.commit()
             return True
-        except Error as e:
-            print(e)
+        except Error as er:
+            print('[Error] in enable_rule:')
+            print('rule_id: ', rule_id, 'app_id: ', app_id, 'app_name: ', app_name)
+            print('SQLite error: %s' % (' '.join(er.args)))
+            print("Exception class is: ", er.__class__)
+            print('SQLite traceback: ')
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            print(traceback.format_exception(exc_type, exc_value, exc_tb))
+            return False
+    
+    def disable_rule(self, rule_id: int, app_id: int, app_name: str) -> bool:
+        try:
+            cur = self.db_conn.cursor()
+            if not app_id:
+                cur.execute('''SELECT id FROM applications WHERE name = ?''', [app_name])
+                app_id = cur.fetchone()[0]
+            cur.execute('''DELETE FROM enabled WHERE rule_id = ? AND application_id = ?''', [rule_id, app_id])
+            self.db_conn.commit()
+            return True
+        except Error as er:
+            print('[Error] in disable_rule:')
+            print('rule_id: ', rule_id, 'app_id: ', app_id, 'app_name: ', app_name)
+            print('SQLite error: %s' % (' '.join(er.args)))
+            print("Exception class is: ", er.__class__)
+            print('SQLite traceback: ')
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            print(traceback.format_exception(exc_type, exc_value, exc_tb))
             return False
     
     def update_rule(self, rule: dict) -> None:
         try:
             cur = self.db_conn.cursor()
-            cur.execute('''REPLACE INTO rules (id, key, name, pattern, constraints, rewrite, actions, database) 
+            cur.execute('''REPLACE INTO rules (id, key, name, pattern, constraints, rewrite, actions, owner_id) 
                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', 
                         [rule['id'], rule['key'], rule['name'], rule['pattern'], 
-                         rule['constraints'], rule['rewrite'], rule['actions'], rule['database']
+                         rule['constraints'], rule['rewrite'], rule['actions'], rule['owner_id']
                         ])
             cur.execute('''REPLACE INTO internal_rules (rule_id, pattern_json, constraints_json, rewrite_json, actions_json) VALUES (?, ?, ?, ?, ?)''', 
                         [rule['id'], rule['pattern_json'], rule['constraints_json'], rule['rewrite_json'], rule['actions_json']])
             self.db_conn.commit()
-        except Error as e:
-            print(e)
+        except Error as er:
+            print('[Error] in update_rule:')
+            print(rule)
+            print('SQLite error: %s' % (' '.join(er.args)))
+            print("Exception class is: ", er.__class__)
+            print('SQLite traceback: ')
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            print(traceback.format_exception(exc_type, exc_value, exc_tb))
     
-    def add_rule(self, rule: dict) -> bool:
+    def add_rule(self, rule: dict, user_id: int) -> bool:
         try:
             cur = self.db_conn.cursor()
             cur.execute('''SELECT IFNULL(MAX(id), 0) + 1 FROM rules;''')
             rule['id'] = cur.fetchone()[0]
             
-            cur.execute('''INSERT INTO rules (id, key, name, pattern, constraints, rewrite, actions, database) 
+            cur.execute('''INSERT INTO rules (id, key, name, pattern, constraints, rewrite, actions, owner_id) 
                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', 
                         [rule['id'], rule['key'], rule['name'], rule['pattern'], 
-                         rule['constraints'], rule['rewrite'], rule['actions'], rule['database']
+                         rule['constraints'], rule['rewrite'], rule['actions'], user_id
                         ])
             cur.execute('''INSERT INTO internal_rules (rule_id, pattern_json, constraints_json, rewrite_json, actions_json) VALUES (?, ?, ?, ?, ?)''', 
                         [rule['id'], rule['pattern_json'], rule['constraints_json'], rule['rewrite_json'], rule['actions_json']])
@@ -122,10 +193,10 @@ class DataManager:
     def log_query(self, appguid: str, guid: str, original_query: str, rewritten_query: str, rewriting_path: list) -> None:
         try:
             cur = self.db_conn.cursor()
-            cur.execute('''SELECT IFNULL(MAX(id), 0) + 1 FROM query_logs;''')
+            cur.execute('''SELECT IFNULL(MAX(id), 0) + 1 FROM queries;''')
             query_id = cur.fetchone()[0]
 
-            cur.execute('''INSERT INTO query_logs (id, timestamp, appguid, guid, query_time_ms, original_sql, rewritten_sql) 
+            cur.execute('''INSERT INTO queries (id, timestamp, appguid, guid, query_time_ms, original_sql, rewritten_sql) 
                                        VALUES (?, ?, ?, ?, ?, ?, ?)''', 
                         [query_id, datetime.datetime.now(), appguid, guid, -1000, original_query, rewritten_query])
             seq = 1
@@ -141,7 +212,7 @@ class DataManager:
     def report_query(self, appguid: str, guid: str, query_time_ms: int) -> None:
         try:
             cur = self.db_conn.cursor()
-            cur.execute('''UPDATE query_logs 
+            cur.execute('''UPDATE queries
                               SET query_time_ms = ? 
                             WHERE appguid = ? 
                               AND guid = ?''', 
@@ -150,19 +221,20 @@ class DataManager:
         except Error as e:
             print(e)
     
-    def list_queries(self) -> List[Dict]:
+    def list_queries(self, userid: int) -> List[Dict]:
         try:
             cur = self.db_conn.cursor()
             cur.execute('''SELECT id, 
                                   timestamp, 
-                                  boosted,
+                                  rewritten,
                                   before_latency,
                                   after_latency, 
                                   sql,
                                   suggestion,
-                                  suggested_latency
-                           FROM queries 
-                           ORDER BY id desc''')
+                                  suggested_latency,
+                                  app_name
+                           FROM query_log 
+                          WHERE user_id = ?''', [userid])
             return cur.fetchall()
         except Error as e:
             print(e)
@@ -171,7 +243,7 @@ class DataManager:
         try:
             cur = self.db_conn.cursor()
             cur.execute('''SELECT original_sql
-                           FROM query_logs 
+                           FROM queries 
                            WHERE id = ?''', [query_id])
             return cur.fetchall()[0]
         except Error as e:
@@ -185,6 +257,39 @@ class DataManager:
                                   rewritten_sql
                            FROM rewriting_paths LEFT JOIN rules ON rules.id = rewriting_paths.rule_id
                            WHERE query_id = ?''', [query_id])
+            return cur.fetchall()
+        except Error as e:
+            print(e)
+    
+    def update_user(self, user: dict) -> None:
+        try:
+            cur = self.db_conn.cursor()
+            cur.execute('''REPLACE INTO users (id, email) 
+                                       VALUES (?, ?)''', 
+                        [user['id'], user['email']])
+            self.db_conn.commit()
+        except Error as e:
+            print('[Error] in update_user:')
+            print(e)
+    
+    def update_application(self, app: dict) -> None:
+        try:
+            cur = self.db_conn.cursor()
+            cur.execute('''REPLACE INTO applications (id, name, guid, user_id) 
+                                       VALUES (?, ?, ?, ?)''', 
+                        [app['id'], app['name'], app['guid'], app['user_id']])
+            self.db_conn.commit()
+        except Error as e:
+            print('[Error] in update_application:')
+            print(e)
+    
+    def list_applications(self, userid: int) -> List[Dict]:
+        try:
+            cur = self.db_conn.cursor()
+            cur.execute('''SELECT id,
+                                  name
+                           FROM applications
+                           WHERE applications.user_id = ?''', [userid])
             return cur.fetchall()
         except Error as e:
             print(e)

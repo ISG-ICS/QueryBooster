@@ -5,7 +5,11 @@ CREATE TABLE IF NOT EXISTS rules(
     pattern TEXT,
     constraints TEXT,
     rewrite TEXT,
-    actions TEXT
+    actions TEXT,
+    owner_id INTEGER,
+    CONSTRAINT fk_rules
+        FOREIGN KEY (owner_id)
+        REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS internal_rules(
@@ -37,12 +41,12 @@ CREATE TABLE IF NOT EXISTS applications(
 
 CREATE TABLE IF NOT EXISTS enabled(
     application_id INTEGER,
-    rule_id INTEGER
+    rule_id INTEGER,
     PRIMARY KEY (application_id, rule_id),
     CONSTRAINT fk_applications
         FOREIGN KEY (application_id) 
         REFERENCES applications(id) 
-        ON DELETE CASCADE
+        ON DELETE CASCADE,
     CONSTRAINT fk_rules 
         FOREIGN KEY (rule_id) 
         REFERENCES rules(id) 
@@ -118,18 +122,23 @@ CREATE TABLE IF NOT EXISTS columns(
         ON DELETE CASCADE
 );
 
-CREATE VIEW IF NOT EXISTS query_log AS
+DROP VIEW IF EXISTS query_log;
+CREATE VIEW query_log AS
 SELECT q.id AS id,
        q.timestamp AS timestamp,
        (CASE WHEN q.sql = q.original_sql THEN 'NO' 
              WHEN q.sql != q.original_sql THEN 'YES'
         END) AS rewritten,
-       (SELECT AVG(q1.query_time_ms) FROM queries q1 WHERE q1.sql=ql.original_sql) AS before_latency,
+       (SELECT AVG(q1.query_time_ms) FROM queries q1 WHERE q1.sql=q.original_sql) AS before_latency,
        q.query_time_ms AS after_latency,
        q.original_sql AS sql,
        (CASE WHEN s.query_id IS NOT NULL THEN 'YES' ELSE 'NO'
         END) AS suggestion,
        (CASE WHEN s.query_id IS NOT NULL THEN s.query_time_ms ELSE -1000
-        END) AS suggested_latency
-  FROM queries q LEFT OUTER JOIN suggestions s ON q.id = s.query_id
+        END) AS suggested_latency,
+       a.user_id AS user_id,
+       a.name AS app_name
+  FROM queries q 
+        JOIN applications a ON q.appguid = a.guid
+        LEFT OUTER JOIN suggestions s ON q.id = s.query_id
  ORDER BY q.timestamp DESC;
