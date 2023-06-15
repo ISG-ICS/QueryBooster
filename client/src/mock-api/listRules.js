@@ -7,7 +7,7 @@ const defaultRulesData = [
         "constraints": "",
         "rewrite": "MAX(<x>)",
         "actions": "",
-        "enabled": true
+        "enabled_apps": [{"app_id": 1, "app_name": "TwitterPg"}]
     },
     {
         "id": 10,
@@ -17,7 +17,7 @@ const defaultRulesData = [
         "constraints": "TYPE(x)=DATE",
         "rewrite": "<x>",
         "actions": "",
-        "enabled": false
+        "enabled_apps": [{"app_id": 1, "app_name": "TwitterPg"}, {"app_id": 3, "app_name": "TwitterMySQL"}]
     },
     {
         "id": 11,
@@ -27,7 +27,7 @@ const defaultRulesData = [
         "constraints": "TYPE(x)=TEXT",
         "rewrite": "<x>",
         "actions": "",
-        "enabled": false
+        "enabled_apps": [{"app_id": 1, "app_name": "TwitterPg"}, {"app_id": 3, "app_name": "TwitterMySQL"}]
     },
     {
         "id": 21,
@@ -37,7 +37,7 @@ const defaultRulesData = [
         "constraints": "IS(y)=CONSTANT and\nTYPE(y)=STRING",
         "rewrite": "<x> ILIKE '%<y>%'",
         "actions": "",
-        "enabled": false
+        "enabled_apps": [{"app_id": 1, "app_name": "TwitterPg"}, {"app_id": 3, "app_name": "TwitterMySQL"}]
     },
     {
         "id": 30,
@@ -47,7 +47,7 @@ const defaultRulesData = [
         "constraints": "UNIQUE(tb1, a1)",
         "rewrite": "select <<s1>> \nfrom <tb1> <t1>\nwhere 1=1 \nand <<p1>>\n",
         "actions": "SUBSTITUTE(s1, t2, t1) and\nSUBSTITUTE(p1, t2, t1)",
-        "enabled": true
+        "enabled_apps": [{"app_id": 1, "app_name": "TwitterPg"}, {"app_id": 3, "app_name": "TwitterMySQL"}]
     },
     {
         "id": 101,
@@ -57,7 +57,7 @@ const defaultRulesData = [
         "constraints": "",
         "rewrite": "<x>",
         "actions": "",
-        "enabled": true
+        "enabled_apps": [{"app_id": 3, "app_name": "TwitterMySQL"}]
     },
     {
         "id": 102,
@@ -67,7 +67,7 @@ const defaultRulesData = [
         "constraints": "TYPE(x)=STRING",
         "rewrite": "<x> = <y>",
         "actions": "",
-        "enabled": true
+        "enabled_apps": [{"app_id": 3, "app_name": "TwitterMySQL"}]
     }
 ];
 

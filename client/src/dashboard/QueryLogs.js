@@ -12,6 +12,7 @@ import defaultQueriesData from '../mock-api/listQueries';
 import QueryRewritingPath from './QueryRewritingPath';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { vs } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import {userContext} from '../userContext';
 
 
 export default function QueryLogs() {
@@ -21,10 +22,12 @@ export default function QueryLogs() {
   const [, updateState] = React.useState();
   const forceUpdate = React.useCallback(() => updateState({}), []);
 
+  const user = React.useContext(userContext);
+
   // initial loading queries from server
   const listQueries = (_page) => {
     // post listQueries request to server
-    axios.post('/listQueries', {page: _page})
+    axios.post('/listQueries', {page: _page, 'user_id': user.id})
       .then(function (response) {
         console.log('[/listQueries] -> response:');
         console.log(response);
@@ -57,8 +60,9 @@ export default function QueryLogs() {
           <TableHead>
             <TableRow>
               <TableCell>ID</TableCell>
+              <TableCell>App</TableCell>
               <TableCell>Timestamp</TableCell>
-              <TableCell>Boosted</TableCell>
+              <TableCell>Rewritten</TableCell>
               <TableCell>Before Latency(s)</TableCell>
               <TableCell>After Latency(s)</TableCell>
               <TableCell>SQL</TableCell>
@@ -70,6 +74,7 @@ export default function QueryLogs() {
             {queries.map((query) => (
               <TableRow key={query.id} onClick={() => selectQuery(query)}>
                 <TableCell>{query.id}</TableCell>
+                <TableCell>{query.app_name}</TableCell>
                 <TableCell>{query.timestamp}</TableCell>
                 <TableCell>{query.boosted}</TableCell>
                 <TableCell>{query.before_latency/1000}</TableCell>

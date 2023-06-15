@@ -11,7 +11,8 @@ from core.query_rewriter import QueryRewriter
 from core.data_manager import DataManager
 from core.rule_generator import RuleGenerator
 from core.rule_manager import RuleManager
-from core.query_logger import QueryLogger
+from core.query_manager import QueryManager
+from core.app_manager import AppManager
 
 PORT = 8000
 DIRECTORY = "static"
@@ -20,7 +21,8 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
 
     dm = DataManager()
     rm = RuleManager(dm)
-    ql = QueryLogger(dm)
+    qm = QueryManager(dm)
+    am = AppManager(dm)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=DIRECTORY, **kwargs)
@@ -51,21 +53,24 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             log_text += "\n    Original query"
             log_text += "\n--------------------------------------------------"
             log_text += "\n appguid: " + appguid
+            log_text += "\n guid: " + guid
+            log_text += "\n db: " + database
             log_text += "\n" + QueryRewriter.beautify(original_query)
             log_text += "\n--------------------------------------------------"
             logging.info(log_text)
-            rules = self.rm.fetch_enabled_rules(database)
+            rules = self.rm.fetch_enabled_rules(appguid)
             rewritten_query, rewriting_path = QueryRewriter.rewrite(original_query, rules)
             rewritten_query = QueryPatcher.patch(rewritten_query, database)
             for rewriting in rewriting_path:
                 rewriting[1] = QueryPatcher.patch(rewriting[1], database)
-            self.ql.log_query(appguid, guid, QueryPatcher.patch(QueryRewriter.reformat(original_query), database), rewritten_query, rewriting_path)
+            self.qm.log_query(appguid, guid, QueryPatcher.patch(QueryRewriter.reformat(original_query), database), rewritten_query, rewriting_path)
             log_text = ""
             log_text += "\n=================================================="
             log_text += "\n    Rewritten query"
             log_text += "\n--------------------------------------------------"
             log_text += "\n appguid: " + appguid
             log_text += "\n guid: " + guid
+            log_text += "\n db: " + database
             log_text += "\n" + QueryRewriter.beautify(rewritten_query)
             log_text += "\n--------------------------------------------------"
             logging.info(log_text)
@@ -83,10 +88,11 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             log_text += "\n--------------------------------------------------"
             log_text += "\n appguid: " + appguid
             log_text += "\n guid: " + guid
+            log_text += "\n db: " + database
             log_text += "\n query_time_ms: " + str(query_time_ms)
             log_text += "\n--------------------------------------------------"
             logging.info(log_text)
-            self.ql.report_query(appguid, guid, query_time_ms)
+            self.qm.report_query(appguid, guid, query_time_ms)
             self.send_response(200)
             self.end_headers()
             response = BytesIO()
@@ -102,7 +108,10 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         logging.info("\n[/listRules] request:")
         logging.info(request)
 
-        rules_json = self.rm.list_rules()
+        request = json.loads(request, strict=False)
+        user_id = request['user_id']
+
+        rules_json = self.rm.list_rules(user_id)
 
         self.send_response(200)
         self.end_headers()
@@ -110,18 +119,41 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         response.write(json.dumps(rules_json).encode('utf-8'))
         self.wfile.write(response.getvalue())
 
-    def post_switch_rule(self):
+    def post_enable_rule(self):
         content_length = int(self.headers['Content-Length'])
         body = self.rfile.read(content_length)
         request = body.decode('utf-8')
 
         # logging
-        logging.info("\n[/switcheRule] request:")
+        logging.info("\n[/enableRule] request:")
         logging.info(request)
 
-        # enable/disable rule to data manager
-        rule = json.loads(request)
-        success = self.dm.switch_rule(rule['id'], rule['enabled'])
+        # enable rule for the given app to data manager
+        request = json.loads(request, strict=False)
+        rule = request['rule']
+        app = request['app']
+        success = self.dm.enable_rule(rule['id'], app['id'], app['name'])
+
+        self.send_response(200)
+        self.end_headers()
+        response = BytesIO()
+        response.write(str(success).encode('utf-8'))
+        self.wfile.write(response.getvalue())
+    
+    def post_disable_rule(self):
+        content_length = int(self.headers['Content-Length'])
+        body = self.rfile.read(content_length)
+        request = body.decode('utf-8')
+
+        # logging
+        logging.info("\n[/disableRule] request:")
+        logging.info(request)
+
+        # enable rule for the given app to data manager
+        request = json.loads(request, strict=False)
+        rule = request['rule']
+        app = request['app']
+        success = self.dm.disable_rule(rule['id'], app['id'], app['name'])
 
         self.send_response(200)
         self.end_headers()
@@ -139,8 +171,10 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         logging.info(request)
 
         # add rule to rule manager
-        rule = json.loads(request)
-        success = self.rm.add_rule(rule)
+        request = json.loads(request, strict=False)
+        rule = request['rule']
+        user_id = request['user_id']
+        success = self.rm.add_rule(rule, user_id)
 
         self.send_response(200)
         self.end_headers()
@@ -176,7 +210,10 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         logging.info("\n[/listQueries] request:")
         logging.info(request)
 
-        queries_json = self.ql.list_queries()
+        request = json.loads(request, strict=False)
+        user_id = request['user_id']
+
+        queries_json = self.qm.list_queries(user_id)
 
         self.send_response(200)
         self.end_headers()
@@ -195,7 +232,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
 
         # fetch rewriting path from query logger
         query_id = json.loads(request)["queryId"]
-        rewriting_path_json = self.ql.rewriting_path(query_id)
+        rewriting_path_json = self.qm.rewriting_path(query_id)
 
         self.send_response(200)
         self.end_headers()
@@ -353,14 +390,36 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         response = BytesIO()
         response.write(json.dumps(recommend_rules_json).encode('utf-8'))
         self.wfile.write(response.getvalue())
+    
+    def post_list_applications(self):
+        content_length = int(self.headers['Content-Length'])
+        body = self.rfile.read(content_length)
+        request = body.decode('utf-8')
+
+        # logging
+        logging.info("\n[/listApplications] request:")
+        logging.info(request)
+
+        request = json.loads(request, strict=False)
+        user_id = request['user_id']
+
+        applications_json = self.am.list_applications(user_id)
+
+        self.send_response(200)
+        self.end_headers()
+        response = BytesIO()
+        response.write(json.dumps(applications_json).encode('utf-8'))
+        self.wfile.write(response.getvalue())
 
     def do_POST(self):
         if self.path == "/":
             self.post_query()
         elif self.path == "/listRules":
             self.post_list_rules()
-        elif self.path == "/switchRule":
-            self.post_switch_rule()
+        elif self.path == "/enableRule":
+            self.post_enable_rule()
+        elif self.path == "/disableRule":
+            self.post_disable_rule()
         elif self.path == "/listQueries":
             self.post_list_queries()
         elif self.path == "/rewritingPath":
@@ -379,6 +438,8 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.post_add_rule()
         elif self.path == "/deleteRule":
             self.post_delete_rule()
+        elif self.path == "/listApplications":
+            self.post_list_applications()
 
 
 if __name__ == '__main__':

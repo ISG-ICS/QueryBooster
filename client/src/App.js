@@ -1,9 +1,15 @@
+import React from 'react';
 import logo from './logo.svg';
 import './App.css';
 import Dashboard from './dashboard/Dashboard';
+// user context
+import {userContext} from './userContext';
 
 function App() {
   document.title = 'QueryBooster';
+  
+  const [user, setUser] = React.useState({"id": 1, "email": "alice@ics.uci.edu"});
+
   return (
     <div className="App">
       {/* <header className="App-header">
@@ -20,7 +26,9 @@ function App() {
           Learn React
         </a>
       </header> */}
-      <Dashboard />
+      <userContext.Provider value={user}>
+        <Dashboard />
+      </userContext.Provider>
     </div>
   );
 }

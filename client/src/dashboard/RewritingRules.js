@@ -10,13 +10,14 @@ import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
-import Switch from '@mui/material/Switch';
 import Title from './Title';
 import defaultRulesData from '../mock-api/listRules';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { vs } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import { Box } from '@mui/material';
 import AddRewritingRule from './AddRewritingRule';
+import AppTagCell from './ApplicationTag';
+import {userContext} from '../userContext';
 
 
 export default function RewrittingRules() {
@@ -26,10 +27,14 @@ export default function RewrittingRules() {
   const [, updateState] = React.useState();
   const forceUpdate = React.useCallback(() => updateState({}), []);
 
+  const user = React.useContext(userContext);
+
   // initial loading rules from server
   const listRules = () => {
+    console.log('[/listRules] -> request:');
+    console.log('  user_id: ' + user.id);
     // post listRules request to server
-    axios.post('/listRules', {})
+    axios.post('/listRules', {'user_id': user.id})
       .then(function (response) {
         console.log('[/listRules] -> response:');
         console.log(response);
@@ -119,7 +124,7 @@ export default function RewrittingRules() {
               <TableCell>Name</TableCell>
               <TableCell>Pattern</TableCell>
               <TableCell>Rewrite</TableCell>
-              <TableCell align="right">Enabled</TableCell>
+              <TableCell align="right">Enabled Apps</TableCell>
               <TableCell align="center">Delete</TableCell>
             </TableRow>
           </TableHead>
@@ -139,10 +144,11 @@ export default function RewrittingRules() {
                   </SyntaxHighlighter>
                 </TableCell>
                 <TableCell align="right">
-                  <Switch
+                  {/* <Switch
                     checked={rule.enabled}
                     onChange={(event) => handleChange(event, rule)}
-                    inputProps={{ 'aria-label': 'controlled' }} />
+                    inputProps={{ 'aria-label': 'controlled' }} /> */}
+                  <AppTagCell ruleId={rule.id} tags={rule.enabled_apps} />
                 </TableCell>
                 <TableCell align="center">
                   <Button variant="outlined" color="error" onClick={() => handleDelete(rule)} >Delete</Button>

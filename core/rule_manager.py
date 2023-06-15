@@ -20,18 +20,18 @@ class RuleManager:
     def __del__(self):
         del self.dm
 
-    def add_rule(self, rule: dict) -> bool:
+    def add_rule(self, rule: dict, user_id: int) -> bool:
         rule['key'] = '_'.join([word.lower() for word in str(rule['name']).split(' ')])
         rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
         rule['constraints_json'] = RuleParser.parse_constraints(rule['constraints'], rule['mapping'])
         rule['actions_json'] = RuleParser.parse_actions(rule['actions'], rule['mapping'])
-        return self.dm.add_rule(rule)
+        return self.dm.add_rule(rule, user_id)
     
     def delete_rule(self, rule: dict) -> bool:
         return self.dm.delete_rule(rule)
     
-    def fetch_enabled_rules(self, database: str) -> list:
-        enabled_rules = self.dm.enabled_rules(database)
+    def fetch_enabled_rules(self, appguid: str) -> list:
+        enabled_rules = self.dm.enabled_rules(appguid)
         res = []
         for enabled_rule in enabled_rules:
             res.append({
@@ -45,20 +45,38 @@ class RuleManager:
             })
         return res
     
-    def list_rules(self) -> list:
-        rules = self.dm.list_rules()
-        res = []
+    def list_rules(self, userid: int) -> list:
+        rules = self.dm.list_rules(userid)
+        # group the rule together and 
+        # list its enabled applications
+        rule_applications = {}
         for rule in rules:
-            res.append({
-                'id': rule[0],
-                'key': rule[1],
-                'name': rule[2],
-                'pattern': rule[3],
-                'constraints': rule[4],
-                'rewrite': rule[5],
-                'actions': rule[6],
-                'enabled': True if rule[7] == 1 else False
-            })
+            rule_id = rule[0]
+            application_id = rule[7]
+            application_name = rule[8]
+            if application_id is not None:
+                if rule_id in rule_applications:
+                    rule_applications[rule_id].append({"app_id": application_id, "app_name": application_name})
+                else:
+                    rule_applications[rule_id] = [{"app_id": application_id, "app_name": application_name}]
+            else:
+                rule_applications[rule_id] = None
+        res = []
+        visited_rule_ids = []
+        for rule in rules:
+            if rule[0] not in visited_rule_ids:
+                res.append({
+                    'id': rule[0],
+                    'key': rule[1],
+                    'name': rule[2],
+                    'pattern': rule[3],
+                    'constraints': rule[4],
+                    'rewrite': rule[5],
+                    'actions': rule[6],
+                    'enabled_apps': rule_applications[rule[0]]
+                })
+                visited_rule_ids.append(rule[0])
+
         return res
         
     def transform_rule_graph(self, root_rule: dict) -> dict:

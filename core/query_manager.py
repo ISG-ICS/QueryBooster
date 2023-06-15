@@ -5,7 +5,7 @@ from core.data_manager import DataManager
 import json
 
 
-class QueryLogger:
+class QueryManager:
 
     def __init__(self, dm: DataManager) -> None:
         self.dm = dm
@@ -19,19 +19,20 @@ class QueryLogger:
     def report_query(self, appguid: str, guid: str, query_time_ms: int) -> None:
         self.dm.report_query(appguid, guid, query_time_ms)
 
-    def list_queries(self) -> list:
-        queries = self.dm.list_queries()
+    def list_queries(self, userid: int) -> list:
+        queries = self.dm.list_queries(userid)
         res = []
         for query in queries:
             res.append({
                 'id': query[0],
                 'timestamp': query[1],
-                'boosted': query[2],
+                'rewritten': query[2],
                 'before_latency': query[3],
                 'after_latency': query[4],
                 'sql': query[5],
                 'suggestion': query[6],
-                'suggested_latency': query[7]
+                'suggested_latency': query[7],
+                'app_name': query[8]
             })
         return res
     
