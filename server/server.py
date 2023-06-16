@@ -13,6 +13,7 @@ from core.rule_generator import RuleGenerator
 from core.rule_manager import RuleManager
 from core.query_manager import QueryManager
 from core.app_manager import AppManager
+from core.user_manager import UserManager
 
 PORT = 8000
 DIRECTORY = "static"
@@ -23,6 +24,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
     rm = RuleManager(dm)
     qm = QueryManager(dm)
     am = AppManager(dm)
+    um = UserManager(dm)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=DIRECTORY, **kwargs)
@@ -109,7 +111,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         logging.info(request)
 
         request = json.loads(request, strict=False)
-        user_id = request['user_id']
+        user_id = request['user_id'] if 'user_id' in request else None
 
         rules_json = self.rm.list_rules(user_id)
 
@@ -211,7 +213,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         logging.info(request)
 
         request = json.loads(request, strict=False)
-        user_id = request['user_id']
+        user_id = request['user_id'] if 'user_id' in request else None
 
         queries_json = self.qm.list_queries(user_id)
 
@@ -410,6 +412,25 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         response = BytesIO()
         response.write(json.dumps(applications_json).encode('utf-8'))
         self.wfile.write(response.getvalue())
+    
+    def post_create_user(self):
+        content_length = int(self.headers['Content-Length'])
+        body = self.rfile.read(content_length)
+        request = body.decode('utf-8')
+
+        # logging
+        logging.info("\n[/createUser] request:")
+        logging.info(request)
+
+        # add rule to rule manager
+        request = json.loads(request, strict=False)
+        success = self.um.create_user(request)
+
+        self.send_response(200)
+        self.end_headers()
+        response = BytesIO()
+        response.write(str(success).encode('utf-8'))
+        self.wfile.write(response.getvalue())
 
     def do_POST(self):
         if self.path == "/":
@@ -440,6 +461,8 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.post_delete_rule()
         elif self.path == "/listApplications":
             self.post_list_applications()
+        elif self.path == "/createUser":
+            self.post_create_user()
 
 
 if __name__ == '__main__':

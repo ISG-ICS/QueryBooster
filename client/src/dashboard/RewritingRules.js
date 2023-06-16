@@ -53,7 +53,7 @@ export default function RewrittingRules() {
   };
 
   // call listRules() only once after initial rendering
-  React.useEffect(() => {listRules()}, []);
+  React.useEffect(() => {listRules()}, [user]);
   
   // handle change on the switch of a rule
   const handleChange = (event, rule) => {

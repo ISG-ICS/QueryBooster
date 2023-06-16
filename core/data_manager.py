@@ -32,18 +32,19 @@ class DataManager:
         try:
             # create two users: Alice and Bob
             #
-            self.update_user({'id': 1, 'email': 'alice@ics.uci.edu'})
-            self.update_user({'id': 2, 'email': 'bob@cs.ucla.edu'})
-            # create one app for Alice
+            self.update_user({'id': '102153741508111367852', 'email': 'alice.vldb@gmail.com'})
+            self.update_user({'id': '110518596083203416821', 'email': 'bob.vldb@gmail.com'})
+            # create two apps for Alice
             #
-            self.update_application({'id': 1, 'name': 'TwitterPg', 'guid': 'Alice-Tableau-Twitter-Pg', 'user_id': 1})
+            self.update_application({'id': 1, 'name': 'TwitterPg', 'guid': 'Alice-Tableau-Twitter-Pg', 'user_id': '102153741508111367852'})
+            self.update_application({'id': 2, 'name': 'TwitterMySQL', 'guid': 'Alice-Tableau-Twitter-MySQL', 'user_id': '102153741508111367852'})
             # create one app for Bob
             #
-            self.update_application({'id': 2, 'name': 'TpchPg', 'guid': 'Bob-Tableau-Tpch-Pg', 'user_id': 2})
+            self.update_application({'id': 3, 'name': 'TpchPg', 'guid': 'Bob-Tableau-Tpch-Pg', 'user_id': '110518596083203416821'})
             # create one rule for Alice
             #
             rule = get_rule('remove_max_distinct')
-            rule['owner_id'] = 1
+            rule['user_id'] = '102153741508111367852'
             rule['pattern_json'] = json.dumps(rule['pattern_json'])
             rule['constraints_json'] = json.dumps(rule['constraints_json'])
             rule['rewrite_json'] = json.dumps(rule['rewrite_json'])
@@ -60,7 +61,7 @@ class DataManager:
         if self.db_conn:
             self.db_conn.close()
     
-    def list_rules(self, userid: int) -> List[Dict]:
+    def list_rules(self, user_id: str) -> List[Dict]:
         try:
             cur = self.db_conn.cursor()
             cur.execute('''SELECT rules.id, 
@@ -76,8 +77,8 @@ class DataManager:
                                       ON rules.id = enabled.rule_id
                                 LEFT OUTER JOIN applications
                                       ON enabled.application_id = applications.id
-                           WHERE rules.owner_id = ?
-                             AND applications.user_id = ?''', [userid, userid])
+                           WHERE rules.user_id = ?
+                             AND applications.user_id = ?''', [user_id, user_id])
             return cur.fetchall()
         except Error as e:
             print(e)
@@ -142,10 +143,10 @@ class DataManager:
     def update_rule(self, rule: dict) -> None:
         try:
             cur = self.db_conn.cursor()
-            cur.execute('''REPLACE INTO rules (id, key, name, pattern, constraints, rewrite, actions, owner_id) 
+            cur.execute('''REPLACE INTO rules (id, key, name, pattern, constraints, rewrite, actions, user_id) 
                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', 
                         [rule['id'], rule['key'], rule['name'], rule['pattern'], 
-                         rule['constraints'], rule['rewrite'], rule['actions'], rule['owner_id']
+                         rule['constraints'], rule['rewrite'], rule['actions'], rule['user_id']
                         ])
             cur.execute('''REPLACE INTO internal_rules (rule_id, pattern_json, constraints_json, rewrite_json, actions_json) VALUES (?, ?, ?, ?, ?)''', 
                         [rule['id'], rule['pattern_json'], rule['constraints_json'], rule['rewrite_json'], rule['actions_json']])
@@ -159,13 +160,13 @@ class DataManager:
             exc_type, exc_value, exc_tb = sys.exc_info()
             print(traceback.format_exception(exc_type, exc_value, exc_tb))
     
-    def add_rule(self, rule: dict, user_id: int) -> bool:
+    def add_rule(self, rule: dict, user_id: str) -> bool:
         try:
             cur = self.db_conn.cursor()
             cur.execute('''SELECT IFNULL(MAX(id), 0) + 1 FROM rules;''')
             rule['id'] = cur.fetchone()[0]
             
-            cur.execute('''INSERT INTO rules (id, key, name, pattern, constraints, rewrite, actions, owner_id) 
+            cur.execute('''INSERT INTO rules (id, key, name, pattern, constraints, rewrite, actions, user_id) 
                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', 
                         [rule['id'], rule['key'], rule['name'], rule['pattern'], 
                          rule['constraints'], rule['rewrite'], rule['actions'], user_id
@@ -221,7 +222,7 @@ class DataManager:
         except Error as e:
             print(e)
     
-    def list_queries(self, userid: int) -> List[Dict]:
+    def list_queries(self, user_id: str) -> List[Dict]:
         try:
             cur = self.db_conn.cursor()
             cur.execute('''SELECT id, 
@@ -234,7 +235,7 @@ class DataManager:
                                   suggested_latency,
                                   app_name
                            FROM query_log 
-                          WHERE user_id = ?''', [userid])
+                          WHERE user_id = ?''', [user_id])
             return cur.fetchall()
         except Error as e:
             print(e)
@@ -283,20 +284,28 @@ class DataManager:
             print('[Error] in update_application:')
             print(e)
     
-    def list_applications(self, userid: int) -> List[Dict]:
+    def list_applications(self, user_id: str) -> List[Dict]:
         try:
             cur = self.db_conn.cursor()
             cur.execute('''SELECT id,
                                   name
                            FROM applications
-                           WHERE applications.user_id = ?''', [userid])
+                           WHERE applications.user_id = ?''', [user_id])
             return cur.fetchall()
         except Error as e:
             print(e)
+    
+    def create_user(self, user: dict) -> bool:
+        try:
+            cur = self.db_conn.cursor()
+            cur.execute('''REPLACE INTO users (id, email) VALUES (?, ?)''', 
+                        [user['id'], user['email']])
+            self.db_conn.commit()
+            return True
+        except Error as e:
+            print(e)
+            return False
 
 
 if __name__ == '__main__':
     dm = DataManager()
-    print(dm.list_rules())
-    print(dm.enabled_rules('postgresql'))
-    print(dm.enabled_rules('mysql'))

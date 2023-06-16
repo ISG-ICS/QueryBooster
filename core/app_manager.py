@@ -12,8 +12,8 @@ class AppManager:
     def __del__(self):
         del self.dm
 
-    def list_applications(self, userid: int) -> list:
-        applications = self.dm.list_applications(userid)
+    def list_applications(self, user_id: str) -> list:
+        applications = self.dm.list_applications(user_id)
         res = []
         for app in applications:
             res.append({

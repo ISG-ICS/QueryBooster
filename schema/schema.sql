@@ -6,9 +6,9 @@ CREATE TABLE IF NOT EXISTS rules(
     constraints TEXT,
     rewrite TEXT,
     actions TEXT,
-    owner_id INTEGER,
+    user_id TEXT,
     CONSTRAINT fk_rules
-        FOREIGN KEY (owner_id)
+        FOREIGN KEY (user_id)
         REFERENCES users(id)
 );
 
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS internal_rules(
 );
 
 CREATE TABLE IF NOT EXISTS users(
-    id INTEGER PRIMARY KEY,
+    id TEXT PRIMARY KEY,
     email TEXT
 );
 
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS applications(
     id INTEGER PRIMARY KEY,
     name TEXT,
     guid TEXT,
-    user_id INTEGER,
+    user_id TEXT,
     CONSTRAINT fk_users
         FOREIGN KEY (user_id) 
         REFERENCES users(id) 

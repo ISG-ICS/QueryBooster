@@ -19,8 +19,8 @@ class QueryManager:
     def report_query(self, appguid: str, guid: str, query_time_ms: int) -> None:
         self.dm.report_query(appguid, guid, query_time_ms)
 
-    def list_queries(self, userid: int) -> list:
-        queries = self.dm.list_queries(userid)
+    def list_queries(self, user_id: str) -> list:
+        queries = self.dm.list_queries(user_id)
         res = []
         for query in queries:
             res.append({

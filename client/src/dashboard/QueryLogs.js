@@ -44,7 +44,7 @@ export default function QueryLogs() {
   };
 
   // call listQueries() only once after initial rendering
-  React.useEffect(() => {listQueries(0)}, []);
+  React.useEffect(() => {listQueries(0)}, [user]);
   
   // handle click on a query
   const selectQuery = (query) => {

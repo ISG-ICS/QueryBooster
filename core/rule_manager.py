@@ -20,7 +20,7 @@ class RuleManager:
     def __del__(self):
         del self.dm
 
-    def add_rule(self, rule: dict, user_id: int) -> bool:
+    def add_rule(self, rule: dict, user_id: str) -> bool:
         rule['key'] = '_'.join([word.lower() for word in str(rule['name']).split(' ')])
         rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
         rule['constraints_json'] = RuleParser.parse_constraints(rule['constraints'], rule['mapping'])
@@ -45,8 +45,8 @@ class RuleManager:
             })
         return res
     
-    def list_rules(self, userid: int) -> list:
-        rules = self.dm.list_rules(userid)
+    def list_rules(self, user_id: str) -> list:
+        rules = self.dm.list_rules(user_id)
         # group the rule together and 
         # list its enabled applications
         rule_applications = {}
