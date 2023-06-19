@@ -10,7 +10,7 @@ WHERE  CAST(DATE_TRUNC('QUARTER',
             (TIMESTAMP '2017-01-01 00:00:00.000'), 
             (TIMESTAMP '2017-04-01 00:00:00.000'))
 AND  (STRPOS(text, 'iphone') > 0)
-GROUP  BY 2;`,
+GROUP  BY 2`,
     "rewritings":
     [
         {
@@ -25,7 +25,7 @@ WHERE  DATE_TRUNC('QUARTER', created_at)
             (TIMESTAMP '2017-01-01 00:00:00.000'), 
             (TIMESTAMP '2017-04-01 00:00:00.000'))
 AND  (STRPOS(text, 'iphone') > 0)
-GROUP  BY 2;`
+GROUP  BY 2`
         },
         {
             "seq": 2,
@@ -39,7 +39,7 @@ WHERE  DATE_TRUNC('QUARTER', created_at)
            (TIMESTAMP '2017-01-01 00:00:00.000'), 
            (TIMESTAMP '2017-04-01 00:00:00.000'))
 AND  text ILIKE '%iphone%'
-GROUP  BY 2;`
+GROUP  BY 2`
         }
     ]
 };

@@ -1,5 +1,6 @@
 import * as React from 'react';
 import axios from 'axios';
+import Link from '@mui/material/Link';
 import NiceModal from '@ebay/nice-modal-react';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -10,6 +11,7 @@ import TableRow from '@mui/material/TableRow';
 import Title from './Title';
 import defaultQueriesData from '../mock-api/listQueries';
 import QueryRewritingPath from './QueryRewritingPath';
+import QuerySuggestionRewritingPath from './QuerySuggestionRewritingPath';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { vs } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import {userContext} from '../userContext';
@@ -46,10 +48,16 @@ export default function QueryLogs() {
   // call listQueries() only once after initial rendering
   React.useEffect(() => {listQueries(0)}, [user]);
   
-  // handle click on a query
-  const selectQuery = (query) => {
+  // show a query's rewriting path
+  const showQueryRewritingPath = (query) => {
     console.log(query);
     NiceModal.show(QueryRewritingPath, {queryId: query.id});
+  };
+
+  // show a query's suggestion rewriting path
+  const showQuerySuggestionRewritingPath = (query) => {
+    console.log(query);
+    NiceModal.show(QuerySuggestionRewritingPath, {queryId: query.id});
   };
 
   return (
@@ -72,11 +80,21 @@ export default function QueryLogs() {
           </TableHead>
           <TableBody>
             {queries.map((query) => (
-              <TableRow key={query.id} onClick={() => selectQuery(query)}>
+              <TableRow key={query.id} >
                 <TableCell>{query.id}</TableCell>
                 <TableCell>{query.app_name}</TableCell>
                 <TableCell>{query.timestamp}</TableCell>
-                <TableCell>{query.boosted}</TableCell>
+                <TableCell>
+                  {query.rewritten == 'YES' ? (
+                    <Link component="button"
+                          onClick={() => showQueryRewritingPath(query)}
+                    >
+                      {query.rewritten}
+                    </Link>
+                  ) : (
+                    <div>{query.rewritten}</div>
+                  )}
+                </TableCell>
                 <TableCell>{query.before_latency/1000}</TableCell>
                 <TableCell>{query.after_latency/1000}</TableCell>
                 <TableCell>
@@ -84,7 +102,17 @@ export default function QueryLogs() {
                     {query.sql}
                   </SyntaxHighlighter>
                 </TableCell>
-                <TableCell>{query.suggestion}</TableCell>
+                <TableCell>
+                  {query.suggestion == 'YES' ? (
+                    <Link component="button"
+                          onClick={() => showQuerySuggestionRewritingPath(query)}
+                    >
+                      {query.suggestion}
+                    </Link>
+                  ) : (
+                    <div>{query.suggestion}</div>
+                  )}
+                </TableCell>
                 <TableCell>{query.suggested_latency/1000}</TableCell>
               </TableRow>
             ))}
