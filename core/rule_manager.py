@@ -44,6 +44,21 @@ class RuleManager:
                 'actions_json': json.loads(enabled_rule[6])
             })
         return res
+
+    def fetch_all_rules(self) -> list:
+        rules = self.dm.all_rules()
+        res = []
+        for rule in rules:
+            res.append({
+                'id': rule[0],
+                'key': rule[1],
+                'name': rule[2],
+                'pattern_json': json.loads(rule[3]),
+                'constraints_json': json.loads(rule[4]),
+                'rewrite_json': json.loads(rule[5]),
+                'actions_json': json.loads(rule[6])
+            })
+        return res
     
     def list_rules(self, user_id: str) -> list:
         rules = self.dm.list_rules(user_id)

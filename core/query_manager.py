@@ -50,3 +50,32 @@ class QueryManager:
                 "rewritten_sql": rewriting[2]
             })
         return res
+    
+    def suggestion_rewriting_path(self, query_id: str) -> dict:
+        original_sql = self.dm.get_original_sql(query_id)
+        res = {
+            "original_sql": original_sql,
+            "rewritings":[]
+        }
+        rewritings = self.dm.list_suggestion_rewritings(query_id)
+        for rewriting in rewritings:
+            res["rewritings"].append({
+                "seq": rewriting[0],
+                "rule": rewriting[1],
+                "rule_id":  rewriting[2],
+                "rule_user_id": rewriting[3],
+                "rule_user_email": rewriting[4],
+                "rewritten_sql": rewriting[5]
+            })
+        return res
+
+    def fetch_query(self, guid: str) -> dict:
+        query = self.dm.fetch_query(guid)
+        return {
+            'id': query[0],
+            'rewritten': query[1],
+            'sql': query[2]
+        }
+    
+    def log_query_suggestion(self, query_id: str, rewritten_query: str, rewriting_path: list) -> None:
+        self.dm.log_query_suggestion(query_id, rewritten_query, rewriting_path)

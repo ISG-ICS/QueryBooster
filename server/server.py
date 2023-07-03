@@ -4,6 +4,7 @@ sys.path.append("..")
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 import json
 import logging
+import threading
 from io import BytesIO
 from core.profiler import Profiler
 from core.query_patcher import QueryPatcher
@@ -90,11 +91,15 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             log_text += "\n--------------------------------------------------"
             log_text += "\n appguid: " + appguid
             log_text += "\n guid: " + guid
-            log_text += "\n db: " + database
             log_text += "\n query_time_ms: " + str(query_time_ms)
             log_text += "\n--------------------------------------------------"
             logging.info(log_text)
             self.qm.report_query(appguid, guid, query_time_ms)
+            
+            # start a background thread to suggest rewritings for this query
+            #
+            threading.Thread(target=self.background_suggest_rewritings, name='Background Suggest Rewritings', args=[guid]).start()
+            
             self.send_response(200)
             self.end_headers()
             response = BytesIO()
@@ -232,7 +237,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         logging.info("\n[/rewritingPath] request:")
         logging.info(request)
 
-        # fetch rewriting path from query logger
+        # fetch rewriting path from query manager
         query_id = json.loads(request)["queryId"]
         rewriting_path_json = self.qm.rewriting_path(query_id)
 
@@ -432,6 +437,70 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         response.write(str(success).encode('utf-8'))
         self.wfile.write(response.getvalue())
 
+    def post_suggestion_rewriting_path(self):
+        content_length = int(self.headers['Content-Length'])
+        body = self.rfile.read(content_length)
+        request = body.decode('utf-8')
+
+        # logging
+        logging.info("\n[/suggestionRewritingPath] request:")
+        logging.info(request)
+
+        # fetch suggestion rewriting path from query manager
+        query_id = json.loads(request)["queryId"]
+        suggestion_rewriting_path_json = self.qm.suggestion_rewriting_path(query_id)
+
+        self.send_response(200)
+        self.end_headers()
+        response = BytesIO()
+        response.write(json.dumps(suggestion_rewriting_path_json).encode('utf-8'))
+        self.wfile.write(response.getvalue())
+    
+    def background_suggest_rewritings(self, guid: str) -> None:
+
+        _dm = DataManager(init=False)
+        _qm = QueryManager(_dm)
+        _rm = RuleManager(_dm)
+
+        log_text = ""
+        log_text += "\n=================================================="
+        log_text += "\n   Background suggest rewritings [Started]"
+        log_text += "\n--------------------------------------------------"
+        log_text += "\n guid: " + guid
+        logging.info(log_text)
+
+        # fetch the query with the given guid
+        query = _qm.fetch_query(guid)
+        if query['rewritten'] == 'NO':
+            # suggest rewritings for the query
+            original_query = query['sql']
+            log_text = ""
+            log_text += "\n--------------------------------------------------"
+            log_text += "\n    Original query"
+            log_text += "\n--------------------------------------------------"
+            log_text += "\n" + QueryRewriter.beautify(original_query)
+            logging.info(log_text)
+            # fetch all rules
+            rules = _rm.fetch_all_rules()
+            rewritten_query, rewriting_path = QueryRewriter.rewrite(original_query, rules)
+            rewritten_query = QueryPatcher.patch(rewritten_query)
+            for rewriting in rewriting_path:
+                rewriting[1] = QueryPatcher.patch(rewriting[1])
+            self.qm.log_query_suggestion(query['id'], rewritten_query, rewriting_path)
+            log_text = ""
+            log_text += "\n--------------------------------------------------"
+            log_text += "\n    Rewritten query"
+            log_text += "\n--------------------------------------------------"
+            log_text += "\n" + QueryRewriter.beautify(rewritten_query)
+            log_text += "\n--------------------------------------------------"
+            logging.info(log_text)
+        
+        log_text += "\n--------------------------------------------------"
+        log_text += "\n   Background suggest rewritings [Ended]"
+        log_text += "\n--------------------------------------------------"
+
+        return None
+
     def do_POST(self):
         if self.path == "/":
             self.post_query()
@@ -463,6 +532,8 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.post_list_applications()
         elif self.path == "/createUser":
             self.post_create_user()
+        elif self.path == "/suggestionRewritingPath":
+            self.post_suggestion_rewriting_path()
 
 
 if __name__ == '__main__':

@@ -6,7 +6,7 @@ class QueryPatcher:
     # Patch the SQL query based on specific database
     #
     @staticmethod
-    def patch(sql: str, database: str) -> str:
+    def patch(sql: str, database: str='postgresql') -> str:
         if database == 'postgresql':
             sql = QueryPatcher.patch_ilike(sql)
             sql = QueryPatcher.patch_timestamp(sql)

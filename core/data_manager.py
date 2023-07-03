@@ -12,11 +12,12 @@ from data.rules import get_rule
 
 class DataManager:
 
-    def __init__(self) -> None:
+    def __init__(self, init=True) -> None:
         db_path = Path(__file__).parent / "../"
         self.db_conn = sqlite3.connect(db_path / 'querybooster.db')
-        self.__init_schema()
-        self.__init_data()
+        if init:
+            self.__init_schema()
+            self.__init_data()
     
     def __init_schema(self) -> None:
         try:
@@ -86,6 +87,25 @@ class DataManager:
     def enabled_rules(self, appguid: str) -> List[Dict]:
         try:
             cur = self.db_conn.cursor()
+            cur.execute('''SELECT rules.id, 
+                                  rules.key, 
+                                  rules.name, 
+                                  internal_rules.pattern_json,
+                                  internal_rules.constraints_json,
+                                  internal_rules.rewrite_json,
+                                  internal_rules.actions_json
+                           FROM rules JOIN enabled ON rules.id = enabled.rule_id
+                                      JOIN applications ON enabled.application_id = applications.id
+                                      LEFT JOIN internal_rules ON rules.id = internal_rules.rule_id 
+                           WHERE applications.guid = ? 
+                           ORDER BY rules.id''', [appguid])
+            return cur.fetchall()
+        except Error as e:
+            print(e)
+    
+    def all_rules(self) -> List[Dict]:
+        try:
+            cur = self.db_conn.cursor()
             cur.execute('''SELECT id, 
                                   key, 
                                   name, 
@@ -93,11 +113,8 @@ class DataManager:
                                   constraints_json,
                                   rewrite_json,
                                   actions_json
-                           FROM rules JOIN enabled ON rules.id = enabled.rule_id
-                                      JOIN applications ON enabled.application_id = applications.id
-                                      LEFT JOIN internal_rules ON rules.id = internal_rules.rule_id 
-                           WHERE applications.guid = ? 
-                           ORDER BY rules.id''', [appguid])
+                           FROM rules LEFT JOIN internal_rules ON rules.id = internal_rules.rule_id 
+                           ORDER BY rules.id''', [])
             return cur.fetchall()
         except Error as e:
             print(e)
@@ -197,7 +214,7 @@ class DataManager:
             cur.execute('''SELECT IFNULL(MAX(id), 0) + 1 FROM queries;''')
             query_id = cur.fetchone()[0]
 
-            cur.execute('''INSERT INTO queries (id, timestamp, appguid, guid, query_time_ms, original_sql, rewritten_sql) 
+            cur.execute('''INSERT INTO queries (id, timestamp, appguid, guid, query_time_ms, original_sql, sql) 
                                        VALUES (?, ?, ?, ?, ?, ?, ?)''', 
                         [query_id, datetime.datetime.now(), appguid, guid, -1000, original_query, rewritten_query])
             seq = 1
@@ -262,6 +279,23 @@ class DataManager:
         except Error as e:
             print(e)
     
+    def list_suggestion_rewritings(self, query_id: int) -> List[Dict]:
+        try:
+            cur = self.db_conn.cursor()
+            cur.execute('''SELECT seq, 
+                                  rules.name, 
+                                  rules.id,
+                                  rules.user_id,
+                                  users.email,
+                                  rewritten_sql
+                           FROM suggestion_rewriting_paths
+                                LEFT JOIN rules ON rules.id = suggestion_rewriting_paths.rule_id
+                                JOIN users on rules.user_id = users.id
+                           WHERE query_id = ?''', [query_id])
+            return cur.fetchall()
+        except Error as e:
+            print(e)
+    
     def update_user(self, user: dict) -> None:
         try:
             cur = self.db_conn.cursor()
@@ -305,6 +339,35 @@ class DataManager:
         except Error as e:
             print(e)
             return False
+    
+    def fetch_query(self, guid: str) -> dict:
+        try:
+            cur = self.db_conn.cursor()
+            cur.execute('''SELECT query_log.id, 
+                                  query_log.rewritten,
+                                  query_log.sql
+                           FROM query_log JOIN queries ON query_log.id = queries.id
+                          WHERE queries.guid = ?''', [guid])
+            return cur.fetchall()[0]
+        except Error as e:
+            print(e)
+    
+    def log_query_suggestion(self, query_id: int, rewritten_query: str, rewriting_path: list) -> None:
+        try:
+            cur = self.db_conn.cursor()
+            # TODO - estimate the query_time_ms for suggested rewritten_sql
+            cur.execute('''INSERT INTO suggestions (query_id, query_time_ms, rewritten_sql) 
+                                       VALUES (?, ?, ?)''', 
+                        [query_id, -1000, rewritten_query])
+            seq = 1
+            for rewriting in rewriting_path:
+                cur.execute('''INSERT INTO suggestion_rewriting_paths (query_id, seq, rule_id, rewritten_sql)
+                                           VALUES (?, ?, ?, ?)''', 
+                            [query_id, seq, rewriting[0], rewriting[1]])
+                seq += 1
+            self.db_conn.commit()
+        except Error as e:
+            print(e)
 
 
 if __name__ == '__main__':
