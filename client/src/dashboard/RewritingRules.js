@@ -106,7 +106,7 @@ export default function RewrittingRules() {
 
   // handle click on add rewriting rule button
   const addRewritingRule = () => {
-    NiceModal.show(AddRewritingRule)
+    NiceModal.show(AddRewritingRule, {user_id: user.id})
     .then((res) => {
       console.log(res);
       listRules();

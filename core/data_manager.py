@@ -78,8 +78,7 @@ class DataManager:
                                       ON rules.id = enabled.rule_id
                                 LEFT OUTER JOIN applications
                                       ON enabled.application_id = applications.id
-                           WHERE rules.user_id = ?
-                             AND applications.user_id = ?''', [user_id, user_id])
+                           WHERE rules.user_id = ?''', [user_id])
             return cur.fetchall()
         except Error as e:
             print(e)

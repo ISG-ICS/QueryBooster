@@ -75,7 +75,7 @@ class RuleManager:
                 else:
                     rule_applications[rule_id] = [{"app_id": application_id, "app_name": application_name}]
             else:
-                rule_applications[rule_id] = None
+                rule_applications[rule_id] = []
         res = []
         visited_rule_ids = []
         for rule in rules:

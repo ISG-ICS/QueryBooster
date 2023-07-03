@@ -14,16 +14,13 @@ import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import defaultRecommendRuleData from '../mock-api/recommendRule';
 import defaultRulesData from '../mock-api/listRules';
-import databaseOptions from '../constants/databaseOptions';
 import { FormLabel } from '@mui/material';
-import MenuItem from '@mui/material/MenuItem';
 import RuleGraph from './RuleGraph';
 
-const AddRewritingRule = NiceModal.create(() => {
+const AddRewritingRule = NiceModal.create(({user_id}) => {
   const modal = useModal();
   // Set up states for a rewriting rule
   const [name, setName] = React.useState("");
-  const [database, setDatabase] = React.useState("postgresql");
   const [pattern, setPattern] = React.useState("");
   const [constraints, setConstraints] = React.useState("");
   const [rewrite, setRewrite] = React.useState("");
@@ -34,10 +31,6 @@ const AddRewritingRule = NiceModal.create(() => {
 
   const onNameChange = (event) => {
     setName(event.target.value);
-  };
-
-  const onDatabaseChange = (event) => {
-    setDatabase(event.target.value);
   };
 
   const onPatternChange = (event) => {
@@ -89,16 +82,19 @@ const AddRewritingRule = NiceModal.create(() => {
   const onAdd = () => {
     if (pattern != "" && rewrite != "") {
       // post addRule request to server
-      axios.post('/addRule', 
-        {
+      const request = { 
+        'rule': {
           'name': name, 
           'pattern': pattern, 
           'constraints': constraints, 
           'rewrite': rewrite, 
-          'actions': actions, 
-          'database': database
-        }
-      )
+          'actions': actions
+        },
+        'user_id': user_id
+      };
+      console.log('[/addRule] -> request:');
+      console.log(request);
+      axios.post('/addRule', request)
       .then(function (response) {
         console.log('[/addRule] -> response:');
         console.log(response);
@@ -118,7 +114,7 @@ const AddRewritingRule = NiceModal.create(() => {
             "constraints": "IS(y)=CONSTANT and\nTYPE(y)=STRING",
             "rewrite": "<x> ILIKE '%<y>%'",
             "actions": "",
-            "enabled": false
+            "enabled_apps": []
           }
         );
         modal.resolve(error);
@@ -156,42 +152,30 @@ const AddRewritingRule = NiceModal.create(() => {
                   <Box width="100%"/>
                 </Grid>
                 <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
-                  <Grid container justifyContent="center" spacing={2}>
-                    <Grid item xs={8} sm={8} md={8} lg={8} xl={8}>
-                      <TextField required id="name" label="Name" fullWidth value={name} onChange={onNameChange} />
-                    </Grid>
-                    <Grid item xs={4} sm={4} md={4} lg={4} xl={4}>
-                      <TextField required select id="database" label="Database" fullWidth value={database} onChange={onDatabaseChange} >
-                        {databaseOptions.map((option) => (
-                          <MenuItem key={option.value} value={option.value}>
-                            {option.label}
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                    </Grid>
-                  </Grid>
-                </Grid>
-                <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
-                  <Box width="100%"/>
+                  <TextField required id="name" label="Name" fullWidth value={name} onChange={onNameChange} />
                 </Grid>
                 <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
                   <Grid container justifyContent="center" spacing={2}>
-                    <Grid item xs={4} sm={4} md={4} lg={4} xl={4}>
+                    <Grid item xs={6} sm={6} md={6} lg={6} xl={6}>
                       <TextField required id="pattern" label="Pattern" multiline fullWidth value={pattern} onChange={onPatternChange} />
                     </Grid>
-                    <Grid item xs={2} sm={2} md={2} lg={2} xl={2}>
-                      <TextField id="constraints" label="Constraints" multiline fullWidth value={constraints} onChange={onConstraintsChange} />
-                    </Grid>
-                    <Grid item xs={4} sm={4} md={4} lg={4} xl={4}>
+                    <Grid item xs={6} sm={6} md={6} lg={6} xl={6}>
                       <TextField required id="rewrite" label="Rewrite" multiline fullWidth value={rewrite} onChange={onRewriteChange} />
                     </Grid>
-                    <Grid item xs={2} sm={2} md={2} lg={2} xl={2}>
+                  </Grid>
+                </Grid>
+                <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
+                  <Grid container justifyContent="center" spacing={2}>
+                    <Grid item xs={6} sm={6} md={6} lg={6} xl={6}>
+                      <TextField id="constraints" label="Constraints" multiline fullWidth value={constraints} onChange={onConstraintsChange} />
+                    </Grid>
+                    <Grid item xs={6} sm={6} md={6} lg={6} xl={6}>
                       <TextField id="actions" label="Actions" multiline fullWidth value={actions} onChange={onActionsChange} />
                     </Grid>
-                    <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
-                      <Button type="submit" variant="contained" color="primary" onClick={onAdd}>Add</Button>
-                    </Grid>
                   </Grid>
+                </Grid>
+                <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
+                  <Button type="submit" variant="contained" color="primary" onClick={onAdd}>Add</Button>
                 </Grid>
                 <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
                   <Box width="100%"/>
