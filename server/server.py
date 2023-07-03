@@ -486,7 +486,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             rewritten_query = QueryPatcher.patch(rewritten_query)
             for rewriting in rewriting_path:
                 rewriting[1] = QueryPatcher.patch(rewriting[1])
-            self.qm.log_query_suggestion(query['id'], rewritten_query, rewriting_path)
+            _qm.log_query_suggestion(query['id'], rewritten_query, rewriting_path)
             log_text = ""
             log_text += "\n--------------------------------------------------"
             log_text += "\n    Rewritten query"
