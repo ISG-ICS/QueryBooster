@@ -1,4 +1,4 @@
-from typing import Any, Union
+from typing import Any, Union, Tuple
 import copy
 from core.profiler import Profiler
 from core.query_rewriter import QueryRewriter
@@ -124,7 +124,7 @@ class RuleGenerator:
             return None
     
     @staticmethod
-    def minDiffSubtree(leftNode: Any, rightNode: Any) -> tuple[Any, Any]:
+    def minDiffSubtree(leftNode: Any, rightNode: Any) -> Tuple[Any, Any]:
         # Case-1: both nodes are dict
         #
         if QueryRewriter.is_dict(leftNode) and QueryRewriter.is_dict(rightNode):
@@ -149,19 +149,19 @@ class RuleGenerator:
         return leftNode, rightNode
     
     @staticmethod
-    def minDiffSubtreeInStrings(leftNode: str, rightNode: str) -> tuple[Any, Any]:
+    def minDiffSubtreeInStrings(leftNode: str, rightNode: str) -> Tuple[Any, Any]:
         if leftNode.lower() == rightNode.lower():
             return None, None
         return leftNode, rightNode
     
     @staticmethod
-    def minDiffSubtreeInNumbers(leftNode: numbers, rightNode: numbers) -> tuple[Any, Any]:
+    def minDiffSubtreeInNumbers(leftNode: numbers, rightNode: numbers) -> Tuple[Any, Any]:
         if leftNode == rightNode:
             return None, None
         return leftNode, rightNode
 
     @staticmethod
-    def minDiffSubtreeInConstants(leftNode: Any, rightNode: Any) -> tuple[Any, Any]:
+    def minDiffSubtreeInConstants(leftNode: Any, rightNode: Any) -> Tuple[Any, Any]:
         if QueryRewriter.is_string(leftNode) and QueryRewriter.is_string(rightNode):
             return RuleGenerator.minDiffSubtreeInStrings(leftNode, rightNode)
         if QueryRewriter.is_number(leftNode) and QueryRewriter.is_number(rightNode):
@@ -169,7 +169,7 @@ class RuleGenerator:
         return leftNode, rightNode
     
     @staticmethod
-    def minDiffSubtreeInDotExpressions(leftNode: str, rightNode: str) -> tuple[Any, Any]:
+    def minDiffSubtreeInDotExpressions(leftNode: str, rightNode: str) -> Tuple[Any, Any]:
         leftChildren = leftNode.split('.')
         rightChildren = rightNode.split('.')
         # if they have different length
@@ -187,7 +187,7 @@ class RuleGenerator:
                 return leftNode, rightNode
 
     @staticmethod
-    def minDiffSubtreeInDicts(leftNode: dict, rightNode: dict) -> tuple[Any, Any]:
+    def minDiffSubtreeInDicts(leftNode: dict, rightNode: dict) -> Tuple[Any, Any]:
         # if they have different keys, return themselves
         #
         if set(leftNode.keys()) != set(rightNode.keys()):
@@ -230,7 +230,7 @@ class RuleGenerator:
         return leftSubtree, rightSubtree
 
     @staticmethod
-    def minDiffSubtreeInLists(leftNode: list, rightNode: list) -> tuple[Any, Any]:
+    def minDiffSubtreeInLists(leftNode: list, rightNode: list) -> Tuple[Any, Any]:
         # if they have different length, return themselves
         #
         if len(leftNode) != len(rightNode):
@@ -269,7 +269,7 @@ class RuleGenerator:
     #          "INNER JOIN <x1> ON <x1>.<x2> = <x3>.<x4> AND <x1>.<x5> = <x6>"
     #
     @staticmethod
-    def extendToFullASTJson(node: Any) -> tuple[Any, Scope]:
+    def extendToFullASTJson(node: Any) -> Tuple[Any, Scope]:
         # case-1: no SELECT and no FROM and no WHERE
         if not RuleGenerator.existKeywordInASTJson(node, 'SELECT') and \
             not RuleGenerator.existKeywordInASTJson(node, 'FROM') and \
@@ -612,7 +612,7 @@ class RuleGenerator:
     # Return the new mapping with the new Var map (e.g., <x3> -> V3) and the new VarInternal (e.g., V3)
     #
     @staticmethod
-    def findNextVarInternal(mapping: dict) -> tuple[dict, str]:
+    def findNextVarInternal(mapping: dict) -> Tuple[dict, str]:
         maxVarNum = 0
         for varInternal in mapping.values():
             if VarTypesInfo[VarType.VarList]['internalBase'] not in varInternal and VarTypesInfo[VarType.Var]['internalBase'] in varInternal:
@@ -632,7 +632,7 @@ class RuleGenerator:
     # Return the new mapping with the new VarList map (e.g., <<y3>> -> VL3) and the new VarListInternal (e.g., VL3)
     #
     @staticmethod
-    def findNextVarListInternal(mapping: dict) -> tuple[dict, str]:
+    def findNextVarListInternal(mapping: dict) -> Tuple[dict, str]:
         maxVarListNum = 0
         for varInternal in mapping.values():
             if VarTypesInfo[VarType.VarList]['internalBase'] in varInternal:
