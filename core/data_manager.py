@@ -9,12 +9,13 @@ from sqlite3 import Error
 from pathlib import Path
 from typing import Dict, List
 from data.rules import get_rule
+import os
 
 class DataManager:
 
     def __init__(self, init=True) -> None:
         db_path = Path(__file__).parent / "../"
-        self.db_conn = sqlite3.connect(db_path / 'querybooster.db')
+        self.db_conn = sqlite3.connect(os.path.join(db_path, 'querybooster.db'))
         if init:
             self.__init_schema()
             self.__init_data()
@@ -23,7 +24,7 @@ class DataManager:
         try:
             cur = self.db_conn.cursor()
             schema_path = Path(__file__).parent / "../schema"
-            with open(schema_path / 'schema.sql') as schema_sql_file:
+            with open(os.path.join(schema_path, 'schema.sql')) as schema_sql_file:
                 schema_sql = schema_sql_file.read()
                 cur.executescript(schema_sql)
         except Error as e:
