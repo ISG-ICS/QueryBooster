@@ -3,7 +3,7 @@ from mo_sql_parsing import format
 import copy
 import numbers
 import sqlparse
-from typing import Any
+from typing import Any, Tuple
 
 from core.rule_parser import VarType, VarTypesInfo
 
@@ -59,7 +59,7 @@ class QueryRewriter:
     #     }
     # 
     @staticmethod
-    def rewrite(query: str, rules: list, iterate=True) -> tuple[str, list]:
+    def rewrite(query: str, rules: list, iterate=True) -> Tuple[str, list]:
         
         query_ast = parse(query)
 
