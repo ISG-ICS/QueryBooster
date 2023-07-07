@@ -15,7 +15,7 @@ class DataManager:
 
     def __init__(self, init=True) -> None:
         db_path = Path(__file__).parent / "../"
-        self.db_conn = sqlite3.connect(os.path.join(db_path, 'querybooster.db'))
+        self.db_conn = sqlite3.connect(os.path.join(db_path, 'querybooster.db'), check_same_thread=False)
         if init:
             self.__init_schema()
             self.__init_data()
