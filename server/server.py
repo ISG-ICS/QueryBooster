@@ -247,33 +247,6 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         response.write(json.dumps(rewriting_path_json).encode('utf-8'))
         self.wfile.write(response.getvalue())
     
-    def post_generate_seed_rule(self):
-        content_length = int(self.headers['Content-Length'])
-        body = self.rfile.read(content_length)
-        request = body.decode('utf-8')
-
-        # logging
-        logging.info("\n[/generateSeedRule] request:")
-        logging.info(request)
-
-        # generate seed rule from rule generator
-        request_json = json.loads(request)
-        q0 = request_json["q0"]
-        q1 = request_json["q1"]
-        seed_rule_json = RuleGenerator.generate_seed_rule(q0, q1)
-
-        # patch pattern and rewrite in seed rule
-        # TODO - get database from frontend request
-        #
-        seed_rule_json['pattern'] = QueryPatcher.patch(seed_rule_json['pattern'], 'postgresql')
-        seed_rule_json['rewrite'] = QueryPatcher.patch(seed_rule_json['rewrite'], 'postgresql')
-
-        self.send_response(200)
-        self.end_headers()
-        response = BytesIO()
-        response.write(json.dumps(seed_rule_json).encode('utf-8'))
-        self.wfile.write(response.getvalue())
-    
     def post_generate_rule_graph(self):
         content_length = int(self.headers['Content-Length'])
         body = self.rfile.read(content_length)
@@ -514,8 +487,6 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.post_list_queries()
         elif self.path == "/rewritingPath":
             self.post_rewriting_path()
-        elif self.path == "/generateSeedRule":
-            self.post_generate_seed_rule()
         elif self.path == "/generateRuleGraph":
             self.post_generate_rule_graph()
         elif self.path == "/generateRulesGraph":

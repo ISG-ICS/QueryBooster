@@ -62,27 +62,6 @@ class RuleGenerator:
         seedRule['constraints'], seedRule['constraints_json'], seedRule['actions'], seedRule['actions_json'] = '', '[]', '', '[]'
 
         return seedRule
-
-    # Generate the seed rule for a given rewriting pair q0 -> q1
-    #
-    @staticmethod
-    def generate_seed_rule(q0: str, q1: str) -> dict:
-        # Extend partial SQL statement to full SQL statement
-        #    for the sake of sql parser
-        # 
-        q0, q0Scope = RuleParser.extendToFullSQL(q0)
-        q1, q1Scope = RuleParser.extendToFullSQL(q1)
-
-        # Parse full SQL statement into AST json
-        # 
-        q0ASTJson = mosql.parse(q0)
-        q1ASTJson = mosql.parse(q1)
-
-        # Find minimum different subtrees between two AST jsons
-        #
-        patternASTJson, rewriteASTJson = RuleGenerator.minDiffSubtree(q0ASTJson, q1ASTJson)
-
-        return {'pattern': RuleGenerator.deparse(patternASTJson), 'rewrite': RuleGenerator.deparse(rewriteASTJson)}
     
     @staticmethod
     def deparse(astJson: Any) -> str:
@@ -122,31 +101,6 @@ class RuleGenerator:
             return VarType.Var
         else:
             return None
-    
-    @staticmethod
-    def minDiffSubtree(leftNode: Any, rightNode: Any) -> Tuple[Any, Any]:
-        # Case-1: both nodes are dict
-        #
-        if QueryRewriter.is_dict(leftNode) and QueryRewriter.is_dict(rightNode):
-            return RuleGenerator.minDiffSubtreeInDicts(leftNode, rightNode)
-        
-        # Case-2: both nodes are list
-        #
-        if QueryRewriter.is_list(leftNode) and QueryRewriter.is_list(rightNode):
-            return RuleGenerator.minDiffSubtreeInLists(leftNode, rightNode)
-        
-        # Case-3: both nodes are constants
-        # 
-        if QueryRewriter.is_constant(leftNode) and QueryRewriter.is_constant(rightNode):
-            return RuleGenerator.minDiffSubtreeInConstants(leftNode, rightNode)
-        
-        # Case-4: both nodes are dot expressions
-        # 
-        if QueryRewriter.is_dot_expression(leftNode) and QueryRewriter.is_dot_expression(rightNode):
-            return RuleGenerator.minDiffSubtreeInDotExpressions(leftNode, rightNode)
-        
-        # Other cases: return themselves
-        return leftNode, rightNode
     
     @staticmethod
     def minDiffSubtreeInStrings(leftNode: str, rightNode: str) -> Tuple[Any, Any]:
