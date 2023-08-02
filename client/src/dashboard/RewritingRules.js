@@ -16,6 +16,7 @@ import SyntaxHighlighter from 'react-syntax-highlighter';
 import { vs } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import { Box } from '@mui/material';
 import AddRewritingRule from './AddRewritingRule';
+import EditRewritingRule from './EditRewritingRule';
 import AppTagCell from './ApplicationTag';
 import {userContext} from '../userContext';
 
@@ -113,6 +114,14 @@ export default function RewrittingRules() {
     });
   };
 
+  const editRewritingRule = (rule) => {
+    NiceModal.show(EditRewritingRule, {user_id: user.id, rule: rule})
+    .then((res) => {
+      console.log(res);
+      listRules();
+    });
+  };
+
   return (
     <React.Fragment>
       <Title>Rewriting Rules</Title>
@@ -125,6 +134,7 @@ export default function RewrittingRules() {
               <TableCell>Pattern</TableCell>
               <TableCell>Rewrite</TableCell>
               <TableCell align="right">Enabled Apps</TableCell>
+              <TableCell align="center">Edit</TableCell>
               <TableCell align="center">Delete</TableCell>
             </TableRow>
           </TableHead>
@@ -149,6 +159,9 @@ export default function RewrittingRules() {
                     onChange={(event) => handleChange(event, rule)}
                     inputProps={{ 'aria-label': 'controlled' }} /> */}
                   <AppTagCell ruleId={rule.id} tags={rule.enabled_apps} />
+                </TableCell>
+                <TableCell align="center">
+                  <Button variant="outlined" color="error" onClick={() => editRewritingRule(rule)} >Edit</Button>
                 </TableCell>
                 <TableCell align="center">
                   <Button variant="outlined" color="error" onClick={() => handleDelete(rule)} >Delete</Button>
