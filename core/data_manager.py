@@ -207,7 +207,7 @@ class DataManager:
                          ])
             cur.execute(
                 '''INSERT INTO internal_rules (rule_id, pattern_json, constraints_json, rewrite_json, actions_json) VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT (id) DO UPDATE SET pattern_json=excluded.pattern_json, constraints_json=excluded.constraints_json, rewrite_json=excluded.rewrite_json, actions_json=excluded.actions_json''',
+                ON CONFLICT (rule_id) DO UPDATE SET pattern_json=excluded.pattern_json, constraints_json=excluded.constraints_json, rewrite_json=excluded.rewrite_json, actions_json=excluded.actions_json''',
                 [rule_id, rule['pattern_json'], rule['constraints_json'], rule['rewrite_json'],
                  rule['actions_json']])
             self.db_conn.commit()

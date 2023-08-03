@@ -197,14 +197,12 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         # logging
         logging.info("\n[/editRule] request:")
         logging.info(request)
-
         # add rule to rule manager
         request = json.loads(request, strict=False)
         rule = request['rule']
         user_id = request['user_id']
         rule_id = request['id']
         success = self.rm.edit_rule(rule, user_id, rule_id)
-
         self.send_response(200)
         self.end_headers()
 
