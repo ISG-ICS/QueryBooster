@@ -115,7 +115,7 @@ export default function RewrittingRules() {
   };
 
   const editRewritingRule = (rule) => {
-    NiceModal.show(EditRewritingRule, {user_id: user.id, rule: rule})
+    NiceModal.show(EditRewritingRule, {user_id: user.id, rule: rule, rule_id: rule.id})
     .then((res) => {
       console.log(res);
       listRules();

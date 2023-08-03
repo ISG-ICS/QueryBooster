@@ -17,7 +17,7 @@ import defaultRulesData from '../mock-api/listRules';
 import { FormLabel } from '@mui/material';
 import RuleGraph from './RuleGraph';
 
-const EditRewritingRule = NiceModal.create(({user_id, rule}) => {
+const EditRewritingRule = NiceModal.create(({user_id, rule, rule_id}) => {
   const modal = useModal();
   // Set up states for a rewriting rule
   const [name, setName] = React.useState(rule.name);
@@ -79,7 +79,7 @@ const EditRewritingRule = NiceModal.create(({user_id, rule}) => {
     }
   };
 
-  const onAdd = () => {
+  const onEdit = () => {
     if (pattern != "" && rewrite != "") {
       // post addRule request to server
       const request = {
@@ -90,19 +90,20 @@ const EditRewritingRule = NiceModal.create(({user_id, rule}) => {
           'rewrite': rewrite,
           'actions': actions
         },
-        'user_id': user_id
+        'user_id': user_id,
+        'id': rule_id
       };
-      console.log('[/addRule] -> request:');
+      console.log('[/editRule] -> request:');
       console.log(request);
-      axios.post('/addRule', request)
+      axios.post('/editRule', request)
       .then(function (response) {
-        console.log('[/addRule] -> response:');
+        console.log('[/editRule] -> response:');
         console.log(response);
         modal.resolve(response);
         modal.hide();
       })
       .catch(function (error) {
-        console.log('[/addRule] -> error:');
+        console.log('[/editRule] -> error:');
         console.log(error);
         // mock add rule to defaultRulesData
         defaultRulesData.push(
@@ -175,7 +176,7 @@ const EditRewritingRule = NiceModal.create(({user_id, rule}) => {
                   </Grid>
                 </Grid>
                 <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
-                  <Button type="submit" variant="contained" color="primary" onClick={onAdd}>Add</Button>
+                  <Button type="submit" variant="contained" color="primary" onClick={onEdit}>Edit</Button>
                 </Grid>
                 <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
                   <Box width="100%"/>
