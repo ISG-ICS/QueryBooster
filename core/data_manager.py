@@ -196,19 +196,19 @@ class DataManager:
             print(e)
             return False
 
-    def edit_rule(self, rule: dict, user_id: str, rule_id: str) -> bool:
+    def edit_rule(self, rule: dict, user_id: str) -> bool:
         try:
             cur = self.db_conn.cursor()
             cur.execute('''INSERT INTO rules (id, "key", name, pattern, constraints, rewrite, actions, user_id) 
                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET  
                                        name=excluded.name, pattern=excluded.pattern, constraints=excluded.constraints, rewrite=excluded.rewrite, actions=excluded.actions''',
-                        [rule_id, rule['key'], rule['name'], rule['pattern'],
+                        [rule['id'], rule['key'], rule['name'], rule['pattern'],
                          rule['constraints'], rule['rewrite'], rule['actions'], user_id
                          ])
             cur.execute(
                 '''INSERT INTO internal_rules (rule_id, pattern_json, constraints_json, rewrite_json, actions_json) VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT (rule_id) DO UPDATE SET pattern_json=excluded.pattern_json, constraints_json=excluded.constraints_json, rewrite_json=excluded.rewrite_json, actions_json=excluded.actions_json''',
-                [rule_id, rule['pattern_json'], rule['constraints_json'], rule['rewrite_json'],
+                [rule['id'], rule['pattern_json'], rule['constraints_json'], rule['rewrite_json'],
                  rule['actions_json']])
             self.db_conn.commit()
             return True

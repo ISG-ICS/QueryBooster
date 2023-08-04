@@ -17,14 +17,15 @@ import defaultRulesData from '../mock-api/listRules';
 import { FormLabel } from '@mui/material';
 import RuleGraph from './RuleGraph';
 
-const EditRewritingRule = NiceModal.create(({user_id, rule, rule_id}) => {
+const AddRewritingRule = NiceModal.create(({user_id, rule=null}) => {
   const modal = useModal();
   // Set up states for a rewriting rule
-  const [name, setName] = React.useState(rule.name);
-  const [pattern, setPattern] = React.useState(rule.pattern);
-  const [constraints, setConstraints] = React.useState(rule.constraints);
-  const [rewrite, setRewrite] = React.useState(rule.rewrite);
-  const [actions, setActions] = React.useState(rule.actions);
+  const isNewRule = !rule;
+  const [name, setName] = React.useState(isNewRule ? "" : rule.name);
+  const [pattern, setPattern] = React.useState(isNewRule ? "" : rule.pattern);
+  const [constraints, setConstraints] = React.useState(isNewRule ? "" : rule.constraints);
+  const [rewrite, setRewrite] = React.useState(isNewRule ? "" : rule.rewrite);
+  const [actions, setActions] = React.useState(isNewRule ? "" : rule.actions);
   // Set up states for an example rewriting pair
   const [q0, setQ0] = React.useState("");
   const [q1, setQ1] = React.useState("");
@@ -79,6 +80,51 @@ const EditRewritingRule = NiceModal.create(({user_id, rule, rule_id}) => {
     }
   };
 
+  const onAdd = () => {
+    if (pattern != "" && rewrite != "") {
+      // post addRule request to server
+      const request = {
+        'rule': {
+          'name': name,
+          'pattern': pattern,
+          'constraints': constraints,
+          'rewrite': rewrite,
+          'actions': actions,
+          'id': isNewRule ? "" : rule.id
+        },
+        'user_id': user_id
+      };
+      console.log('[/addRule] -> request:');
+      console.log(request);
+      axios.post('/addRule', request)
+      .then(function (response) {
+        console.log('[/addRule] -> response:');
+        console.log(response);
+        modal.resolve(response);
+        modal.hide();
+      })
+      .catch(function (error) {
+        console.log('[/addRule] -> error:');
+        console.log(error);
+        // mock add rule to defaultRulesData
+        defaultRulesData.push(
+          {
+            "id": 22,
+            "key": "replace_strpos_upper",
+            "name": "Replace Strpos Upper",
+            "pattern": "STRPOS(UPPER(<x>),'<y>')>0",
+            "constraints": "IS(y)=CONSTANT and\nTYPE(y)=STRING",
+            "rewrite": "<x> ILIKE '%<y>%'",
+            "actions": "",
+            "enabled_apps": []
+          }
+        );
+        modal.resolve(error);
+        modal.hide();
+      });
+    }
+  };
+
   const onEdit = () => {
     if (pattern != "" && rewrite != "") {
       // post addRule request to server
@@ -88,10 +134,10 @@ const EditRewritingRule = NiceModal.create(({user_id, rule, rule_id}) => {
           'pattern': pattern,
           'constraints': constraints,
           'rewrite': rewrite,
-          'actions': actions
+          'actions': actions,
+          'id': isNewRule ? "" : rule.id
         },
         'user_id': user_id,
-        'id': rule.id
       };
       console.log('[/editRule] -> request:');
       console.log(request);
@@ -144,7 +190,7 @@ const EditRewritingRule = NiceModal.create(({user_id, rule, rule_id}) => {
       fullWidth
       maxWidth={'lg'}
     >
-      <DialogTitle>Add Rewriting Rule</DialogTitle>
+      <DialogTitle>{isNewRule ? "Add Rewriting Modal" : "Edit Rewriting Modal"}</DialogTitle>
         <DialogContent>
         <Grid sx={{ flexGrow: 1 }} container spacing={2}>
             <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
@@ -176,7 +222,7 @@ const EditRewritingRule = NiceModal.create(({user_id, rule, rule_id}) => {
                   </Grid>
                 </Grid>
                 <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
-                  <Button type="submit" variant="contained" color="primary" onClick={onEdit}>Edit</Button>
+                  <Button type="submit" variant="contained" color="primary" onClick={isNewRule ? onAdd : onEdit}>{isNewRule ? "Add" : "Edit"}</Button>
                 </Grid>
                 <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
                   <Box width="100%"/>
@@ -209,4 +255,4 @@ const EditRewritingRule = NiceModal.create(({user_id, rule, rule_id}) => {
   );
 });
 
-export default EditRewritingRule;
+export default AddRewritingRule;

@@ -167,46 +167,28 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         response = BytesIO()
         response.write(str(success).encode('utf-8'))
         self.wfile.write(response.getvalue())
-    
-    def post_add_rule(self):
+
+    def post_rewrite_rule(self):
         content_length = int(self.headers['Content-Length'])
         body = self.rfile.read(content_length)
         request = body.decode('utf-8')
 
+        isNewRule = json.loads(request, strict=False)['rule']['id'] == ""
         # logging
-        logging.info("\n[/addRule] request:")
+        if isNewRule:
+            logging.info("\n[/addRule] request:")
+        else:
+            logging.info("\n[/editRule] request:")
         logging.info(request)
 
         # add rule to rule manager
         request = json.loads(request, strict=False)
         rule = request['rule']
         user_id = request['user_id']
-        success = self.rm.add_rule(rule, user_id)
+        success = self.rm.rewrite_rule(rule, user_id)
 
         self.send_response(200)
         self.end_headers()
-        response = BytesIO()
-        response.write(str(success).encode('utf-8'))
-        self.wfile.write(response.getvalue())
-
-    def post_edit_rule(self):
-        content_length = int(self.headers['Content-Length'])
-        body = self.rfile.read(content_length)
-        request = body.decode('utf-8')
-
-        # logging
-        logging.info("\n[/editRule] request:")
-        logging.info(request)
-        # add rule to rule manager
-        request = json.loads(request, strict=False)
-        rule = request['rule']
-        user_id = request['user_id']
-        rule_id = request['id']
-        success = self.rm.edit_rule(rule, user_id, rule_id)
-        self.send_response(200)
-        self.end_headers()
-
-        # Respond with the success status
         response = BytesIO()
         response.write(str(success).encode('utf-8'))
         self.wfile.write(response.getvalue())
@@ -517,10 +499,8 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.post_recommend_rule()
         elif self.path == "/recommendRules":
             self.post_recommend_rules()
-        elif self.path == "/addRule":
-            self.post_add_rule()
-        elif self.path == "/editRule":
-            self.post_edit_rule()
+        elif self.path == "/addRule" or self.path == "/editRule":
+            self.post_rewrite_rule()
         elif self.path == "/deleteRule":
             self.post_delete_rule()
         elif self.path == "/listApplications":
