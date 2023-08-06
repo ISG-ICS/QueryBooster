@@ -17,7 +17,7 @@ import defaultRulesData from '../mock-api/listRules';
 import { FormLabel } from '@mui/material';
 import RuleGraph from './RuleGraph';
 
-const AddRewritingRule = NiceModal.create(({user_id, rule=null}) => {
+const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
   const modal = useModal();
   // Set up states for a rewriting rule
   const isNewRule = !rule;
@@ -255,4 +255,4 @@ const AddRewritingRule = NiceModal.create(({user_id, rule=null}) => {
   );
 });
 
-export default AddRewritingRule;
+export default RewritingRuleModal;
