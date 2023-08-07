@@ -80,7 +80,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
     }
   };
 
-  const onAdd = () => {
+  const onAddOrEdit = () => {
     if (pattern != "" && rewrite != "") {
       // post addRule request to server
       const request = {
@@ -90,66 +90,21 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
           'constraints': constraints,
           'rewrite': rewrite,
           'actions': actions,
-          'id': isNewRule ? "" : rule.id
+          'id': isNewRule ? -1 : rule.id
         },
         'user_id': user_id
       };
-      console.log('[/addRule] -> request:');
+      console.log('[/saveRule] -> request:');
       console.log(request);
-      axios.post('/addRule', request)
+      axios.post('/saveRule', request)
       .then(function (response) {
-        console.log('[/addRule] -> response:');
+        console.log('[/saveRule] -> response:');
         console.log(response);
         modal.resolve(response);
         modal.hide();
       })
       .catch(function (error) {
-        console.log('[/addRule] -> error:');
-        console.log(error);
-        // mock add rule to defaultRulesData
-        defaultRulesData.push(
-          {
-            "id": 22,
-            "key": "replace_strpos_upper",
-            "name": "Replace Strpos Upper",
-            "pattern": "STRPOS(UPPER(<x>),'<y>')>0",
-            "constraints": "IS(y)=CONSTANT and\nTYPE(y)=STRING",
-            "rewrite": "<x> ILIKE '%<y>%'",
-            "actions": "",
-            "enabled_apps": []
-          }
-        );
-        modal.resolve(error);
-        modal.hide();
-      });
-    }
-  };
-
-  const onEdit = () => {
-    if (pattern != "" && rewrite != "") {
-      // post addRule request to server
-      const request = {
-        'rule': {
-          'name': name,
-          'pattern': pattern,
-          'constraints': constraints,
-          'rewrite': rewrite,
-          'actions': actions,
-          'id': isNewRule ? "" : rule.id
-        },
-        'user_id': user_id,
-      };
-      console.log('[/editRule] -> request:');
-      console.log(request);
-      axios.post('/editRule', request)
-      .then(function (response) {
-        console.log('[/editRule] -> response:');
-        console.log(response);
-        modal.resolve(response);
-        modal.hide();
-      })
-      .catch(function (error) {
-        console.log('[/editRule] -> error:');
+        console.log('[/saveRule] -> error:');
         console.log(error);
         // mock add rule to defaultRulesData
         defaultRulesData.push(
@@ -190,7 +145,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
       fullWidth
       maxWidth={'lg'}
     >
-      <DialogTitle>{isNewRule ? "Add Rewriting Modal" : "Edit Rewriting Modal"}</DialogTitle>
+      <DialogTitle>{isNewRule ? "Add Rewriting Rule" : "Edit Rewriting Rule"}</DialogTitle>
         <DialogContent>
         <Grid sx={{ flexGrow: 1 }} container spacing={2}>
             <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
@@ -222,7 +177,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
                   </Grid>
                 </Grid>
                 <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
-                  <Button type="submit" variant="contained" color="primary" onClick={isNewRule ? onAdd : onEdit}>{isNewRule ? "Add" : "Edit"}</Button>
+                  <Button type="submit" variant="contained" color="primary" onClick={onAddOrEdit}>Save</Button>
                 </Grid>
                 <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
                   <Box width="100%"/>

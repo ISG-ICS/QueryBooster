@@ -103,9 +103,9 @@ export default function RewrittingRules() {
       listRules();
     });
   };
-  
+
   // handle click on add rewriting rule button AND edit rewriting rule button
-  const rewritingRuleModal = (rule) => {
+  const AddOrEditRewritingRule = (rule) => {
     NiceModal.show(RewritingRuleModal, {user_id: user.id, rule: rule})
     .then((res) => {
       console.log(res);
@@ -152,7 +152,7 @@ export default function RewrittingRules() {
                   <AppTagCell ruleId={rule.id} tags={rule.enabled_apps} />
                 </TableCell>
                 <TableCell align="center">
-                  <Button variant="outlined" color="error" onClick={() => rewritingRuleModal(rule)} >Edit</Button>
+                  <Button variant="outlined" color="error" onClick={() => AddOrEditRewritingRule(rule)} >Edit</Button>
                 </TableCell>
                 <TableCell align="center">
                   <Button variant="outlined" color="error" onClick={() => handleDelete(rule)} >Delete</Button>
@@ -166,7 +166,7 @@ export default function RewrittingRules() {
           See more orders
          </Link> */}
       <Box>
-        <Fab size="small" color="primary" aria-label="add" onClick={() => rewritingRuleModal()}>
+        <Fab size="small" color="primary" aria-label="add" onClick={() => AddOrEditRewritingRule()}>
           <AddIcon />
         </Fab>
       </Box>

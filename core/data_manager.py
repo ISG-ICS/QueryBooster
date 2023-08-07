@@ -176,29 +176,13 @@ class DataManager:
             print('SQLite traceback: ')
             exc_type, exc_value, exc_tb = sys.exc_info()
             print(traceback.format_exception(exc_type, exc_value, exc_tb))
-    
-    def add_rule(self, rule: dict, user_id: str) -> bool:
-        try:
-            cur = self.db_conn.cursor()
-            cur.execute('''SELECT IFNULL(MAX(id), 0) + 1 FROM rules;''')
-            rule['id'] = cur.fetchone()[0]
-            
-            cur.execute('''INSERT INTO rules (id, key, name, pattern, constraints, rewrite, actions, user_id) 
-                                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
-                        [rule['id'], rule['key'], rule['name'], rule['pattern'], 
-                         rule['constraints'], rule['rewrite'], rule['actions'], user_id
-                        ])
-            cur.execute('''INSERT INTO internal_rules (rule_id, pattern_json, constraints_json, rewrite_json, actions_json) VALUES (?, ?, ?, ?, ?)''', 
-                        [rule['id'], rule['pattern_json'], rule['constraints_json'], rule['rewrite_json'], rule['actions_json']])
-            self.db_conn.commit()
-            return True
-        except Error as e:
-            print(e)
-            return False
 
-    def edit_rule(self, rule: dict, user_id: str) -> bool:
+    def add_or_edit_rule(self, rule: dict, user_id: str) -> bool:
         try:
             cur = self.db_conn.cursor()
+            if(rule['id'] == -1):
+                cur.execute('''SELECT IFNULL(MAX(id), 0) + 1 FROM rules;''')
+                rule['id'] = cur.fetchone()[0]
             cur.execute('''INSERT INTO rules (id, "key", name, pattern, constraints, rewrite, actions, user_id) 
                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET  
                                        name=excluded.name, pattern=excluded.pattern, constraints=excluded.constraints, rewrite=excluded.rewrite, actions=excluded.actions''',

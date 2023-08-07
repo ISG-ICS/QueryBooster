@@ -173,12 +173,8 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         body = self.rfile.read(content_length)
         request = body.decode('utf-8')
 
-        isNewRule = json.loads(request, strict=False)['rule']['id'] == ""
         # logging
-        if isNewRule:
-            logging.info("\n[/addRule] request:")
-        else:
-            logging.info("\n[/editRule] request:")
+        logging.info("\n[/saveRule] request:")
         logging.info(request)
 
         # add rule to rule manager
@@ -499,7 +495,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.post_recommend_rule()
         elif self.path == "/recommendRules":
             self.post_recommend_rules()
-        elif self.path == "/addRule" or self.path == "/editRule":
+        elif self.path == "/saveRule":
             self.post_rewrite_rule()
         elif self.path == "/deleteRule":
             self.post_delete_rule()

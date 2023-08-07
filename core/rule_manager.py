@@ -25,9 +25,7 @@ class RuleManager:
         rule['pattern_json'], rule['rewrite_json'], rule['mapping'] = RuleParser.parse(rule['pattern'], rule['rewrite'])
         rule['constraints_json'] = RuleParser.parse_constraints(rule['constraints'], rule['mapping'])
         rule['actions_json'] = RuleParser.parse_actions(rule['actions'], rule['mapping'])
-        if rule['id'] == "":
-            return self.dm.add_rule(rule, user_id)
-        return self.dm.edit_rule(rule, user_id)
+        return self.dm.add_or_edit_rule(rule, user_id)
 
     def delete_rule(self, rule: dict) -> bool:
         return self.dm.delete_rule(rule)
