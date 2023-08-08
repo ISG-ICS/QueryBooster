@@ -21,3 +21,9 @@ class AppManager:
                 'name': app[1]
             })
         return res
+    
+    def save_applications(self, app: dict) -> bool:
+        return self.dm.add_or_edit_application(app)
+
+    def delete_application(self, app: dict) -> bool:
+        return self.dm.delete_application(app)

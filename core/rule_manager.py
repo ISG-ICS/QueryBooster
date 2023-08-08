@@ -60,7 +60,7 @@ class RuleManager:
             })
         return res
     
-    def list_rules(self, user_id: str) -> list:
+    def list_rules(self, user_id: str, app_id: str) -> list:
         rules = self.dm.list_rules(user_id)
         # group the rule together and 
         # list its enabled applications
@@ -80,16 +80,17 @@ class RuleManager:
         visited_rule_ids = []
         for rule in rules:
             if rule[0] not in visited_rule_ids:
-                res.append({
-                    'id': rule[0],
-                    'key': rule[1],
-                    'name': rule[2],
-                    'pattern': rule[3],
-                    'constraints': rule[4],
-                    'rewrite': rule[5],
-                    'actions': rule[6],
-                    'enabled_apps': rule_applications[rule[0]]
-                })
+                if app_id == None or int(app_id) == rule_applications[rule[0]][0]["app_id"]:
+                    res.append({
+                        'id': rule[0],
+                        'key': rule[1],
+                        'name': rule[2],
+                        'pattern': rule[3],
+                        'constraints': rule[4],
+                        'rewrite': rule[5],
+                        'actions': rule[6],
+                        'enabled_apps': rule_applications[rule[0]]
+                    })
                 visited_rule_ids.append(rule[0])
 
         return res

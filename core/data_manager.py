@@ -317,6 +317,32 @@ class DataManager:
         except Error as e:
             print('[Error] in update_application:')
             print(e)
+
+    def add_or_edit_application(self, app: dict) -> None:
+        try:
+            cur = self.db_conn.cursor()
+            if(app['id'] == -1):
+                cur.execute('''SELECT IFNULL(MAX(id), 0) + 1 FROM rules;''')
+                app['id'] = cur.fetchone()[0]
+            cur.execute('''REPLACE INTO applications (id, name, user_id) 
+                                       VALUES (?, ?, ?)''', 
+                        [app['id'], app['name'], app['user_id']])
+            self.db_conn.commit()
+        except Error as e:
+            print('[Error] in add_or_edit_application:')
+            print(e)
+
+    def delete_application(self, app: dict) -> bool:
+        try:
+            cur = self.db_conn.cursor()
+            cur.execute('''PRAGMA foreign_keys=on;''')
+            cur.execute('''DELETE FROM applications WHERE id = ? AND user_id = ?''', [app['id'], app['user_id']])
+            cur.execute('''PRAGMA foreign_keys=off;''')
+            self.db_conn.commit()
+            return True
+        except Error as e:
+            print(e)
+            return False
     
     def list_applications(self, user_id: str) -> List[Dict]:
         try:
