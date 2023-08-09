@@ -80,7 +80,7 @@ class RuleManager:
         visited_rule_ids = []
         for rule in rules:
             if rule[0] not in visited_rule_ids:
-                if app_id == None or int(app_id) == rule_applications[rule[0]][0]["app_id"]:
+                if app_id == None or (len(rule_applications[rule[0]]) and int(app_id) == rule_applications[rule[0]][0]["app_id"]):
                     res.append({
                         'id': rule[0],
                         'key': rule[1],

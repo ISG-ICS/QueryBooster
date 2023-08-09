@@ -12,9 +12,9 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Title from './Title';
 import { Box } from '@mui/material';
+import {userContext} from '../userContext';
 import ManageApplicationModal from './ManageApplicationModal';
 import ViewAssignedRules from './ViewAssignedRules';
-import {userContext} from '../userContext';
 
 export default function ManageApplication() {
     // Set up a state for list of apps
@@ -106,7 +106,7 @@ export default function ManageApplication() {
                   <Button variant="outlined" color="primary" onClick={() => viewAssignedRules(app)} >View</Button>
                 </TableCell>
                 <TableCell align="center">
-                  <Button variant="outlined" color="error" onClick={() => manageAppModal(app)}>Edit</Button>
+                  <Button variant="outlined" color="primary" onClick={() => manageAppModal(app)}>Edit</Button>
                 </TableCell>
                 <TableCell align="center">
                   <Button variant="outlined" color="error" onClick={() => handleDelete(app)}>Delete</Button>
