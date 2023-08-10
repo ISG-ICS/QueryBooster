@@ -15,6 +15,8 @@ import Title from './Title';
 import defaultSuggestionRewritingPathData from '../mock-api/suggestionRewritingPath';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { vs } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import {userContext} from "../userContext";
+import RewritingRuleModal from "./RewritingRuleModal";
 
 const Item = styled(Paper)(({ theme }) => ({
   backgroundColor: theme.palette.mode === 'dark' ? '#1A2027' : '#fff',
@@ -31,7 +33,9 @@ const QuerySuggestionRewritingPath = NiceModal.create(({ queryId }) => {
   // Set up a state for providing forceUpdate function
   const [, updateState] = React.useState();
   const forceUpdate = React.useCallback(() => updateState({}), []);
-  
+
+  const user = React.useContext(userContext);
+
   // initial loading suggestion rewritings from server
   const getSuggestionRewritingPath = (_queryId) => {
     // post suggestionRewritingPath request to server
@@ -53,7 +57,16 @@ const QuerySuggestionRewritingPath = NiceModal.create(({ queryId }) => {
 
   // call getSuggestionRewritePath() only once after initial rendering
   React.useEffect(() => {getSuggestionRewritingPath(queryId)}, []);
-  
+
+  const AddToMine = (recommendedQuery) => {
+    const queries = [suggestionRewritingPath.original_sql, recommendedQuery]
+    NiceModal.show(RewritingRuleModal, {user_id: user.id, queries: queries})
+    .then((res) => {
+      console.log(res);
+      // listRules();
+    });
+  };
+
   return (
     <Dialog
       open={modal.visible}
@@ -78,7 +91,8 @@ const QuerySuggestionRewritingPath = NiceModal.create(({ queryId }) => {
                     <Stack direction="row" spacing={2} >
                       <Item>{rewriting.rule}</Item>
                       <Item>{rewriting.rule_user_email}</Item>
-                      <Button variant="outlined">Add to mine</Button>
+                      <Button variant="outlined" color="error" onClick={() => AddToMine(rewriting.rewritten_sql)} >Add to mine</Button>
+                      {/*<Button variant="outlined">Add to mine</Button>*/}
                     </Stack>
                   </Item>
                   <Item>

@@ -177,7 +177,7 @@ class DataManager:
             exc_type, exc_value, exc_tb = sys.exc_info()
             print(traceback.format_exception(exc_type, exc_value, exc_tb))
 
-    def add_or_edit_rule(self, rule: dict, user_id: str) -> bool:
+    def save_rule(self, rule: dict, user_id: str) -> bool:
         try:
             cur = self.db_conn.cursor()
             if(rule['id'] == -1):

@@ -152,7 +152,7 @@ export default function RewrittingRules() {
                   <AppTagCell ruleId={rule.id} tags={rule.enabled_apps} />
                 </TableCell>
                 <TableCell align="center">
-                  <Button variant="outlined" color="error" onClick={() => AddOrEditRewritingRule(rule)} >Edit</Button>
+                  <Button variant="outlined" onClick={() => AddOrEditRewritingRule(rule)} >Edit</Button>
                 </TableCell>
                 <TableCell align="center">
                   <Button variant="outlined" color="error" onClick={() => handleDelete(rule)} >Delete</Button>

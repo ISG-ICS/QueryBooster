@@ -17,18 +17,21 @@ import defaultRulesData from '../mock-api/listRules';
 import { FormLabel } from '@mui/material';
 import RuleGraph from './RuleGraph';
 
-const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
+const RewritingRuleModal = NiceModal.create(({user_id, rule=null, queries=null}) => {
   const modal = useModal();
   // Set up states for a rewriting rule
   const isNewRule = !rule;
+  const isAddToMine = !!queries;
   const [name, setName] = React.useState(isNewRule ? "" : rule.name);
   const [pattern, setPattern] = React.useState(isNewRule ? "" : rule.pattern);
   const [constraints, setConstraints] = React.useState(isNewRule ? "" : rule.constraints);
   const [rewrite, setRewrite] = React.useState(isNewRule ? "" : rule.rewrite);
   const [actions, setActions] = React.useState(isNewRule ? "" : rule.actions);
   // Set up states for an example rewriting pair
-  const [q0, setQ0] = React.useState("");
-  const [q1, setQ1] = React.useState("");
+  const [q0, setQ0] = React.useState(isAddToMine ? queries[0] : "");
+  const [q1, setQ1] = React.useState(isAddToMine ? queries[1] : "");
+  // const [q0, setQ0] = React.useState("");
+  // const [q1, setQ1] = React.useState("");
 
   const onNameChange = (event) => {
     setName(event.target.value);
@@ -106,19 +109,35 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
       .catch(function (error) {
         console.log('[/saveRule] -> error:');
         console.log(error);
-        // mock add rule to defaultRulesData
-        defaultRulesData.push(
-          {
-            "id": 22,
-            "key": "replace_strpos_upper",
-            "name": "Replace Strpos Upper",
-            "pattern": "STRPOS(UPPER(<x>),'<y>')>0",
-            "constraints": "IS(y)=CONSTANT and\nTYPE(y)=STRING",
-            "rewrite": "<x> ILIKE '%<y>%'",
-            "actions": "",
-            "enabled_apps": []
+
+        if(isNewRule){
+          // mock add rule to defaultRulesData
+          defaultRulesData.push(
+            {
+              "id": 22,
+              "key": "replace_strpos_upper",
+              "name": "Replace Strpos Upper",
+              "pattern": "STRPOS(UPPER(<x>),'<y>')>0",
+              "constraints": "IS(y)=CONSTANT and\nTYPE(y)=STRING",
+              "rewrite": "<x> ILIKE '%<y>%'",
+              "actions": "",
+              "enabled_apps": []
+            }
+          );
+        }else{
+          // mock update rule to defaultRulesData
+          const index = defaultRulesData.findIndex(r => r.id === rule.id);
+          if (index !== -1) {
+            defaultRulesData[index] = {
+              ...defaultRulesData[index],
+              name: name,
+              pattern: pattern,
+              constraints: constraints,
+              rewrite: rewrite,
+              actions: actions
+            };
           }
-        );
+        }
         modal.resolve(error);
         modal.hide();
       });

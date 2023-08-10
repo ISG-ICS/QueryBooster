@@ -168,7 +168,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         response.write(str(success).encode('utf-8'))
         self.wfile.write(response.getvalue())
 
-    def post_rewrite_rule(self):
+    def post_save_rule(self):
         content_length = int(self.headers['Content-Length'])
         body = self.rfile.read(content_length)
         request = body.decode('utf-8')
@@ -181,7 +181,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         request = json.loads(request, strict=False)
         rule = request['rule']
         user_id = request['user_id']
-        success = self.rm.rewrite_rule(rule, user_id)
+        success = self.rm.save_rule(rule, user_id)
 
         self.send_response(200)
         self.end_headers()
@@ -496,7 +496,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         elif self.path == "/recommendRules":
             self.post_recommend_rules()
         elif self.path == "/saveRule":
-            self.post_rewrite_rule()
+            self.post_save_rule()
         elif self.path == "/deleteRule":
             self.post_delete_rule()
         elif self.path == "/listApplications":
