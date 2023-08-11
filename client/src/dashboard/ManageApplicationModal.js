@@ -21,7 +21,7 @@ const ManageApplicationModal = NiceModal.create(({user_id, app=null}) => {
     };
 
     const onAddOrEdit = () => {
-        if (name != null) {
+        if (name !== null && name.replace(/\s/g, '').length ) {
             // post saveApplication request to server
             const request = {
               'name': name,
