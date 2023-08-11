@@ -16,7 +16,7 @@ import {userContext} from '../userContext';
 import ManageApplicationModal from './ManageApplicationModal';
 import ViewAssignedRules from './ViewAssignedRules';
 
-export default function ManageApplication() {
+export default function Applications() {
     // Set up a state for list of apps
   const [applications, setApplications] = React.useState([]);
   // Set up a state for providing forceUpdate function
@@ -48,7 +48,7 @@ export default function ManageApplication() {
   // call listApplications() only once after initial rendering
   React.useEffect(() => { listApplications() }, [user]);
 
-  //handle check on assigned rules for this app
+  //handle click on view assigned rules for this app
   const viewAssignedRules = (app) => {
     NiceModal.show(ViewAssignedRules, {user_id: user.id, app: app})
     .then((res) => {
@@ -74,7 +74,7 @@ export default function ManageApplication() {
     });
   };
   
-  // handle click on add applications AND edit applications
+  // handle click on add applications AND edit an application
   const manageAppModal = (app) => {
     NiceModal.show(ManageApplicationModal, {user_id: user.id, app: app})
     .then((res) => {
@@ -85,7 +85,7 @@ export default function ManageApplication() {
 
   return (
     <React.Fragment>
-      <Title>Manage Applications</Title>
+      <Title>Applications</Title>
       <TableContainer sx={{ maxHeight: 500, maxWidth: 1400 }}>
         <Table stickyHeader size="small">
           <TableHead>

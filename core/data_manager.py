@@ -318,7 +318,7 @@ class DataManager:
             print('[Error] in update_application:')
             print(e)
 
-    def add_or_edit_application(self, app: dict) -> None:
+    def save_application(self, app: dict) -> None:
         try:
             cur = self.db_conn.cursor()
             if(app['id'] == -1):
@@ -331,7 +331,7 @@ class DataManager:
                         [app['id'], app['name'], app['user_id']])
             self.db_conn.commit()
         except Error as e:
-            print('[Error] in add_or_edit_application:')
+            print('[Error] in save_application:')
             print(e)
 
     def delete_application(self, app: dict) -> bool:

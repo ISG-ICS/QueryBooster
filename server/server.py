@@ -382,7 +382,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         logging.info(request)
 
         request = json.loads(request, strict=False)
-        user_id = request['user_id']
+        user_id =  user_id = request['user_id'] if 'user_id' in request else None
 
         applications_json = self.am.list_applications(user_id)
 
