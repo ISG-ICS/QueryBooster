@@ -403,7 +403,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
 
         # fetch application information
         app = json.loads(request)
-        success = self.am.save_applications(app)
+        success = self.am.save_application(app)
 
         self.send_response(200)
         self.end_headers()

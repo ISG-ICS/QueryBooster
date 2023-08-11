@@ -17,7 +17,7 @@ import ManageApplicationModal from './ManageApplicationModal';
 import ViewAssignedRules from './ViewAssignedRules';
 
 export default function Applications() {
-    // Set up a state for list of apps
+  // Set up a state for list of apps
   const [applications, setApplications] = React.useState([]);
   // Set up a state for providing forceUpdate function
   const [, updateState] = React.useState();
@@ -48,7 +48,7 @@ export default function Applications() {
   // call listApplications() only once after initial rendering
   React.useEffect(() => { listApplications() }, [user]);
 
-  //handle click on view assigned rules for this app
+  // handle click on view assigned rules for this app
   const viewAssignedRules = (app) => {
     NiceModal.show(ViewAssignedRules, {user_id: user.id, app: app})
     .then((res) => {

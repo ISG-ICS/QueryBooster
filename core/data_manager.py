@@ -337,9 +337,7 @@ class DataManager:
     def delete_application(self, app: dict) -> bool:
         try:
             cur = self.db_conn.cursor()
-            cur.execute('''PRAGMA foreign_keys=on;''')
             cur.execute('''DELETE FROM applications WHERE id = ? AND user_id = ?''', [app['id'], app['user_id']])
-            cur.execute('''PRAGMA foreign_keys=off;''')
             self.db_conn.commit()
             return True
         except Error as e:

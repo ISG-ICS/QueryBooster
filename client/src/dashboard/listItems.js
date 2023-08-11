@@ -47,7 +47,7 @@ export const mainListItems = (
       <ListItemIcon>
         <AppRegistrationIcon fontSize="large" />
       </ListItemIcon>
-      <ListItemText primary="Manage Applications" />
+      <ListItemText primary="Applications" />
     </ListItemButton>
   </React.Fragment>
 );
