@@ -91,8 +91,7 @@ const QuerySuggestionRewritingPath = NiceModal.create(({ queryId }) => {
                     <Stack direction="row" spacing={2} >
                       <Item>{rewriting.rule}</Item>
                       <Item>{rewriting.rule_user_email}</Item>
-                      <Button variant="outlined" color="error" onClick={() => AddToMine(rewriting.rewritten_sql)} >Add to mine</Button>
-                      {/*<Button variant="outlined">Add to mine</Button>*/}
+                      <Button variant="outlined">Add to mine</Button>
                     </Stack>
                   </Item>
                   <Item>
