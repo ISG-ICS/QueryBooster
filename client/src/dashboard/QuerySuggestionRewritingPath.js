@@ -16,7 +16,6 @@ import defaultSuggestionRewritingPathData from '../mock-api/suggestionRewritingP
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { vs } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import {userContext} from "../userContext";
-import RewritingRuleModal from "./RewritingRuleModal";
 
 const Item = styled(Paper)(({ theme }) => ({
   backgroundColor: theme.palette.mode === 'dark' ? '#1A2027' : '#fff',
@@ -57,15 +56,6 @@ const QuerySuggestionRewritingPath = NiceModal.create(({ queryId }) => {
 
   // call getSuggestionRewritePath() only once after initial rendering
   React.useEffect(() => {getSuggestionRewritingPath(queryId)}, []);
-
-  const AddToMine = (recommendedQuery) => {
-    const queries = [suggestionRewritingPath.original_sql, recommendedQuery]
-    NiceModal.show(RewritingRuleModal, {user_id: user.id, queries: queries})
-    .then((res) => {
-      console.log(res);
-      // listRules();
-    });
-  };
 
   return (
     <Dialog
