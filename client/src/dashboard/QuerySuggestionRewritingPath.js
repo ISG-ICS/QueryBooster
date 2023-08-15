@@ -33,8 +33,6 @@ const QuerySuggestionRewritingPath = NiceModal.create(({ queryId }) => {
   const [, updateState] = React.useState();
   const forceUpdate = React.useCallback(() => updateState({}), []);
 
-  const user = React.useContext(userContext);
-
   // initial loading suggestion rewritings from server
   const getSuggestionRewritingPath = (_queryId) => {
     // post suggestionRewritingPath request to server

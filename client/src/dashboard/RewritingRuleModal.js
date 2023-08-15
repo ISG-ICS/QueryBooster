@@ -82,7 +82,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
 
   const onAddOrEdit = () => {
     if (pattern != "" && rewrite != "") {
-      // post addRule request to server
+      // post saveRule request to server
       const request = {
         'rule': {
           'name': name,
