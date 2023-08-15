@@ -16,6 +16,10 @@ import defaultRecommendRuleData from '../mock-api/recommendRule';
 import defaultRulesData from '../mock-api/listRules';
 import { FormLabel } from '@mui/material';
 import RuleGraph from './RuleGraph';
+import AceEditor from "react-ace";
+import "ace-builds/src-noconflict/theme-textmate";
+import "ace-builds/src-noconflict/mode-mysql";
+import "ace-builds/src-noconflict/ext-language_tools";
 
 const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
   const modal = useModal();
@@ -50,12 +54,12 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
     setActions(event.target.value);
   };
 
-  const onQ0Change = (event) => {
-    setQ0(event.target.value);
+  const onQ0Change = (newQ0Value) => {
+    setQ0(newQ0Value);
   };
 
-  const onQ1Change = (event) => {
-    setQ1(event.target.value);
+  const onQ1Change = (newQ1Value) => {
+    setQ1(newQ1Value);
   };
 
   const onFormulate = () => {
@@ -206,10 +210,46 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
                   <FormLabel>Formulating a Rule using Rewriting Example</FormLabel>
                 </Grid>
                 <Grid item xs={6} sm={6} md={6} lg={6} xl={6}>
-                  <TextField id="q0" label="Original SQL" multiline fullWidth onChange={onQ0Change} value={q0} />
+                  <AceEditor
+                    placeholder="Original SQL"
+                    mode="mysql"
+                    theme="textmate"
+                    width='100%'
+                    fontSize={14}
+                    showPrintMargin={true}
+                    wrapEnabled={true}
+                    showGutter={true}
+                    highlightActiveLine={false}
+                    value={q0}
+                    onChange={onQ0Change}
+                    setOptions={{
+                    enableBasicAutocompletion: false,
+                    enableLiveAutocompletion: true,
+                    enableSnippets: false,
+                    showLineNumbers: false,
+                    tabSize: 2,
+                  }}/>
                 </Grid>
                 <Grid item xs={6} sm={6} md={6} lg={6} xl={6}>
-                  <TextField id="q1" label="Rewritten SQL" multiline fullWidth onChange={onQ1Change} value={q1} />
+                  <AceEditor
+                    placeholder="Rewritten SQL"
+                    mode="mysql"
+                    theme="textmate"
+                    width='100%'
+                    fontSize={14}
+                    showPrintMargin={true}
+                    wrapEnabled={true}
+                    showGutter={true}
+                    highlightActiveLine={false}
+                    value={q1}
+                    onChange={onQ1Change}
+                    setOptions={{
+                    enableBasicAutocompletion: false,
+                    enableLiveAutocompletion: true,
+                    enableSnippets: false,
+                    showLineNumbers: false,
+                    tabSize: 2,
+                  }}/>
                 </Grid>
                 <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
                   <Stack direction="row" spacing={2}>
