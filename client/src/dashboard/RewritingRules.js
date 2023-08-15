@@ -15,7 +15,7 @@ import defaultRulesData from '../mock-api/listRules';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { vs } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import { Box } from '@mui/material';
-import AddRewritingRule from './AddRewritingRule';
+import RewritingRuleModal from './RewritingRuleModal';
 import AppTagCell from './ApplicationTag';
 import {userContext} from '../userContext';
 
@@ -104,9 +104,9 @@ export default function RewrittingRules() {
     });
   };
 
-  // handle click on add rewriting rule button
-  const addRewritingRule = () => {
-    NiceModal.show(AddRewritingRule, {user_id: user.id})
+  // handle click on add rewriting rule button AND edit rewriting rule button
+  const AddOrEditRewritingRule = (rule) => {
+    NiceModal.show(RewritingRuleModal, {user_id: user.id, rule: rule})
     .then((res) => {
       console.log(res);
       listRules();
@@ -125,6 +125,7 @@ export default function RewrittingRules() {
               <TableCell>Pattern</TableCell>
               <TableCell>Rewrite</TableCell>
               <TableCell align="right">Enabled Apps</TableCell>
+              <TableCell align="center">Edit</TableCell>
               <TableCell align="center">Delete</TableCell>
             </TableRow>
           </TableHead>
@@ -151,6 +152,9 @@ export default function RewrittingRules() {
                   <AppTagCell ruleId={rule.id} tags={rule.enabled_apps} />
                 </TableCell>
                 <TableCell align="center">
+                  <Button variant="outlined" onClick={() => AddOrEditRewritingRule(rule)} >Edit</Button>
+                </TableCell>
+                <TableCell align="center">
                   <Button variant="outlined" color="error" onClick={() => handleDelete(rule)} >Delete</Button>
                 </TableCell>
               </TableRow>
@@ -162,7 +166,7 @@ export default function RewrittingRules() {
           See more orders
          </Link> */}
       <Box>
-        <Fab size="small" color="primary" aria-label="add" onClick={() => addRewritingRule()}>
+        <Fab size="small" color="primary" aria-label="add" onClick={() => AddOrEditRewritingRule()}>
           <AddIcon />
         </Fab>
       </Box>

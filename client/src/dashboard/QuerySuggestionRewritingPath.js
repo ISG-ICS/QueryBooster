@@ -15,6 +15,7 @@ import Title from './Title';
 import defaultSuggestionRewritingPathData from '../mock-api/suggestionRewritingPath';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { vs } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import {userContext} from "../userContext";
 
 const Item = styled(Paper)(({ theme }) => ({
   backgroundColor: theme.palette.mode === 'dark' ? '#1A2027' : '#fff',
@@ -31,7 +32,7 @@ const QuerySuggestionRewritingPath = NiceModal.create(({ queryId }) => {
   // Set up a state for providing forceUpdate function
   const [, updateState] = React.useState();
   const forceUpdate = React.useCallback(() => updateState({}), []);
-  
+
   // initial loading suggestion rewritings from server
   const getSuggestionRewritingPath = (_queryId) => {
     // post suggestionRewritingPath request to server
@@ -53,7 +54,7 @@ const QuerySuggestionRewritingPath = NiceModal.create(({ queryId }) => {
 
   // call getSuggestionRewritePath() only once after initial rendering
   React.useEffect(() => {getSuggestionRewritingPath(queryId)}, []);
-  
+
   return (
     <Dialog
       open={modal.visible}

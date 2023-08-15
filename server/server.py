@@ -167,21 +167,21 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         response = BytesIO()
         response.write(str(success).encode('utf-8'))
         self.wfile.write(response.getvalue())
-    
-    def post_add_rule(self):
+
+    def post_save_rule(self):
         content_length = int(self.headers['Content-Length'])
         body = self.rfile.read(content_length)
         request = body.decode('utf-8')
 
         # logging
-        logging.info("\n[/addRule] request:")
+        logging.info("\n[/saveRule] request:")
         logging.info(request)
 
         # add rule to rule manager
         request = json.loads(request, strict=False)
         rule = request['rule']
         user_id = request['user_id']
-        success = self.rm.add_rule(rule, user_id)
+        success = self.rm.save_rule(rule, user_id)
 
         self.send_response(200)
         self.end_headers()
@@ -495,8 +495,8 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.post_recommend_rule()
         elif self.path == "/recommendRules":
             self.post_recommend_rules()
-        elif self.path == "/addRule":
-            self.post_add_rule()
+        elif self.path == "/saveRule":
+            self.post_save_rule()
         elif self.path == "/deleteRule":
             self.post_delete_rule()
         elif self.path == "/listApplications":
