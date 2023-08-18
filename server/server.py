@@ -117,8 +117,9 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
 
         request = json.loads(request, strict=False)
         user_id = request['user_id'] if 'user_id' in request else None
+        app_id = request['app_id'] if 'app_id' in request else None
 
-        rules_json = self.rm.list_rules(user_id)
+        rules_json = self.rm.list_rules(user_id, app_id)
 
         self.send_response(200)
         self.end_headers()
@@ -381,7 +382,7 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         logging.info(request)
 
         request = json.loads(request, strict=False)
-        user_id = request['user_id']
+        user_id =  user_id = request['user_id'] if 'user_id' in request else None
 
         applications_json = self.am.list_applications(user_id)
 
@@ -389,6 +390,46 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         response = BytesIO()
         response.write(json.dumps(applications_json).encode('utf-8'))
+        self.wfile.write(response.getvalue())
+    
+    def post_save_application(self):
+        content_length = int(self.headers['Content-Length'])
+        body = self.rfile.read(content_length)
+        request = body.decode('utf-8')
+
+        # logging
+        logging.info("\n[/saveApplication] request:")
+        logging.info(request)
+
+        # fetch application information
+        app = json.loads(request)
+        success = self.am.save_application(app)
+
+        self.send_response(200)
+        self.end_headers()
+        response = BytesIO()
+        response.write(str(success).encode('utf-8'))
+        self.wfile.write(response.getvalue())
+    
+    def post_delete_application(self):
+        content_length = int(self.headers['Content-Length'])
+        body = self.rfile.read(content_length)
+        request = body.decode('utf-8')
+
+        # logging
+        logging.info("\n[/deleteApplication] request:")
+        logging.info(request)
+
+        # delete rule from rule manager
+        request = json.loads(request)
+        application = request['app']
+        application['user_id'] = request['user_id']
+        success = self.am.delete_application(application)
+
+        self.send_response(200)
+        self.end_headers()
+        response = BytesIO()
+        response.write(str(success).encode('utf-8'))
         self.wfile.write(response.getvalue())
     
     def post_create_user(self):
@@ -501,6 +542,10 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.post_delete_rule()
         elif self.path == "/listApplications":
             self.post_list_applications()
+        elif self.path == "/saveApplication":
+            self.post_save_application()
+        elif self.path == "/deleteApplication":
+            self.post_delete_application()
         elif self.path == "/createUser":
             self.post_create_user()
         elif self.path == "/suggestionRewritingPath":
