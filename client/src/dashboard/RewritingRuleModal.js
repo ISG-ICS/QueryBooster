@@ -15,15 +15,22 @@ import TextField from '@mui/material/TextField';
 import defaultRecommendRuleData from '../mock-api/recommendRule';
 import defaultRulesData from '../mock-api/listRules';
 import { FormLabel } from '@mui/material';
+import InputLabel from '@mui/material/InputLabel';
+import FormControl from '@mui/material/FormControl';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
 import RuleGraph from './RuleGraph';
 import AceEditor from "react-ace";
 import "ace-builds/src-noconflict/theme-textmate";
 import "ace-builds/src-noconflict/mode-mysql";
+import "ace-builds/src-noconflict/mode-pgsql";
 import "ace-builds/src-noconflict/ext-language_tools";
 
 const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
   const modal = useModal();
   // Set up states for a rewriting rule
+  const [queryOptions, setQueryOptions] = React.useState(["mysql", "pgsql"])
+  const [queryLanguage, setQueryLanguage] = React.useState("mysql")
   const isNewRule = !rule;
   const [name, setName] = React.useState(isNewRule ? "" : rule.name);
   const [pattern, setPattern] = React.useState(isNewRule ? "" : rule.pattern);
@@ -60,6 +67,10 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
 
   const onQ1Change = (newQ1Value) => {
     setQ1(newQ1Value);
+  };
+
+  const handleSelectChange = (event) => {
+    setQueryLanguage(event.target.value);
   };
 
   const onFormulate = () => {
@@ -203,18 +214,33 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
                   <Box width="100%"/>
                 </Grid>
                 <Divider />
-                <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
+                {/* <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
                   <Box width="100%"/>
-                </Grid>
+                </Grid> */}
                 <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
-                  <FormLabel>Formulating a Rule using Rewriting Example</FormLabel>
+                  <Grid container justifyContent="center" spacing={2}>
+                    <Grid item justifyContent="center" xs={6} sm={6} md={6} lg={6} xl={6}>
+                      <FormLabel>Formulating a Rule using Rewriting Example</FormLabel>
+                    </Grid>
+                    <Grid item xs={6} sm={6} md={6} lg={6} xl={6}>
+                      <FormControl fullWidth height='80%'>
+                        <InputLabel>Select SQL Dialect</InputLabel>
+                        <Select label="Select SQL Dialect" fullWidth value={queryLanguage} onChange={handleSelectChange}>
+                          {queryOptions.map((queryOption) => (
+                              <MenuItem value={queryOption}>{queryOption}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                  </Grid>
                 </Grid>
                 <Grid item xs={6} sm={6} md={6} lg={6} xl={6}>
                   <AceEditor
                     placeholder="Original SQL"
-                    mode="mysql"
+                    mode={queryLanguage}
                     theme="textmate"
                     width='100%'
+                    height='150px'
                     fontSize={14}
                     showPrintMargin={true}
                     wrapEnabled={true}
@@ -233,9 +259,10 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
                 <Grid item xs={6} sm={6} md={6} lg={6} xl={6}>
                   <AceEditor
                     placeholder="Rewritten SQL"
-                    mode="mysql"
+                    mode={queryLanguage}
                     theme="textmate"
                     width='100%'
+                    height='150px'
                     fontSize={14}
                     showPrintMargin={true}
                     wrapEnabled={true}
