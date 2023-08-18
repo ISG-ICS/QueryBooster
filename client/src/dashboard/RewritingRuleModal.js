@@ -28,9 +28,10 @@ import "ace-builds/src-noconflict/ext-language_tools";
 
 const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
   const modal = useModal();
-  // Set up states for a rewriting rule
+  // Set up query language used for query editor
   const [queryOptions, setQueryOptions] = React.useState(["mysql", "pgsql"])
   const [queryLanguage, setQueryLanguage] = React.useState("mysql")
+  // Set up states for a rewriting rule
   const isNewRule = !rule;
   const [name, setName] = React.useState(isNewRule ? "" : rule.name);
   const [pattern, setPattern] = React.useState(isNewRule ? "" : rule.pattern);
@@ -164,6 +165,19 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
     });
   };
 
+  //resize query editor
+  const onLoad = (editor) => {
+    editor.on('change', (arg, activeEditor) => {
+      const aceEditor = activeEditor;
+      const curHeight = aceEditor.getSession().getScreenLength() *
+        (aceEditor.renderer.lineHeight + aceEditor.renderer.scrollBar.getWidth());
+      const newHeight = (curHeight < 100) ? 100 : curHeight;
+      aceEditor.container.style.height = `${newHeight}px`;
+      aceEditor.resize();
+    });
+  };
+  
+
   React.useEffect(() => {}, []);
 
   return (
@@ -214,18 +228,15 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
                   <Box width="100%"/>
                 </Grid>
                 <Divider />
-                {/* <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
-                  <Box width="100%"/>
-                </Grid> */}
                 <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
-                  <Grid container justifyContent="center" spacing={2}>
-                    <Grid item justifyContent="center" xs={6} sm={6} md={6} lg={6} xl={6}>
+                  <Grid container justifyContent="flex-start" alignItems="center" spacing={1}>
+                    <Grid item xs={4} sm={4} md={4} lg={4} xl={4}>
                       <FormLabel>Formulating a Rule using Rewriting Example</FormLabel>
                     </Grid>
-                    <Grid item xs={6} sm={6} md={6} lg={6} xl={6}>
-                      <FormControl fullWidth height='80%'>
+                    <Grid item xs={2} sm={2} md={2} lg={2} xl={2}>
+                      <FormControl fullWidth>
                         <InputLabel>Select SQL Dialect</InputLabel>
-                        <Select label="Select SQL Dialect" fullWidth value={queryLanguage} onChange={handleSelectChange}>
+                        <Select label="Select SQL Dialect" value={queryLanguage} onChange={handleSelectChange}>
                           {queryOptions.map((queryOption) => (
                               <MenuItem value={queryOption}>{queryOption}</MenuItem>
                           ))}
@@ -240,14 +251,15 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
                     mode={queryLanguage}
                     theme="textmate"
                     width='100%'
-                    height='150px'
+                    height='100px'
+                    onLoad={onLoad}
                     fontSize={14}
                     showPrintMargin={true}
                     wrapEnabled={true}
                     showGutter={true}
                     highlightActiveLine={false}
                     value={q0}
-                    onChange={onQ0Change}
+                    onChange={onQ0Change}  
                     setOptions={{
                     enableBasicAutocompletion: false,
                     enableLiveAutocompletion: true,
@@ -262,7 +274,8 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
                     mode={queryLanguage}
                     theme="textmate"
                     width='100%'
-                    height='150px'
+                    height='100px'
+                    onLoad={onLoad}
                     fontSize={14}
                     showPrintMargin={true}
                     wrapEnabled={true}
