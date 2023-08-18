@@ -57,7 +57,7 @@ export default function Applications() {
     });
   }
 
-  // handle click on the delete of a application
+  // handle click on the delete of an application
   const handleDelete = (app) => {
     // post deleteApplication request to server
     console.log(app)
@@ -74,7 +74,7 @@ export default function Applications() {
     });
   };
   
-  // handle click on add applications AND edit an application
+  // handle click on add AND edit an application
   const manageAppModal = (app) => {
     NiceModal.show(ManageApplicationModal, {user_id: user.id, app: app})
     .then((res) => {
