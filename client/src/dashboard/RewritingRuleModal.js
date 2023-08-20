@@ -15,10 +15,22 @@ import TextField from '@mui/material/TextField';
 import defaultRecommendRuleData from '../mock-api/recommendRule';
 import defaultRulesData from '../mock-api/listRules';
 import { FormLabel } from '@mui/material';
+import InputLabel from '@mui/material/InputLabel';
+import FormControl from '@mui/material/FormControl';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
 import RuleGraph from './RuleGraph';
+import AceEditor from "react-ace";
+import "ace-builds/src-noconflict/theme-textmate";
+import "ace-builds/src-noconflict/mode-mysql";
+import "ace-builds/src-noconflict/mode-pgsql";
+import "ace-builds/src-noconflict/ext-language_tools";
 
 const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
   const modal = useModal();
+  // Set up query language used for query editor
+  const [queryOptions, setQueryOptions] = React.useState(["mysql", "pgsql"])
+  const [queryLanguage, setQueryLanguage] = React.useState("mysql")
   // Set up states for a rewriting rule
   const isNewRule = !rule;
   const [name, setName] = React.useState(isNewRule ? "" : rule.name);
@@ -50,12 +62,16 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
     setActions(event.target.value);
   };
 
-  const onQ0Change = (event) => {
-    setQ0(event.target.value);
+  const onQ0Change = (newQ0Value) => {
+    setQ0(newQ0Value);
   };
 
-  const onQ1Change = (event) => {
-    setQ1(event.target.value);
+  const onQ1Change = (newQ1Value) => {
+    setQ1(newQ1Value);
+  };
+
+  const handleSelectChange = (event) => {
+    setQueryLanguage(event.target.value);
   };
 
   const onFormulate = () => {
@@ -149,6 +165,19 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
     });
   };
 
+  //resize query editor
+  const onLoad = (editor) => {
+    editor.on('change', (arg, activeEditor) => {
+      const aceEditor = activeEditor;
+      const curHeight = aceEditor.getSession().getScreenLength() *
+        (aceEditor.renderer.lineHeight + aceEditor.renderer.scrollBar.getWidth());
+      const newHeight = (curHeight < 100) ? 100 : curHeight;
+      aceEditor.container.style.height = `${newHeight}px`;
+      aceEditor.resize();
+    });
+  };
+  
+
   React.useEffect(() => {}, []);
 
   return (
@@ -200,16 +229,67 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
                 </Grid>
                 <Divider />
                 <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
-                  <Box width="100%"/>
-                </Grid>
-                <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
-                  <FormLabel>Formulating a Rule using Rewriting Example</FormLabel>
+                  <Grid container justifyContent="flex-start" alignItems="center" spacing={1}>
+                    <Grid item xs={4} sm={4} md={4} lg={4} xl={4}>
+                      <FormLabel>Formulating a Rule using Rewriting Example</FormLabel>
+                    </Grid>
+                    <Grid item xs={2} sm={2} md={2} lg={2} xl={2}>
+                      <FormControl fullWidth>
+                        <InputLabel>Select SQL Dialect</InputLabel>
+                        <Select label="Select SQL Dialect" value={queryLanguage} onChange={handleSelectChange}>
+                          {queryOptions.map((queryOption) => (
+                              <MenuItem value={queryOption}>{queryOption}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                  </Grid>
                 </Grid>
                 <Grid item xs={6} sm={6} md={6} lg={6} xl={6}>
-                  <TextField id="q0" label="Original SQL" multiline fullWidth onChange={onQ0Change} value={q0} />
+                  <AceEditor
+                    placeholder="Original SQL"
+                    mode={queryLanguage}
+                    theme="textmate"
+                    width='100%'
+                    height='100px'
+                    onLoad={onLoad}
+                    fontSize={14}
+                    showPrintMargin={true}
+                    wrapEnabled={true}
+                    showGutter={true}
+                    highlightActiveLine={false}
+                    value={q0}
+                    onChange={onQ0Change}  
+                    setOptions={{
+                    enableBasicAutocompletion: false,
+                    enableLiveAutocompletion: true,
+                    enableSnippets: false,
+                    showLineNumbers: false,
+                    tabSize: 2,
+                  }}/>
                 </Grid>
                 <Grid item xs={6} sm={6} md={6} lg={6} xl={6}>
-                  <TextField id="q1" label="Rewritten SQL" multiline fullWidth onChange={onQ1Change} value={q1} />
+                  <AceEditor
+                    placeholder="Rewritten SQL"
+                    mode={queryLanguage}
+                    theme="textmate"
+                    width='100%'
+                    height='100px'
+                    onLoad={onLoad}
+                    fontSize={14}
+                    showPrintMargin={true}
+                    wrapEnabled={true}
+                    showGutter={true}
+                    highlightActiveLine={false}
+                    value={q1}
+                    onChange={onQ1Change}
+                    setOptions={{
+                    enableBasicAutocompletion: false,
+                    enableLiveAutocompletion: true,
+                    enableSnippets: false,
+                    showLineNumbers: false,
+                    tabSize: 2,
+                  }}/>
                 </Grid>
                 <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
                   <Stack direction="row" spacing={2}>
