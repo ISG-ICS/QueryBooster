@@ -16,8 +16,8 @@ import defaultSuggestionRewritingPathData from '../mock-api/suggestionRewritingP
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { vs } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import {userContext} from "../userContext";
-import RewritingRuleModal from "./RewritingRuleModal";
-import listRules from "./RewritingRuleModal";
+import RewritingRuleModal, { listRules } from "./RewritingRuleModal";
+
 
 const Item = styled(Paper)(({ theme }) => ({
   backgroundColor: theme.palette.mode === 'dark' ? '#1A2027' : '#fff',
