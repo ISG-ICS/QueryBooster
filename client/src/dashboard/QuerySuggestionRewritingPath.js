@@ -27,7 +27,7 @@ const Item = styled(Paper)(({ theme }) => ({
   color: theme.palette.text.primary,
 }));
 
-const QuerySuggestionRewritingPath = NiceModal.create(({ queryId, user }) => {
+const QuerySuggestionRewritingPath = NiceModal.create(({ user, queryId }) => {
   const modal = useModal();
   // Set up a state for rewritingPath
   const [suggestionRewritingPath, setSuggestionRewritingPath] = React.useState({rewritings:[]});
