@@ -57,7 +57,7 @@ export default function QueryLogs() {
   // show a query's suggestion rewriting path
   const showQuerySuggestionRewritingPath = (query) => {
     console.log(query);
-    NiceModal.show(QuerySuggestionRewritingPath, {queryId: query.id});
+    NiceModal.show(QuerySuggestionRewritingPath, {queryId: query.id, user: user});
   };
 
   return (

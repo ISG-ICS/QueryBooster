@@ -17,18 +17,19 @@ import defaultRulesData from '../mock-api/listRules';
 import { FormLabel } from '@mui/material';
 import RuleGraph from './RuleGraph';
 
-const RewritingRuleModal = NiceModal.create(({user_id, rule=null}) => {
+const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) => {
   const modal = useModal();
   // Set up states for a rewriting rule
   const isNewRule = !rule;
+  const hasQuery = !!query;
   const [name, setName] = React.useState(isNewRule ? "" : rule.name);
   const [pattern, setPattern] = React.useState(isNewRule ? "" : rule.pattern);
   const [constraints, setConstraints] = React.useState(isNewRule ? "" : rule.constraints);
   const [rewrite, setRewrite] = React.useState(isNewRule ? "" : rule.rewrite);
   const [actions, setActions] = React.useState(isNewRule ? "" : rule.actions);
   // Set up states for an example rewriting pair
-  const [q0, setQ0] = React.useState("");
-  const [q1, setQ1] = React.useState("");
+  const [q0, setQ0] = React.useState(hasQuery ? query[0] : "");
+  const [q1, setQ1] = React.useState(hasQuery ? query[1] : "");
 
   const onNameChange = (event) => {
     setName(event.target.value);
