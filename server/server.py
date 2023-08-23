@@ -573,7 +573,11 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         elif self.path == "/suggestionRewritingPath":
             self.post_suggestion_rewriting_path()
 
-
+    def do_GET(self):
+        print(self.path)
+        self.path = "/"  # Serve index.html for all routes
+        return SimpleHTTPRequestHandler.do_GET(self)
+    
 if __name__ == '__main__':
     # logging.basicConfig(format='%(asctime)s, %(levelname)s, %(message)s', level=logging.INFO)
     logging.basicConfig(format='%(message)s', level=logging.INFO)

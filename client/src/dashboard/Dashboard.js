@@ -115,6 +115,7 @@ function DashboardContent() {
                     }
                 })
                 .then((res) => {
+                    console.log('[Get Google token Success] res.access_token: ', res.access_token);
                     console.log('[Get Google Profile Success] res.data: ', res.data);
                     // post createUser request to server
                     axios.post('/createUser', {id: res.data.id, email: res.data.email})
