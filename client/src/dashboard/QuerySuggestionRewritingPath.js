@@ -16,6 +16,8 @@ import defaultSuggestionRewritingPathData from '../mock-api/suggestionRewritingP
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { vs } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import {userContext} from "../userContext";
+import RewritingRuleModal, { listRules } from "./RewritingRuleModal";
+
 
 const Item = styled(Paper)(({ theme }) => ({
   backgroundColor: theme.palette.mode === 'dark' ? '#1A2027' : '#fff',
@@ -25,7 +27,7 @@ const Item = styled(Paper)(({ theme }) => ({
   color: theme.palette.text.primary,
 }));
 
-const QuerySuggestionRewritingPath = NiceModal.create(({ queryId }) => {
+const QuerySuggestionRewritingPath = NiceModal.create(({ user, queryId }) => {
   const modal = useModal();
   // Set up a state for rewritingPath
   const [suggestionRewritingPath, setSuggestionRewritingPath] = React.useState({rewritings:[]});
@@ -55,6 +57,16 @@ const QuerySuggestionRewritingPath = NiceModal.create(({ queryId }) => {
   // call getSuggestionRewritePath() only once after initial rendering
   React.useEffect(() => {getSuggestionRewritingPath(queryId)}, []);
 
+  // handle click on Add to mine button
+  const AddOrEditRewritingRule = (q0, q1) => {
+    var query = [JSON.stringify(q0), q1];
+    NiceModal.show(RewritingRuleModal, {user_id: user.id, query: query})
+    .then((res) => {
+      console.log(res);
+      listRules();
+    });
+  };
+
   return (
     <Dialog
       open={modal.visible}
@@ -79,7 +91,7 @@ const QuerySuggestionRewritingPath = NiceModal.create(({ queryId }) => {
                     <Stack direction="row" spacing={2} >
                       <Item>{rewriting.rule}</Item>
                       <Item>{rewriting.rule_user_email}</Item>
-                      <Button variant="outlined">Add to mine</Button>
+                      <Button variant="outlined" onClick={() => AddOrEditRewritingRule(suggestionRewritingPath.original_sql, rewriting.rewritten_sql)} >Add to mine</Button>
                     </Stack>
                   </Item>
                   <Item>
