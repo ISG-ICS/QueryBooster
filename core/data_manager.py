@@ -119,6 +119,22 @@ class DataManager:
         except Error as e:
             print(e)
     
+    def fetch_rule(self, rule_id: int) -> Dict:
+        try:
+            cur = self.db_conn.cursor()
+            cur.execute('''SELECT rules.id, 
+                                  rules.key, 
+                                  rules.name, 
+                                  rules.pattern,
+                                  rules.constraints,
+                                  rules.rewrite,
+                                  rules.actions
+                           FROM rules
+                           WHERE rules.id = ?''', [rule_id])
+            return cur.fetchall()[0]
+        except Error as e:
+            print(e)
+    
     def enable_rule(self, rule_id: int, app_id: int, app_name: str) -> bool:
         try:
             cur = self.db_conn.cursor()
