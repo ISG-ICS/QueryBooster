@@ -59,6 +59,22 @@ class RuleManager:
                 'actions_json': json.loads(rule[6])
             })
         return res
+
+    def fetch_rule(self, rule_id: int) -> dict:
+        rule = self.dm.fetch_rule(rule_id)
+        try:
+            return {
+                'id': rule[0],
+                'key': rule[1],
+                'name': rule[2],
+                'pattern': rule[3],
+                'constraints': rule[4],
+                'rewrite': rule[5],
+                'actions': rule[6]
+            }
+        except Exception as e:
+            print(e)
+            return {}
     
     def list_rules(self, user_id: str, app_id: str) -> list:
         rules = self.dm.list_rules(user_id)

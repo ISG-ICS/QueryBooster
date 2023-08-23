@@ -16,7 +16,7 @@ import defaultSuggestionRewritingPathData from '../mock-api/suggestionRewritingP
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { vs } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import {userContext} from "../userContext";
-import RewritingRuleModal, { listRules } from "./RewritingRuleModal";
+import RewritingRuleModal from "./RewritingRuleModal";
 
 
 const Item = styled(Paper)(({ theme }) => ({
@@ -58,13 +58,31 @@ const QuerySuggestionRewritingPath = NiceModal.create(({ user, queryId }) => {
   React.useEffect(() => {getSuggestionRewritingPath(queryId)}, []);
 
   // handle click on Add to mine button
-  const AddOrEditRewritingRule = (q0, q1) => {
-    var query = [JSON.stringify(q0), q1];
-    NiceModal.show(RewritingRuleModal, {user_id: user.id, query: query})
-    .then((res) => {
-      console.log(res);
-      listRules();
-    });
+  const AddOrEditRewritingRule = (rule_id) => {
+    console.log('[/fetchRule] -> request:');
+    console.log('  rule_id: ' + rule_id);
+    // post fetchRule request to server
+    axios.post('/fetchRule', {'rule_id': rule_id})
+      .then(function (response) {
+        console.log('[/fetchRule] -> response:');
+        console.log(response);
+        const fetchedRule = response.data;
+        // make sure the fetchedRule is a new rule to RewritingRuleModal
+        // TODO - refine this logic later
+        fetchedRule['id'] = -1;
+        fetchedRule['name'] = fetchedRule['name'] + ' (Suggested)';
+        // fetching the rule succeeds, open the RewritingRuleModal to add/edit the rule
+        NiceModal.show(RewritingRuleModal, {user_id: user.id, rule: fetchedRule})
+        .then((res) => {
+          console.log(res);
+        });
+      })
+      .catch(function (error) {
+        console.log('[/fetchRule] -> error:');
+        console.log(error);
+        // fetching the rule fails, do nothing
+      });
+    
   };
 
   return (
@@ -91,7 +109,7 @@ const QuerySuggestionRewritingPath = NiceModal.create(({ user, queryId }) => {
                     <Stack direction="row" spacing={2} >
                       <Item>{rewriting.rule}</Item>
                       <Item>{rewriting.rule_user_email}</Item>
-                      <Button variant="outlined" onClick={() => AddOrEditRewritingRule(suggestionRewritingPath.original_sql, rewriting.rewritten_sql)} >Add to mine</Button>
+                      <Button variant="outlined" onClick={() => AddOrEditRewritingRule(rewriting.rule_id)} >Add to mine</Button>
                     </Stack>
                   </Item>
                   <Item>

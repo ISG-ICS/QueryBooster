@@ -169,6 +169,26 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
         response.write(str(success).encode('utf-8'))
         self.wfile.write(response.getvalue())
 
+    def post_fetch_rule(self):
+        content_length = int(self.headers['Content-Length'])
+        body = self.rfile.read(content_length)
+        request = body.decode('utf-8')
+
+        # logging
+        logging.info("\n[/fetchRule] request:")
+        logging.info(request)
+
+        # fetch a rule from rule manager
+        request = json.loads(request, strict=False)
+        rule_id = request['rule_id']
+        rule_json = self.rm.fetch_rule(int(rule_id))
+
+        self.send_response(200)
+        self.end_headers()
+        response = BytesIO()
+        response.write(json.dumps(rule_json).encode('utf-8'))
+        self.wfile.write(response.getvalue())
+
     def post_save_rule(self):
         content_length = int(self.headers['Content-Length'])
         body = self.rfile.read(content_length)
@@ -536,6 +556,8 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.post_recommend_rule()
         elif self.path == "/recommendRules":
             self.post_recommend_rules()
+        elif self.path == "/fetchRule":
+            self.post_fetch_rule()
         elif self.path == "/saveRule":
             self.post_save_rule()
         elif self.path == "/deleteRule":
