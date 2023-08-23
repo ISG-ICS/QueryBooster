@@ -57,7 +57,7 @@ const QuerySuggestionRewritingPath = NiceModal.create(({ user, queryId }) => {
   // call getSuggestionRewritePath() only once after initial rendering
   React.useEffect(() => {getSuggestionRewritingPath(queryId)}, []);
 
-  // handle click on add rewriting rule button AND edit rewriting rule button
+  // handle click on Add to mine button
   const AddOrEditRewritingRule = (q0, q1) => {
     var query = [JSON.stringify(q0), q1];
     NiceModal.show(RewritingRuleModal, {user_id: user.id, query: query})
