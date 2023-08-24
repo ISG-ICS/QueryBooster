@@ -95,7 +95,9 @@ const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' 
 const mdTheme = createTheme();
 
 function DashboardContent() {
-  const [user, setUser] = React.useState({});
+  const [user, setUser] = React.useState(() => {
+    return JSON.parse(localStorage.getItem('userInfo')) || {}
+  });
   const [open, setOpen] = React.useState(true);
   const toggleDrawer = () => {
     setOpen(!open);
@@ -115,7 +117,6 @@ function DashboardContent() {
                     }
                 })
                 .then((res) => {
-                    console.log('[Get Google token Success] res.access_token: ', res.access_token);
                     console.log('[Get Google Profile Success] res.data: ', res.data);
                     // post createUser request to server
                     axios.post('/createUser', {id: res.data.id, email: res.data.email})
@@ -137,11 +138,14 @@ function DashboardContent() {
 
   const logout = () => {
     googleLogout();
+    localStorage.removeItem('userInfo');
     setUser({});
     forceUpdate();
 };
 
-  React.useEffect(() => {}, []);
+  React.useEffect(() => {
+    localStorage.setItem('userInfo', JSON.stringify(user));
+  }, [user]);
 
   return (
     <userContext.Provider value={user}>
@@ -242,14 +246,13 @@ function DashboardContent() {
                 {/* Rewriting Rules */}
                 <Grid item xs={12}>
                   <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
-                    <Routes>
-                      {/* <RewritingRules /> */}
-                      <Route exact path="/" element={<RewritingRules />} />
-                      <Route path="/formulator" element={<RuleFormulator />} />
-                      <Route path="/jdbc" element={<JDBCDrivers />} />
-                      <Route path="/queries" element={<QueryLogs />} />
-                      <Route path="/applications" element={<Applications />} />
-                    </Routes>
+                      <Routes>
+                        <Route exact path="/" element={<RewritingRules />} />
+                        <Route path="/formulator" element={<RuleFormulator />} />
+                        <Route path="/jdbc" element={<JDBCDrivers />} />
+                        <Route path="/queries" element={<QueryLogs />} />
+                        <Route path="/applications" element={<Applications />} />
+                      </Routes>
                   </Paper>
                 </Grid>
               </Grid>
