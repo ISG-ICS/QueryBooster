@@ -246,13 +246,13 @@ function DashboardContent() {
                 {/* Rewriting Rules */}
                 <Grid item xs={12}>
                   <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
-                      <Routes>
-                        <Route exact path="/" element={<RewritingRules />} />
-                        <Route path="/formulator" element={<RuleFormulator />} />
-                        <Route path="/jdbc" element={<JDBCDrivers />} />
-                        <Route path="/queries" element={<QueryLogs />} />
-                        <Route path="/applications" element={<Applications />} />
-                      </Routes>
+                    <Routes>
+                      <Route exact path="/" element={<RewritingRules />} />
+                      <Route path="/formulator" element={<RuleFormulator />} />
+                      <Route path="/jdbc" element={<JDBCDrivers />} />
+                      <Route path="/queries" element={<QueryLogs />} />
+                      <Route path="/applications" element={<Applications />} />
+                    </Routes>
                   </Paper>
                 </Grid>
               </Grid>

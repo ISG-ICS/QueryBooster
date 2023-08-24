@@ -572,8 +572,8 @@ class MyHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.post_create_user()
         elif self.path == "/suggestionRewritingPath":
             self.post_suggestion_rewriting_path()
-    
-    
+
+
 if __name__ == '__main__':
     # logging.basicConfig(format='%(asctime)s, %(levelname)s, %(message)s', level=logging.INFO)
     logging.basicConfig(format='%(message)s', level=logging.INFO)

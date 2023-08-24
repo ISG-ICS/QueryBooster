@@ -9,15 +9,15 @@ import 'fontsource-roboto'
 import { GoogleOAuthProvider } from '@react-oauth/google';
 
 ReactDOM.render(
-    <GoogleOAuthProvider clientId="536149484005-0rcbnt8rh458jcg806cf1e44o17fs86f.apps.googleusercontent.com">
-      <React.StrictMode>
-        <HashRouter>
-          <NiceModal.Provider>
-            <App />
-          </NiceModal.Provider>
-        </HashRouter>
-      </React.StrictMode>
-    </GoogleOAuthProvider>,
+  <GoogleOAuthProvider clientId="536149484005-0rcbnt8rh458jcg806cf1e44o17fs86f.apps.googleusercontent.com">
+    <React.StrictMode>
+      <HashRouter>
+        <NiceModal.Provider>
+          <App />
+        </NiceModal.Provider>
+      </HashRouter>
+    </React.StrictMode>
+  </GoogleOAuthProvider>,
   document.getElementById('root')
 );
 
