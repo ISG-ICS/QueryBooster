@@ -21,6 +21,7 @@ import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
 import RuleGraph from './RuleGraph';
 import AceEditor from "react-ace";
+import { diffChars } from 'diff';
 import "ace-builds/src-noconflict/theme-textmate";
 import "ace-builds/src-noconflict/mode-mysql";
 import "ace-builds/src-noconflict/mode-pgsql";
@@ -42,6 +43,9 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
   // Set up states for an example rewriting pair
   const [q0, setQ0] = React.useState(hasQuery ? query[0] : "");
   const [q1, setQ1] = React.useState(hasQuery ? query[1] : "");
+  //set compare marker
+  const [q0Markers, setq0Markers] = React.useState([]);
+  const [q1Markers, setq1Markers] = React.useState([]);
 
   const onNameChange = (event) => {
     setName(event.target.value);
@@ -177,9 +181,48 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
       aceEditor.resize();
     });
   };
-  
 
-  React.useEffect(() => {}, []);
+  //TODO: fix multi-column issue
+  const updateMarkers = () => {
+    const diffs = diffChars(q0, q1);
+    console.log('diffs:', diffs);
+    const newq0Markers = [];
+    const newq1Markers = [];
+    let q0Index = 0;
+    let q1Index = 0;
+
+    for (const diff of diffs) {
+      const valueLength = diff.value.length;
+
+      if (diff.added) {
+        newq1Markers.push({
+          startRow: 0,
+          startCol: q1Index,
+          endRow: 0,
+          endCol: q1Index + valueLength,
+          className: 'marker',
+        });
+        q1Index += valueLength;
+      } else if (diff.removed) {
+        newq0Markers.push({
+          startRow: 0,
+          startCol: q0Index,
+          endRow: 0,
+          endCol: q0Index + valueLength,
+          className: 'marker',
+        });
+        q0Index += valueLength;
+      } else {
+        q0Index += valueLength;
+        q1Index += valueLength;
+      }
+    }
+
+    setq0Markers(newq0Markers);
+    setq1Markers(newq1Markers);
+  }
+
+  React.useEffect(() => {updateMarkers();}, [q0, q1]);
 
   return (
     <Dialog
@@ -254,6 +297,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
                     width='100%'
                     height='100px'
                     onLoad={onLoad}
+                    markers={q0Markers}
                     fontSize={14}
                     showPrintMargin={true}
                     wrapEnabled={true}
@@ -277,6 +321,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
                     width='100%'
                     height='100px'
                     onLoad={onLoad}
+                    markers={q1Markers}
                     fontSize={14}
                     showPrintMargin={true}
                     wrapEnabled={true}
