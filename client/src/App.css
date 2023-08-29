@@ -27,9 +27,15 @@
 .App-link {
   color: #61dafb;
 }
-.marker {
+
+.add-marker {
   position: absolute;
   background-color: #FFFF00;
+}
+
+.remove-marker {
+  position: absolute;
+  background-color: #02ff80;
 }
 
 @keyframes App-logo-spin {

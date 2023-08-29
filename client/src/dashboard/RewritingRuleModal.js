@@ -184,42 +184,58 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
 
   //TODO: fix multi-column issue
   const updateMarkers = () => {
-    const diffs = diffChars(q0, q1);
-    console.log('diffs:', diffs);
+    const diff0 = diffChars(q0, q1);
+
+    console.log('diff0:', diff0);
     const newq0Markers = [];
     const newq1Markers = [];
-    let q0Index = 0;
-    let q1Index = 0;
+    let q0Index0 = 0;
+    let q1Index0 = 0;
 
-    for (const diff of diffs) {
+    for (const diff of diff0) {
       const valueLength = diff.value.length;
 
       if (diff.added) {
         newq1Markers.push({
           startRow: 0,
-          startCol: q1Index,
+          startCol: q1Index0,
           endRow: 0,
-          endCol: q1Index + valueLength,
-          className: 'marker',
+          endCol: q1Index0 + valueLength,
+          className: "add-marker",
         });
-        q1Index += valueLength;
+        newq0Markers.push({
+          startRow: 0,
+          startCol: q0Index0 - 1,
+          endRow: 0,
+          endCol: q0Index0 + 1,
+          className: "add-marker",
+        });
+        q1Index0 += valueLength;
       } else if (diff.removed) {
         newq0Markers.push({
           startRow: 0,
-          startCol: q0Index,
+          startCol: q0Index0,
           endRow: 0,
-          endCol: q0Index + valueLength,
-          className: 'marker',
+          endCol: q0Index0 + valueLength,
+          className: "remove-marker",
         });
-        q0Index += valueLength;
+        newq1Markers.push({
+          startRow: 0,
+          startCol: q1Index0 - 1,
+          endRow: 0,
+          endCol: q1Index0 + 1,
+          className: "remove-marker",
+        });
+        q0Index0 += valueLength;
       } else {
-        q0Index += valueLength;
-        q1Index += valueLength;
+        q0Index0 += valueLength;
+        q1Index0 += valueLength;
       }
     }
 
     setq0Markers(newq0Markers);
     setq1Markers(newq1Markers);
+
   }
 
   React.useEffect(() => {updateMarkers();}, [q0, q1]);
@@ -299,7 +315,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
                     onLoad={onLoad}
                     markers={q0Markers}
                     fontSize={14}
-                    showPrintMargin={true}
+                    showPrintMargin={false}
                     wrapEnabled={true}
                     showGutter={true}
                     highlightActiveLine={false}
@@ -323,7 +339,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
                     onLoad={onLoad}
                     markers={q1Markers}
                     fontSize={14}
-                    showPrintMargin={true}
+                    showPrintMargin={false}
                     wrapEnabled={true}
                     showGutter={true}
                     highlightActiveLine={false}
