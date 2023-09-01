@@ -27,7 +27,6 @@ import RewritingRules from './RewritingRules';
 import RuleFormulator from './RuleFormulator';
 import QueryLogs from './QueryLogs';
 import JDBCDrivers from './JDBCDrivers';
-import Applications from './Applications';
 import GoogleIcon from '@mui/icons-material/Google';
 import { googleLogout, useGoogleLogin } from '@react-oauth/google';
 // user context
@@ -247,7 +246,6 @@ function DashboardContent() {
                       <Route path="/formulator" element={<RuleFormulator />} />
                       <Route path="/jdbc" element={<JDBCDrivers />} />
                       <Route path="/queries" element={<QueryLogs />} />
-                      <Route path="/applications" element={<Applications />} />
                     </Routes>
                   </Paper>
                 </Grid>
