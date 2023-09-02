@@ -184,58 +184,124 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
 
   //TODO: fix multi-column issue
   const updateMarkers = () => {
-    const diff0 = diffChars(q0, q1);
+    const q0Lines = (q0 === "") ? "" : q0.split('\n');
+    const q1Lines = (q1 === "") ? "" : q1.split('\n');
+    setq0Markers([]);
+    setq1Markers([]);
 
-    console.log('diff0:', diff0);
+    if (! (q0Lines === "")) {
+      q0Lines.forEach((line, index) => {
+        const qiLine = (q1Lines === "" || q1Lines.length <= index) ? "" : q1Lines[index];
+        compareLine(index, line, qiLine);
+      });
+    }
+  }
+
+  const compareLine = (index, q0line, q1line) => {
+    const diffs = diffChars(q0line, q1line);
+
+    console.log('diffs:', diffs);
     const newq0Markers = [];
     const newq1Markers = [];
     let q0Index0 = 0;
     let q1Index0 = 0;
+    let prevRemv = false;
+    let canReplace = false;
 
-    for (const diff of diff0) {
+    for (const diff of diffs) {
       const valueLength = diff.value.length;
 
-      if (diff.added) {
-        newq1Markers.push({
-          startRow: 0,
-          startCol: q1Index0,
-          endRow: 0,
-          endCol: q1Index0 + valueLength,
-          className: "add-marker",
-        });
-        newq0Markers.push({
-          startRow: 0,
-          startCol: q0Index0 - 1,
-          endRow: 0,
-          endCol: q0Index0 + 1,
-          className: "add-marker",
-        });
-        q1Index0 += valueLength;
-      } else if (diff.removed) {
-        newq0Markers.push({
-          startRow: 0,
-          startCol: q0Index0,
-          endRow: 0,
-          endCol: q0Index0 + valueLength,
-          className: "remove-marker",
-        });
-        newq1Markers.push({
-          startRow: 0,
-          startCol: q1Index0 - 1,
-          endRow: 0,
-          endCol: q1Index0 + 1,
-          className: "remove-marker",
-        });
-        q0Index0 += valueLength;
+      if (canReplace){
+        //detect replaced marker
+        if (diff.added) {
+          newq0Markers[newq0Markers.length - 1].endCol = q0Index0;
+          newq1Markers[newq1Markers.length - 1].endCol = q1Index0 + valueLength;
+          q1Index0 += valueLength;
+        } else if (diff.removed) {
+          newq0Markers[newq0Markers.length - 1].endCol = q0Index0 + valueLength;
+          newq1Markers[newq1Markers.length - 1].endCol = q1Index0;
+          q0Index0 += valueLength;
+        } else {
+          q0Index0 += valueLength;
+          q1Index0 += valueLength;
+          if (!(/^\s*$/.test(diff.value))){
+            //if all space
+            canReplace = false;
+          }
+        }
+        prevRemv = false;
       } else {
-        q0Index0 += valueLength;
-        q1Index0 += valueLength;
+        //normal operation
+        if (diff.added) {
+          if(prevRemv) {
+            //replace: pop all previous removed-marker
+            const lastq0Remv = newq0Markers.pop();
+            const lastq1Remv = newq1Markers.pop();
+
+            //add replaced-marker
+            newq1Markers.push({
+              startRow: index,
+              startCol: q1Index0,
+              endRow: index,
+              endCol: q1Index0 + valueLength,
+              className: "replace-marker",
+            });
+            newq0Markers.push({
+              startRow: index,
+              startCol: lastq0Remv.startCol,
+              endRow: index,
+              endCol: lastq0Remv.endCol,
+              className: "replace-marker",
+            });
+            //replace true
+            canReplace = true;
+          } else {
+            newq1Markers.push({
+              startRow: index,
+              startCol: q1Index0,
+              endRow: index,
+              endCol: q1Index0 + valueLength,
+              className: "add-marker",
+            });
+            newq0Markers.push({
+              startRow: index,
+              startCol: q0Index0 - 1,
+              endRow: index,
+              endCol: q0Index0 + 1,
+              className: "add-marker",
+            });
+          }
+          q1Index0 += valueLength;
+          prevRemv = false;
+        } else if (diff.removed) {
+          newq0Markers.push({
+            startRow: index,
+            startCol: q0Index0,
+            endRow: index,
+            endCol: q0Index0 + valueLength,
+            className: "remove-marker",
+          });
+          newq1Markers.push({
+            startRow: index,
+            startCol: q1Index0 - 1,
+            endRow: index,
+            endCol: q1Index0,
+            className: "remove-marker",
+          });
+          q0Index0 += valueLength;
+          prevRemv = true;
+        } else {
+          q0Index0 += valueLength;
+          q1Index0 += valueLength;
+          prevRemv = false;
+        }
       }
     }
 
-    setq0Markers(newq0Markers);
-    setq1Markers(newq1Markers);
-
+    console.log(newq0Markers)
+    console.log(newq1Markers)
+    setq0Markers(q0Markers => [...q0Markers, ...newq0Markers]);
+    setq1Markers(q1Markers => [...q1Markers, ...newq1Markers]);
   }
 
   React.useEffect(() => {updateMarkers();}, [q0, q1]);

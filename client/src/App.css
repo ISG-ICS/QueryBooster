@@ -30,12 +30,17 @@
 
 .add-marker {
   position: absolute;
-  background-color: #FFFF00;
+  background-color: #9cf998;
 }
 
 .remove-marker {
   position: absolute;
-  background-color: #02ff80;
+  background-color: #fc7d7d;
+}
+
+.replace-marker {
+  position: absolute;
+  background-color: #fefb64;
 }
 
 @keyframes App-logo-spin {
