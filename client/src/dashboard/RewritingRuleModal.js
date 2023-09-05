@@ -208,7 +208,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
     let prevRemv = false;
     let canReplace = false;
 
-    for (const diff of diffs) {
+    diffs.forEach((diff, diffIndex) => {
       const valueLength = diff.value.length;
 
       if (canReplace){
@@ -263,11 +263,12 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
               endCol: q1Index0 + valueLength,
               className: "add-marker",
             });
+            //special case for ' and "
             newq0Markers.push({
               startRow: index,
-              startCol: q0Index0 - 1,
+              startCol: ((diffIndex+1 <= diffs.length-1) && (diffs[diffIndex+1].value.charAt(0) === "'")) ? (q0Index0 - 1) : (q0Index0),
               endRow: index,
-              endCol: q0Index0 + 1,
+              endCol: ((diffIndex+1 <= diffs.length-1) && (diffs[diffIndex+1].value.charAt(0) === "'")) ? (q0Index0) : (q0Index0 + 1),
               className: "add-marker",
             });
           }
@@ -296,7 +297,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
           prevRemv = false;
         }
       }
-    }
+    });
 
     console.log(newq0Markers)
     console.log(newq1Markers)
