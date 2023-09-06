@@ -49,7 +49,6 @@ def post_query():
             appguid = request_data['appguid']
             guid = request_data['guid']
 
-            print("GUID: " + guid)
             # rewrite
             if cmd == 'rewrite':
                 original_query = request_data['query']
@@ -66,9 +65,8 @@ def post_query():
                 print(log_text)
 
                 # Fetch enabled rules
-                # print("ETA1")
                 rules = rm.fetch_enabled_rules(appguid)
-                # print("ETA2")
+
                 # Rewrite the query
                 rewritten_query, rewriting_path = QueryRewriter.rewrite(original_query, rules)
                 rewritten_query = QueryPatcher.patch(rewritten_query, database)
@@ -77,11 +75,9 @@ def post_query():
                     rewriting[1] = QueryPatcher.patch(rewriting[1], database)
 
                 formatted_original_query = QueryRewriter.reformat(original_query)
-                # print("ETA3")
                 qm.log_query(
                     appguid, guid, QueryPatcher.patch(formatted_original_query, database),
                     rewritten_query, rewriting_path)
-                # print("ETA4")
                 log_text = "\n=================================================="
                 log_text += "\n    Rewritten query"
                 log_text += "\n--------------------------------------------------"
@@ -106,9 +102,7 @@ def post_query():
                 log_text += "\n query_time_ms: " + str(query_time_ms)
                 log_text += "\n--------------------------------------------------"
                 logging.info(log_text)
-                # print("ETA5")
                 qm.report_query(appguid, guid, query_time_ms)
-                # print("ETA6")
                 # Start a background thread to suggest rewritings for this query
                 threading.Thread(target=background_suggest_rewritings, name='Background Suggest Rewritings', args=[guid]).start()
 
@@ -416,12 +410,9 @@ def suggestion_rewriting_path():
         return jsonify(str(e)), 400
 
 def background_suggest_rewritings(guid):
-    print("DAVID start background")
     _dm = DataManager(init=False)
     _qm = QueryManager(_dm)
     _rm = RuleManager(_dm)
-
-    print("DAVID 1")
 
     log_text = ""
     log_text += "\n=================================================="
@@ -430,13 +421,9 @@ def background_suggest_rewritings(guid):
     log_text += "\n guid: " + guid
     print(log_text)
 
-    print("DAVID 2")
     # Fetch the query with the given guid
-    print("guid: " + guid)
     query = _qm.fetch_query(guid)
-    print("DAVID 3")
     if query['rewritten'] == 'NO':
-        print("DAVID if statement")
         # Suggest rewritings for the query
         original_query = query['sql']
         log_text = ""
@@ -464,26 +451,4 @@ def background_suggest_rewritings(guid):
     log_text += "\n   Background suggest rewritings [Ended]"
     log_text += "\n--------------------------------------------------"
 
-    print("DAVID -- end background")
     return None
-
-# testing
-#@app.route can take path parameters such as
-#1.
-# @app.route("/members")
-# def members():
-#     return {"members" : ["A", "B", "C"]}
-#2.
-# @app.route("/<filename>")
-# def serve_static(filename):
-#     return send_from_directory('./static/', filename)
-#3.
-# @app.route("/static/js/<path:filename>")
-# def serve_static2(filename):
-#     return send_from_directory('./static/static/js', filename)
-# @app.route("/static/css/<path:filename>")
-# def serve_static3(filename):
-#     return send_from_directory('./static/static/css', filename)
-
-# if __name__ == "__main__":
-#     app.run(debug=True, host='0.0.0.0', port=8000)
