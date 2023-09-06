@@ -114,7 +114,8 @@ def post_query():
 @app.route('/createUser', methods=['POST'])
 def create_user():
     try:
-        request_data = request.get_json()
+        # request_data = request.get_json()
+        request_data = json.loads(request.data, strict=False)
 
         # Logging
         print("\n[/createUser] request:")
@@ -129,7 +130,8 @@ def create_user():
 @app.route('/listRules', methods=['POST'])
 def list_rules():
     try:
-        request_data = request.get_json()
+        # request_data = request.get_json()
+        request_data = json.loads(request.data, strict=False)
 
         # Logging
         print("\n[/listRules] request:")
@@ -146,7 +148,8 @@ def list_rules():
 @app.route('/deleteRule', methods=['POST'])
 def delete_rule():
     try:
-        request_data = request.get_json()
+        # request_data = request.get_json()
+        request_data = json.loads(request.data, strict=False)
 
         # Logging
         print("\n[/deleteRule] request:")
@@ -161,7 +164,8 @@ def delete_rule():
 @app.route('/saveRule', methods=['POST'])
 def save_rule():
     try:
-        request_data = request.get_json()
+        # request_data = request.get_json()
+        request_data = json.loads(request.data, strict=False)
 
         # Logging
         print("\n[/saveRule] request:")
@@ -178,7 +182,8 @@ def save_rule():
 @app.route('/recommendRule', methods=['POST'])
 def recommend_rule():
     try:
-        request_data = request.get_json()
+        # request_data = request.get_json()
+        request_data = json.loads(request.data, strict=False)
 
         # Logging
         print("\n[/recommendRule] request:")
@@ -199,7 +204,8 @@ def recommend_rule():
 @app.route('/recommendRules', methods=['POST'])
 def recommend_rules():
     try:
-        request_data = request.get_json()
+        # request_data = request.get_json()
+        request_data = json.loads(request.data, strict=False)
 
         # Logging
         print("\n[/recommendRules] request:")
@@ -222,7 +228,8 @@ def recommend_rules():
 @app.route('/generateRuleGraph', methods=['POST'])
 def generate_rule_graph():
     try:
-        request_data = request.get_json()
+        # request_data = request.get_json()
+        request_data = json.loads(request.data, strict=False)
 
         # Logging
         print("\n[/generateRuleGraph] request:")
@@ -251,15 +258,16 @@ def generate_rule_graph():
 @app.route('/generateRulesGraph', methods=['POST'])
 def generate_rules_graph():
     try:
-        request_json = request.get_json()
+        # request_data = request.get_json()
+        request_data = json.loads(request.data, strict=False)
 
         # Logging
         logging.info("\n[/generateRulesGraph] request:")
-        logging.info(request_json)
+        logging.info(request_data)
 
         # Extract data from the JSON request
-        database = request_json['database']
-        examples = request_json['examples']
+        database = request_data['database']
+        examples = request_data['examples']
         root_rules_json = RuleGenerator.generate_rules_graph(examples)
 
         # Transform the rules graph to the UI required format
@@ -281,7 +289,8 @@ def generate_rules_graph():
 @app.route('/enableRule', methods=['POST'])
 def enable_rule():
     try:
-        request_data = request.get_json()
+        # request_data = request.get_json()
+        request_data = json.loads(request.data, strict=False)
 
         # Logging
         print("\n[/enableRule] request:")
@@ -298,7 +307,8 @@ def enable_rule():
 @app.route('/disableRule', methods=['POST'])
 def disable_rule():
     try:
-        request_data = request.get_json()
+        # request_data = request.get_json()
+        request_data = json.loads(request.data, strict=False)
 
         # Logging
         print("\n[/disableRule] request:")
@@ -315,7 +325,8 @@ def disable_rule():
 @app.route('/listQueries', methods=['POST'])
 def list_queries():
     try:
-        request_data = request.get_json()
+        # request_data = request.get_json()
+        request_data = json.loads(request.data, strict=False)
 
         # Logging
         print("\n[/listQueries] request:")
@@ -331,7 +342,8 @@ def list_queries():
 @app.route('/rewritingPath', methods=['POST'])
 def rewriting_path():
     try:
-        request_data = request.get_json()
+        # request_data = request.get_json()
+        request_data = json.loads(request.data, strict=False)
 
         # Logging
         print("\n[/rewritingPath] request:")
@@ -347,7 +359,8 @@ def rewriting_path():
 @app.route('/listApplications', methods=['POST'])
 def list_applications():
     try:
-        request_data = request.get_json()
+        # request_data = request.get_json()
+        request_data = json.loads(request.data, strict=False)
 
         # Logging
         print("\n[/listApplications] request:")
@@ -363,7 +376,8 @@ def list_applications():
 @app.route('/saveApplication', methods=['POST'])
 def save_application():
     try:
-        request_data = request.get_json()
+        # request_data = request.get_json()
+        request_data = json.loads(request.data, strict=False)
 
         # Logging
         print("\n[/saveApplication] request:")
@@ -378,7 +392,8 @@ def save_application():
 @app.route('/deleteApplication', methods=['POST'])
 def delete_application():
     try:
-        request_data = request.get_json()
+        # request_data = request.get_json()
+        request_data = json.loads(request.data, strict=False)
 
         # Logging
         logging.info("\n[/deleteApplication] request:")
@@ -396,7 +411,8 @@ def delete_application():
 @app.route('/suggestionRewritingPath', methods=['POST'])
 def suggestion_rewriting_path():
     try:
-        request_data = request.get_json()
+        # request_data = request.get_json()
+        request_data = json.loads(request.data, strict=False)
 
         # Logging
         print("\n[/suggestionRewritingPath] request:")
