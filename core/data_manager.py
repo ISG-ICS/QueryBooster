@@ -379,6 +379,7 @@ class DataManager:
                            FROM query_log JOIN queries ON query_log.id = queries.id
                           WHERE queries.guid = ?''', [guid])
             return cur.fetchall()[0]
+
         except Error as e:
             print(e)
     

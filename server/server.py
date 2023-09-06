@@ -31,9 +31,91 @@ am = AppManager(dm)
 um = UserManager(dm)
 
 #Members API Route
-@app.route("/")
-def index():
-    return send_from_directory('./static/', 'index.html')
+@app.route("/", methods=["GET", "POST"])
+def post_query():
+    try:
+        if request.method == "GET":
+            return send_from_directory('./static/', 'index.html')
+
+        elif request.method == "POST":
+            # request_data
+            request_data = json.loads(request.data, strict=False)
+
+            # Logging
+            print("\n[/] request:")
+            print(request)
+
+            cmd = request_data['cmd']
+            appguid = request_data['appguid']
+            guid = request_data['guid']
+
+            print("GUID: " + guid)
+            # rewrite
+            if cmd == 'rewrite':
+                original_query = request_data['query']
+                database = request_data['db']
+
+                log_text = "\n=================================================="
+                log_text += "\n    Original query"
+                log_text += "\n--------------------------------------------------"
+                log_text += "\n appguid: " + appguid
+                log_text += "\n guid: " + guid
+                log_text += "\n db: " + database
+                log_text += "\n" + QueryRewriter.beautify(original_query)
+                log_text += "\n--------------------------------------------------"
+                print(log_text)
+
+                # Fetch enabled rules
+                # print("ETA1")
+                rules = rm.fetch_enabled_rules(appguid)
+                # print("ETA2")
+                # Rewrite the query
+                rewritten_query, rewriting_path = QueryRewriter.rewrite(original_query, rules)
+                rewritten_query = QueryPatcher.patch(rewritten_query, database)
+
+                for rewriting in rewriting_path:
+                    rewriting[1] = QueryPatcher.patch(rewriting[1], database)
+
+                formatted_original_query = QueryRewriter.reformat(original_query)
+                # print("ETA3")
+                qm.log_query(
+                    appguid, guid, QueryPatcher.patch(formatted_original_query, database),
+                    rewritten_query, rewriting_path)
+                # print("ETA4")
+                log_text = "\n=================================================="
+                log_text += "\n    Rewritten query"
+                log_text += "\n--------------------------------------------------"
+                log_text += "\n appguid: " + appguid
+                log_text += "\n guid: " + guid
+                log_text += "\n db: " + database
+                log_text += "\n" + QueryRewriter.beautify(rewritten_query)
+                log_text += "\n--------------------------------------------------"
+                print(log_text)
+
+                return rewritten_query
+
+            # report
+            elif cmd == 'report':
+                query_time_ms = request_data['queryTimeMs']
+
+                log_text = "\n=================================================="
+                log_text += "\n    Report query time ms"
+                log_text += "\n--------------------------------------------------"
+                log_text += "\n appguid: " + appguid
+                log_text += "\n guid: " + guid
+                log_text += "\n query_time_ms: " + str(query_time_ms)
+                log_text += "\n--------------------------------------------------"
+                logging.info(log_text)
+                # print("ETA5")
+                qm.report_query(appguid, guid, query_time_ms)
+                # print("ETA6")
+                # Start a background thread to suggest rewritings for this query
+                threading.Thread(target=background_suggest_rewritings, name='Background Suggest Rewritings', args=[guid]).start()
+
+                return 'true'
+
+    except Exception as e:
+        return jsonify(str(e)), 400
 
 @app.route('/createUser', methods=['POST'])
 def create_user():
@@ -45,7 +127,6 @@ def create_user():
         print(request_data)
 
         success = um.create_user(request_data)
-
 
         return jsonify(success), 200
     except Exception as e:
@@ -335,6 +416,13 @@ def suggestion_rewriting_path():
         return jsonify(str(e)), 400
 
 def background_suggest_rewritings(guid):
+    print("DAVID start background")
+    _dm = DataManager(init=False)
+    _qm = QueryManager(_dm)
+    _rm = RuleManager(_dm)
+
+    print("DAVID 1")
+
     log_text = ""
     log_text += "\n=================================================="
     log_text += "\n   Background suggest rewritings [Started]"
@@ -342,9 +430,13 @@ def background_suggest_rewritings(guid):
     log_text += "\n guid: " + guid
     print(log_text)
 
+    print("DAVID 2")
     # Fetch the query with the given guid
-    query = qm.fetch_query(guid)
+    print("guid: " + guid)
+    query = _qm.fetch_query(guid)
+    print("DAVID 3")
     if query['rewritten'] == 'NO':
+        print("DAVID if statement")
         # Suggest rewritings for the query
         original_query = query['sql']
         log_text = ""
@@ -354,12 +446,12 @@ def background_suggest_rewritings(guid):
         log_text += "\n" + QueryRewriter.beautify(original_query)
         print(log_text)
         # Fetch all rules
-        rules = rm.fetch_all_rules()
+        rules = _rm.fetch_all_rules()
         rewritten_query, rewriting_path = QueryRewriter.rewrite(original_query, rules)
         rewritten_query = QueryPatcher.patch(rewritten_query)
         for rewriting in rewriting_path:
             rewriting[1] = QueryPatcher.patch(rewriting[1])
-        qm.log_query_suggestion(query['id'], rewritten_query, rewriting_path)
+        _qm.log_query_suggestion(query['id'], rewritten_query, rewriting_path)
         log_text = ""
         log_text += "\n--------------------------------------------------"
         log_text += "\n    Rewritten query"
@@ -372,6 +464,7 @@ def background_suggest_rewritings(guid):
     log_text += "\n   Background suggest rewritings [Ended]"
     log_text += "\n--------------------------------------------------"
 
+    print("DAVID -- end background")
     return None
 
 # testing
