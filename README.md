@@ -43,5 +43,5 @@ Go to the link http://localhost:8000 to access the web interface.
 
 #### Test
 ```bash
-python3 -m pytest
+gunicorn -w 4 -b 127.0.0.1:8000 'server.server:app'
 ```
