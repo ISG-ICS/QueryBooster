@@ -1,1 +1,0 @@
-SELECT CAST("tweets"."created_at" AS DATE)
