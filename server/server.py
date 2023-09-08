@@ -4,7 +4,6 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 import sys
 # append the path of the parent directory
 sys.path.append("..")
-# from http.server import HTTPServer, SimpleHTTPRequestHandler
 import json
 import logging
 import threading
@@ -30,7 +29,7 @@ qm = QueryManager(dm)
 am = AppManager(dm)
 um = UserManager(dm)
 
-#Members API Route
+# Members API Route
 @app.route("/", methods=["GET", "POST"])
 def post_query():
     try:
