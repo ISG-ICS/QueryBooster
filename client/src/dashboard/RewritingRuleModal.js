@@ -182,7 +182,29 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
     });
   };
 
-  //TODO: fix multi-column issue
+  function findDistanceToSpaces(inputString, currentPosition) {
+    
+    let prevSpaceIndex = 0;
+    let nextSpaceIndex = 0;
+    // if current character is a space
+    if (inputString[currentPosition] === ' ') {
+      prevSpaceIndex = inputString.lastIndexOf(' ', currentPosition-1);
+      nextSpaceIndex = inputString.indexOf(' ', currentPosition+1);
+    } else {
+      prevSpaceIndex = inputString.lastIndexOf(' ', currentPosition);
+      nextSpaceIndex = inputString.indexOf(' ', currentPosition);
+    };
+  
+    // Calculate the distance to the previous and next space characters
+    const distanceToPrevSpace = currentPosition - prevSpaceIndex;
+    const distanceToNextSpace = nextSpaceIndex - currentPosition;
+  
+    return {
+      distanceToPrevSpace,
+      distanceToNextSpace,
+    };
+  }
+
   const updateMarkers = () => {
     const q0Lines = (q0 === "") ? "" : q0.split('\n');
     const q1Lines = (q1 === "") ? "" : q1.split('\n');
@@ -244,32 +266,43 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
               startCol: q1Index0,
               endRow: index,
               endCol: q1Index0 + valueLength,
-              className: "replace-marker",
+              className: "d_replace-marker",
             });
             newq0Markers.push({
               startRow: index,
               startCol: lastq0Remv.startCol,
               endRow: index,
               endCol: lastq0Remv.endCol,
-              className: "replace-marker",
+              className: "d_replace-marker",
             });
             //replace true
             canReplace = true;
           } else {
+            //add marker for the entire word for q0 and q1
+            const q0WordDiff = findDistanceToSpaces(q0, q0Index0);
+            const q1WordDiff = findDistanceToSpaces(q1, q1Index0);
+            
+            newq0Markers.push({
+              startRow: index,
+              startCol: q0Index0 - q0WordDiff.distanceToPrevSpace + 1,
+              endRow: index,
+              endCol: q0Index0 + q0WordDiff.distanceToNextSpace,
+              className: "a_add-string-marker",
+            });
+            newq1Markers.push({
+              startRow: index,
+              startCol: q1Index0 - q1WordDiff.distanceToPrevSpace + 1,
+              endRow: index,
+              endCol: q1Index0 + q1WordDiff.distanceToNextSpace,
+              className: "a_add-string-marker",
+            });
+            //highlight added character
             newq1Markers.push({
               startRow: index,
               startCol: q1Index0,
               endRow: index,
               endCol: q1Index0 + valueLength,
-              className: "add-marker",
-            });
-            //special case for ' and "
-            newq0Markers.push({
-              startRow: index,
-              startCol: ((diffIndex+1 <= diffs.length-1) && (diffs[diffIndex+1].value.charAt(0) === "'")) ? (q0Index0 - 1) : (q0Index0),
-              endRow: index,
-              endCol: ((diffIndex+1 <= diffs.length-1) && (diffs[diffIndex+1].value.charAt(0) === "'")) ? (q0Index0) : (q0Index0 + 1),
-              className: "add-marker",
+              className: "b_add-char-marker",
             });
           }
           q1Index0 += valueLength;
@@ -280,14 +313,14 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
             startCol: q0Index0,
             endRow: index,
             endCol: q0Index0 + valueLength,
-            className: "remove-marker",
+            className: "c_remove-marker",
           });
           newq1Markers.push({
             startRow: index,
             startCol: q1Index0 - 1,
             endRow: index,
             endCol: q1Index0,
-            className: "remove-marker",
+            className: "c_remove-marker",
           });
           q0Index0 += valueLength;
           prevRemv = true;
@@ -299,6 +332,8 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
       }
     });
 
+    newq0Markers.sort((a, b) => a.className.localeCompare(b.className));
+    newq1Markers.sort((a, b) => a.className.localeCompare(b.className));
     console.log(newq0Markers)
     console.log(newq1Markers)
     setq0Markers(q0Markers => [...q0Markers, ...newq0Markers]);

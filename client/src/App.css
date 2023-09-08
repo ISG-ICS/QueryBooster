@@ -28,19 +28,24 @@
   color: #61dafb;
 }
 
-.add-marker {
+.b_add-char-marker {
   position: absolute;
-  background-color: #9cf998;
+  background-color: #7aee95;
 }
 
-.remove-marker {
+.a_add-string-marker {
   position: absolute;
-  background-color: #fc7d7d;
+  background-color: #b8fbc8;
 }
 
-.replace-marker {
+.c_remove-marker {
   position: absolute;
-  background-color: #fefb64;
+  background-color: #fcccc8;
+}
+
+.d_replace-marker {
+  position: absolute;
+  background-color: #fefac0;
 }
 
 @keyframes App-logo-spin {
