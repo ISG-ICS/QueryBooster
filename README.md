@@ -33,8 +33,7 @@ npm run build
 
 #### Run QueryBooster server
 ```bash
-cd server/
-python3 server.py
+gunicorn -w 4 -b 127.0.0.1:8000 'server.server:app'
 ```
 
 #### Access QueryBooster web interface
