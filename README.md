@@ -44,3 +44,9 @@ Go to the link http://localhost:8000 to access the web interface.
 ```bash
 python3 -m pytest
 ```
+
+## VLDB 2023 Experiment
+The workloads we experimented on for the paper "**QueryBooster: Improving SQL Performance Using Middleware Services for Human-Centered Query Rewriting**" (published in VLDB 2023) are the following:
+ - Selected query pairs from WeTune: [Test_wetune.csv](https://github.com/ISG-ICS/QueryBooster/blob/main/experiments/Test_wetune.csv).
+ - Query pairs from Calcite test suite: [calcite_tests.csv](https://github.com/ISG-ICS/QueryBooster/blob/main/experiments/calcite_tests.csv).
+ - Tableau generated TPC-H queries (and their human-rewritten queries): [tpch_pg.md](https://github.com/ISG-ICS/QueryBooster/blob/main/experiments/tpch_pg.md).
