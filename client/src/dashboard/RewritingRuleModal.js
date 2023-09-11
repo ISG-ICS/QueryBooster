@@ -183,17 +183,10 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
   };
 
   function findDistanceToSpaces(inputString, currentPosition) {
-    
-    let prevSpaceIndex = 0;
-    let nextSpaceIndex = 0;
-    // if current character is a space
-    if (inputString[currentPosition] === ' ') {
-      prevSpaceIndex = inputString.lastIndexOf(' ', currentPosition-1);
-      nextSpaceIndex = inputString.indexOf(' ', currentPosition+1);
-    } else {
-      prevSpaceIndex = inputString.lastIndexOf(' ', currentPosition);
-      nextSpaceIndex = inputString.indexOf(' ', currentPosition);
-    };
+    // Special case: if current character is a space
+    const isSpace = (inputString[currentPosition] === ' ');
+    const prevSpaceIndex = isSpace ? inputString.lastIndexOf(' ', currentPosition-1) : inputString.lastIndexOf(' ', currentPosition);
+    const nextSpaceIndex = isSpace ? inputString.indexOf(' ', currentPosition+1) : inputString.indexOf(' ', currentPosition);
   
     // Calculate the distance to the previous and next space characters
     const distanceToPrevSpace = currentPosition - prevSpaceIndex;
@@ -203,139 +196,146 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
       distanceToPrevSpace,
       distanceToNextSpace,
     };
-  }
+  };
 
   const updateMarkers = () => {
-    const q0Lines = (q0 === "") ? "" : q0.split('\n');
-    const q1Lines = (q1 === "") ? "" : q1.split('\n');
+    // Clear previous markers
     setq0Markers([]);
     setq1Markers([]);
 
+    const q0Lines = (q0 === "") ? "" : q0.split('\n');
+    const q1Lines = (q1 === "") ? "" : q1.split('\n');
+    
     if (! (q0Lines === "")) {
+      // Check each code line's difference
       q0Lines.forEach((line, index) => {
-        const qiLine = (q1Lines === "" || q1Lines.length <= index) ? "" : q1Lines[index];
-        compareLine(index, line, qiLine);
+        const q1Line = (q1Lines === "" || q1Lines.length <= index) ? "" : q1Lines[index];
+        getDiffByLine(index, line, q1Line);
       });
     }
   }
 
-  const compareLine = (index, q0line, q1line) => {
-    const diffs = diffChars(q0line, q1line);
+  const getDiffByLine = (index, q0Line, q1Line) => {
+    // Get every character difference using diff library
+    const diffs = diffChars(q0Line, q1Line);
 
-    console.log('diffs:', diffs);
     const newq0Markers = [];
     const newq1Markers = [];
-    let q0Index0 = 0;
-    let q1Index0 = 0;
+
+    // Variables used to track marker position 
+    let q0Index = 0;
+    let q1Index = 0;
     let prevRemv = false;
     let canReplace = false;
 
-    diffs.forEach((diff, diffIndex) => {
+    // Loop through each difference
+    diffs.forEach((diff) => {
       const valueLength = diff.value.length;
 
       if (canReplace){
-        //detect replaced marker
+        // Detect replaced marker
         if (diff.added) {
-          newq0Markers[newq0Markers.length - 1].endCol = q0Index0;
-          newq1Markers[newq1Markers.length - 1].endCol = q1Index0 + valueLength;
-          q1Index0 += valueLength;
+          newq0Markers[newq0Markers.length - 1].endCol = q0Index;
+          newq1Markers[newq1Markers.length - 1].endCol = q1Index + valueLength;
+          q1Index += valueLength;
         } else if (diff.removed) {
-          newq0Markers[newq0Markers.length - 1].endCol = q0Index0 + valueLength;
-          newq1Markers[newq1Markers.length - 1].endCol = q1Index0;
-          q0Index0 += valueLength;
+          newq0Markers[newq0Markers.length - 1].endCol = q0Index + valueLength;
+          newq1Markers[newq1Markers.length - 1].endCol = q1Index;
+          q0Index += valueLength;
         } else {
-          q0Index0 += valueLength;
-          q1Index0 += valueLength;
+          q0Index += valueLength;
+          q1Index += valueLength;
           if (!(/^\s*$/.test(diff.value))){
-            //if all space
+            // Check if all space
             canReplace = false;
           }
         }
         prevRemv = false;
       } else {
-        //normal operation
         if (diff.added) {
           if(prevRemv) {
-            //replace: pop all previous removed-marker
+            // Replace: pop all previous removed-marker
             const lastq0Remv = newq0Markers.pop();
             const lastq1Remv = newq1Markers.pop();
 
-            //add replaced-marker
+            // Add replaced-marker
             newq1Markers.push({
               startRow: index,
-              startCol: q1Index0,
+              startCol: q1Index,
               endRow: index,
-              endCol: q1Index0 + valueLength,
-              className: "d_replace-marker",
+              endCol: q1Index + valueLength,
+              className: "replace-marker",
             });
             newq0Markers.push({
               startRow: index,
               startCol: lastq0Remv.startCol,
               endRow: index,
               endCol: lastq0Remv.endCol,
-              className: "d_replace-marker",
+              className: "replace-marker",
             });
-            //replace true
+            // Set canReplace to true
             canReplace = true;
           } else {
-            //add marker for the entire word for q0 and q1
-            const q0WordDiff = findDistanceToSpaces(q0, q0Index0);
-            const q1WordDiff = findDistanceToSpaces(q1, q1Index0);
+            //  Normal Add operation, add marker for the entire word for q0 and q1
+            const q0WordDiff = findDistanceToSpaces(q0, q0Index);
+            const q1WordDiff = findDistanceToSpaces(q1, q1Index);
             
             newq0Markers.push({
               startRow: index,
-              startCol: q0Index0 - q0WordDiff.distanceToPrevSpace + 1,
+              startCol: q0Index - q0WordDiff.distanceToPrevSpace + 1,
               endRow: index,
-              endCol: q0Index0 + q0WordDiff.distanceToNextSpace,
-              className: "a_add-string-marker",
+              endCol: q0Index + q0WordDiff.distanceToNextSpace,
+              className: "add-all-marker",
             });
             newq1Markers.push({
               startRow: index,
-              startCol: q1Index0 - q1WordDiff.distanceToPrevSpace + 1,
+              startCol: q1Index - q1WordDiff.distanceToPrevSpace + 1,
               endRow: index,
-              endCol: q1Index0 + q1WordDiff.distanceToNextSpace,
-              className: "a_add-string-marker",
+              endCol: q1Index + q1WordDiff.distanceToNextSpace,
+              className: "add-all-marker",
             });
-            //highlight added character
+            // Highlight added character position
             newq1Markers.push({
               startRow: index,
-              startCol: q1Index0,
+              startCol: q1Index,
               endRow: index,
-              endCol: q1Index0 + valueLength,
-              className: "b_add-char-marker",
+              endCol: q1Index + valueLength,
+              className: "add-position-marker",
             });
           }
-          q1Index0 += valueLength;
+          q1Index += valueLength;
           prevRemv = false;
         } else if (diff.removed) {
+          // Normal remove operation
           newq0Markers.push({
             startRow: index,
-            startCol: q0Index0,
+            startCol: q0Index,
             endRow: index,
-            endCol: q0Index0 + valueLength,
-            className: "c_remove-marker",
+            endCol: q0Index + valueLength,
+            className: "remove-marker",
           });
           newq1Markers.push({
             startRow: index,
-            startCol: q1Index0 - 1,
+            startCol: q1Index - 1,
             endRow: index,
-            endCol: q1Index0,
-            className: "c_remove-marker",
+            endCol: q1Index,
+            className: "remove-marker",
           });
-          q0Index0 += valueLength;
+          q0Index += valueLength;
           prevRemv = true;
         } else {
-          q0Index0 += valueLength;
-          q1Index0 += valueLength;
+          // No add, remove, replace detected
+          q0Index += valueLength;
+          q1Index += valueLength;
           prevRemv = false;
         }
       }
     });
 
+    // Resolve marker overlap
     newq0Markers.sort((a, b) => a.className.localeCompare(b.className));
     newq1Markers.sort((a, b) => a.className.localeCompare(b.className));
-    console.log(newq0Markers)
-    console.log(newq1Markers)
+
     setq0Markers(q0Markers => [...q0Markers, ...newq0Markers]);
     setq1Markers(q1Markers => [...q1Markers, ...newq1Markers]);
   }
