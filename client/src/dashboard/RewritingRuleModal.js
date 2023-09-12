@@ -21,6 +21,7 @@ import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
 import RuleGraph from './RuleGraph';
 import AceEditor from "react-ace";
+import { diffChars } from 'diff';
 import "ace-builds/src-noconflict/theme-textmate";
 import "ace-builds/src-noconflict/mode-mysql";
 import "ace-builds/src-noconflict/mode-pgsql";
@@ -42,6 +43,9 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
   // Set up states for an example rewriting pair
   const [q0, setQ0] = React.useState(hasQuery ? query[0] : "");
   const [q1, setQ1] = React.useState(hasQuery ? query[1] : "");
+  //set compare marker
+  const [q0Markers, setq0Markers] = React.useState([]);
+  const [q1Markers, setq1Markers] = React.useState([]);
 
   const onNameChange = (event) => {
     setName(event.target.value);
@@ -177,9 +181,176 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
       aceEditor.resize();
     });
   };
-  
 
-  React.useEffect(() => {}, []);
+  function findDistanceToSpaces(inputString, currentPosition) {
+    // Special case: if current character is a space
+    const isSpace = (inputString[currentPosition] === ' ');
+    const prevSpaceIndex = isSpace ? inputString.lastIndexOf(' ', currentPosition-1) : inputString.lastIndexOf(' ', currentPosition);
+    const nextSpaceIndex = isSpace ? inputString.indexOf(' ', currentPosition+1) : inputString.indexOf(' ', currentPosition);
+  
+    // Calculate the distance to the previous and next space characters
+    const distanceToPrevSpace = currentPosition - prevSpaceIndex;
+    const distanceToNextSpace = nextSpaceIndex - currentPosition;
+  
+    return {
+      distanceToPrevSpace,
+      distanceToNextSpace,
+    };
+  };
+
+  const updateMarkers = () => {
+    // Clear previous markers
+    setq0Markers([]);
+    setq1Markers([]);
+
+    const q0Lines = (q0 === "") ? "" : q0.split('\n');
+    const q1Lines = (q1 === "") ? "" : q1.split('\n');
+    
+    if ( q0Lines !== "") {
+      // Check on each code line's difference and update marker for each line
+      q0Lines.forEach((line, index) => {
+        const q1Line = (q1Lines === "" || q1Lines.length <= index) ? "" : q1Lines[index];
+        getDiffByLine(index, line, q1Line);
+      });
+    }
+  }
+
+  const getDiffByLine = (index, q0Line, q1Line) => {
+    // Get every character difference using diff library
+
+    // diffs is an array of elements form like: { count: length_of_difference(int), added: is_added(bool/undefined), removed: is_removed(bool/undefined), value: difference_string(string) }
+    // e.g: [ 0: {count: 32, added: undefined, removed: true, value: "this is the string being removed"},
+    //        1: {count: 30, added: true, removed: undefined, value: "this is the string being added"},
+    //        2: {count: 33, added: undefined, removed: undefined, value: "this is the string without change"}]
+    const diffs = diffChars(q0Line, q1Line);
+
+    const newq0Markers = [];
+    const newq1Markers = [];
+
+    // Variables used to track marker position 
+    let q0Index = 0;
+    let q1Index = 0;
+    let prevRemv = false;
+    let canReplace = false;
+
+    // Loop through each difference
+    diffs.forEach((diff) => {
+      // Get the length of current difference
+      const valueLength = diff.value.length;
+
+      if (canReplace){
+        // Detect can replace: will switch the last marker to replace-marker
+        if (diff.added) {
+          // If current difference is an add operation: combine this add to last marker
+          newq0Markers[newq0Markers.length - 1].endCol = q0Index;
+          newq1Markers[newq1Markers.length - 1].endCol = q1Index + valueLength;
+          q1Index += valueLength;
+        } else if (diff.removed) {
+          // If current difference is an remove operation: combine this remove to last marker
+          newq0Markers[newq0Markers.length - 1].endCol = q0Index + valueLength;
+          newq1Markers[newq1Markers.length - 1].endCol = q1Index;
+          q0Index += valueLength;
+        } else {
+          // If current part has no difference: no marker change
+          q0Index += valueLength;
+          q1Index += valueLength;
+          if (!(/^\s*$/.test(diff.value))){
+            // Check if all space
+            canReplace = false;
+          }
+        }
+        prevRemv = false;
+      } else {
+        if (diff.added) {
+          if(prevRemv) {
+            // Replace: pop all previous removed-marker
+            const lastq0Remv = newq0Markers.pop();
+            const lastq1Remv = newq1Markers.pop();
+
+            // Push new replaced-marker for both q0 and q1
+            newq1Markers.push({
+              startRow: index,
+              startCol: q1Index,
+              endRow: index,
+              endCol: q1Index + valueLength,
+              className: "replace-marker",
+            });
+            newq0Markers.push({
+              startRow: index,
+              startCol: lastq0Remv.startCol,
+              endRow: index,
+              endCol: lastq0Remv.endCol,
+              className: "replace-marker",
+            });
+            // Set canReplace to true
+            canReplace = true;
+          } else {
+            // Detect the position for the entire word: seperated by spaces
+            const q0WordDiff = findDistanceToSpaces(q0, q0Index);
+            const q1WordDiff = findDistanceToSpaces(q1, q1Index);
+            // Normal Add operation, add marker for the entire word for both q0 and q1
+            newq0Markers.push({
+              startRow: index,
+              startCol: q0Index - q0WordDiff.distanceToPrevSpace + 1,
+              endRow: index,
+              endCol: q0Index + q0WordDiff.distanceToNextSpace,
+              className: "add-all-marker",
+            });
+            newq1Markers.push({
+              startRow: index,
+              startCol: q1Index - q1WordDiff.distanceToPrevSpace + 1,
+              endRow: index,
+              endCol: q1Index + q1WordDiff.distanceToNextSpace,
+              className: "add-all-marker",
+            });
+            // Highlight added character position
+            newq1Markers.push({
+              startRow: index,
+              startCol: q1Index,
+              endRow: index,
+              endCol: q1Index + valueLength,
+              className: "add-position-marker",
+            });
+          }
+          q1Index += valueLength;
+          prevRemv = false;
+        } else if (diff.removed) {
+          // Normal remove operation: push remove marker to both q0 and q1
+          newq0Markers.push({
+            startRow: index,
+            startCol: q0Index,
+            endRow: index,
+            endCol: q0Index + valueLength,
+            className: "remove-marker",
+          });
+          newq1Markers.push({
+            startRow: index,
+            startCol: q1Index - 1,
+            endRow: index,
+            endCol: q1Index,
+            className: "remove-marker",
+          });
+          q0Index += valueLength;
+          prevRemv = true;
+        } else {
+          // No add, remove, replace detected: no marker change, just update position
+          q0Index += valueLength;
+          q1Index += valueLength;
+          prevRemv = false;
+        }
+      }
+    });
+
+    // Resolve marker overlap
+    newq0Markers.sort((a, b) => a.className.localeCompare(b.className));
+    newq1Markers.sort((a, b) => a.className.localeCompare(b.className));
+
+    // Set New Markers for current line
+    setq0Markers(q0Markers => [...q0Markers, ...newq0Markers]);
+    setq1Markers(q1Markers => [...q1Markers, ...newq1Markers]);
+  }
+
+  React.useEffect(() => {updateMarkers();}, [q0, q1]);
 
   return (
     <Dialog
@@ -254,8 +425,9 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
                     width='100%'
                     height='100px'
                     onLoad={onLoad}
+                    markers={q0Markers}
                     fontSize={14}
-                    showPrintMargin={true}
+                    showPrintMargin={false}
                     wrapEnabled={true}
                     showGutter={true}
                     highlightActiveLine={false}
@@ -277,8 +449,9 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
                     width='100%'
                     height='100px'
                     onLoad={onLoad}
+                    markers={q1Markers}
                     fontSize={14}
-                    showPrintMargin={true}
+                    showPrintMargin={false}
                     wrapEnabled={true}
                     showGutter={true}
                     highlightActiveLine={false}
