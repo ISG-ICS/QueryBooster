@@ -206,7 +206,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
     const q0Lines = (q0 === "") ? "" : q0.split('\n');
     const q1Lines = (q1 === "") ? "" : q1.split('\n');
     
-    if (! (q0Lines === "")) {
+    if ( q0Lines !== "") {
       // Check on each code line's difference and update marker for each line
       q0Lines.forEach((line, index) => {
         const q1Line = (q1Lines === "" || q1Lines.length <= index) ? "" : q1Lines[index];
@@ -217,6 +217,11 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
 
   const getDiffByLine = (index, q0Line, q1Line) => {
     // Get every character difference using diff library
+
+    // diffs is an array of elements form like: { count: length_of_difference(int), added: is_added(bool/undefined), removed: is_removed(bool/undefined), value: difference_string(string) }
+    // e.g: [ 0: {count: 32, added: undefined, removed: true, value: "this is the string being removed"},
+    //        1: {count: 30, added: true, removed: undefined, value: "this is the string being added"},
+    //        2: {count: 33, added: undefined, removed: undefined, value: "this is the string without change"}]
     const diffs = diffChars(q0Line, q1Line);
 
     const newq0Markers = [];
