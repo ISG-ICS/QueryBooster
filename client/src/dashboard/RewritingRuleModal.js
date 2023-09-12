@@ -207,7 +207,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
     const q1Lines = (q1 === "") ? "" : q1.split('\n');
     
     if (! (q0Lines === "")) {
-      // Check each code line's difference
+      // Check on each code line's difference and update marker for each line
       q0Lines.forEach((line, index) => {
         const q1Line = (q1Lines === "" || q1Lines.length <= index) ? "" : q1Lines[index];
         getDiffByLine(index, line, q1Line);
@@ -230,19 +230,23 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
 
     // Loop through each difference
     diffs.forEach((diff) => {
+      // Get the length of current difference
       const valueLength = diff.value.length;
 
       if (canReplace){
-        // Detect replaced marker
+        // Detect can replace: will switch the last marker to replace-marker
         if (diff.added) {
+          // If current difference is an add operation: combine this add to last marker
           newq0Markers[newq0Markers.length - 1].endCol = q0Index;
           newq1Markers[newq1Markers.length - 1].endCol = q1Index + valueLength;
           q1Index += valueLength;
         } else if (diff.removed) {
+          // If current difference is an remove operation: combine this remove to last marker
           newq0Markers[newq0Markers.length - 1].endCol = q0Index + valueLength;
           newq1Markers[newq1Markers.length - 1].endCol = q1Index;
           q0Index += valueLength;
         } else {
+          // If current part has no difference: no marker change
           q0Index += valueLength;
           q1Index += valueLength;
           if (!(/^\s*$/.test(diff.value))){
@@ -258,7 +262,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
             const lastq0Remv = newq0Markers.pop();
             const lastq1Remv = newq1Markers.pop();
 
-            // Add replaced-marker
+            // Push new replaced-marker for both q0 and q1
             newq1Markers.push({
               startRow: index,
               startCol: q1Index,
@@ -276,10 +280,10 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
             // Set canReplace to true
             canReplace = true;
           } else {
-            //  Normal Add operation, add marker for the entire word for q0 and q1
+            // Detect the position for the entire word: seperated by spaces
             const q0WordDiff = findDistanceToSpaces(q0, q0Index);
             const q1WordDiff = findDistanceToSpaces(q1, q1Index);
-            
+            // Normal Add operation, add marker for the entire word for both q0 and q1
             newq0Markers.push({
               startRow: index,
               startCol: q0Index - q0WordDiff.distanceToPrevSpace + 1,
@@ -306,7 +310,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
           q1Index += valueLength;
           prevRemv = false;
         } else if (diff.removed) {
-          // Normal remove operation
+          // Normal remove operation: push remove marker to both q0 and q1
           newq0Markers.push({
             startRow: index,
             startCol: q0Index,
@@ -324,7 +328,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
           q0Index += valueLength;
           prevRemv = true;
         } else {
-          // No add, remove, replace detected
+          // No add, remove, replace detected: no marker change, just update position
           q0Index += valueLength;
           q1Index += valueLength;
           prevRemv = false;
@@ -336,6 +340,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
     newq0Markers.sort((a, b) => a.className.localeCompare(b.className));
     newq1Markers.sort((a, b) => a.className.localeCompare(b.className));
 
+    // Set New Markers for current line
     setq0Markers(q0Markers => [...q0Markers, ...newq0Markers]);
     setq1Markers(q1Markers => [...q1Markers, ...newq1Markers]);
   }
