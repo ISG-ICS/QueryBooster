@@ -22,6 +22,7 @@ import MenuItem from '@mui/material/MenuItem';
 import RuleGraph from './RuleGraph';
 import AceEditor from "react-ace";
 import { diffChars } from 'diff';
+import { format } from 'sql-formatter';
 import "ace-builds/src-noconflict/theme-textmate";
 import "ace-builds/src-noconflict/mode-mysql";
 import "ace-builds/src-noconflict/mode-pgsql";
@@ -181,6 +182,14 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
       aceEditor.resize();
     });
   };
+
+  const onBeautifyQuery = () => {
+    const sqlLanguage = (queryLanguage === 'pgsql') ? "postgresql" : queryLanguage;
+    const q0Format = format(q0, sqlLanguage);
+    const q1Format = format(q1, sqlLanguage);
+    setQ0(q0Format);
+    setQ1(q1Format);
+  }
 
   function findDistanceToSpaces(inputString, currentPosition) {
     // Special case: if current character is a space
@@ -414,6 +423,11 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
                           ))}
                         </Select>
                       </FormControl>
+                    </Grid>
+                    <Grid item xs={4} sm={4} md={4} lg={4} xl={4}>
+                    </Grid>
+                    <Grid item xs={2} sm={2} md={2} lg={2} xl={2}>
+                      <Button variant="outlined" color="primary" onClick={onBeautifyQuery}>Beautify Query</Button>
                     </Grid>
                   </Grid>
                 </Grid>
