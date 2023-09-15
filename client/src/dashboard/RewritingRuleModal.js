@@ -185,17 +185,97 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
 
   const onBeautifyQuery = () => {
     const sqlLanguage = (queryLanguage === 'pgsql') ? "postgresql" : queryLanguage;
-    const q0Format = format(q0, sqlLanguage);
-    const q1Format = format(q1, sqlLanguage);
-    setQ0(q0Format);
-    setQ1(q1Format);
+    const q0Format = format(q0, {"language": sqlLanguage,
+                                  "tabWidth": 1});
+    const q1Format = format(q1, { "language": sqlLanguage,
+                                  "tabWidth": 1});
+
+    const newLine = [];           
+    let curPos = 0;
+
+    const q0Lines = (q0Format === "") ? "" : q0Format.split('\n');
+    const q1Lines = (q1Format === "") ? "" : q1Format.split('\n');
+
+    let q0Pos = 0;
+    let q1Pos = 0;
+    let newq0 = '';
+    let newq1 = '';
+
+    // Align two queries
+    while (q0Pos < q0Lines.length && q1Pos < q1Lines.length) {
+      const diffs = diffChars(q0Lines[q0Pos], q1Lines[q1Pos]);
+      // console.log(q0Lines[q0Pos], q1Lines[q1Pos]);
+      // console.log(diffs);
+      if (diffs.length == 1 && ! diffs[0].added && ! diffs[0].removed) {
+        newq0 += q0Lines[q0Pos] + '\n';
+        newq1 += q1Lines[q1Pos] + '\n';
+        q0Pos += 1;
+        q1Pos += 1;
+      } else {
+        if (diffs.filter(diff => (! diff.added && ! diff.removed && !(/^\s*$/.test(diff.value)))).length > 0) {
+          newq0 += q0Lines[q0Pos] + '\n';
+          newq1 += q1Lines[q1Pos] + '\n';
+          q0Pos += 1;
+          q1Pos += 1;
+        } else {
+          newq0 += q0Lines[q0Pos] + '\n';
+          newq1 += ' \n';
+          q0Pos += 1;
+        }
+      }
+    }
+
+    // diffs.forEach((diff, index) => {
+    //   if (! diff.removed && ! diff.added) {
+    //     curPos += diff.count;
+    //     if(index < diffs.length - 1 && diffs[index+1].removed && diffs[index+1].value.includes('\n')) {
+    //       if(diff.value.slice(-2) === '\n ' || diff.value.slice(-1) === '\n') {
+    //         newLine.push({position: curPos, segment: ' \n'});
+    //       } else {
+    //         newLine.push({position: curPos, segment: '\n '});
+    //       }
+    //     }
+    //   }
+
+      // if (diff.removed) {
+      //   if(diff.value.includes('\n')) {
+      //     if(diffs[index-1].value.slice(-2) === '\n ' || (diffs[index-1].value.slice(-1) === '\n')){
+      //       console.log('yes:', diff);
+      //       newLine.push({position: curPos, segment: ' \n'});
+      //     } else {
+      //       console.log('no:', diff);
+      //       newLine.push({position: curPos, segment: '\n '});
+      //     }
+      //   }
+      // } else {
+      //   curPos += diff.count;
+      // }
+    // });
+
+    // let newq1 = q1Format;
+    // let placeHolder = 0;
+    // console.log(newLine);
+
+    // // Iterate through the reversed positions
+    // newLine.sort((a, b) => a.position - b.position);
+    // for (const eachNew of newLine) {
+    //   newq1 = newq1.slice(0, eachNew.position + placeHolder) + eachNew.segment + newq1.slice(eachNew.position + placeHolder);
+    // }
+    // console.log(newq1);
+
+    setQ0(newq0);
+    setQ1(newq1);
   }
 
   function findDistanceToSpaces(inputString, currentPosition) {
     // Special case: if current character is a space
     const isSpace = (inputString[currentPosition] === ' ');
-    const prevSpaceIndex = isSpace ? inputString.lastIndexOf(' ', currentPosition-1) : inputString.lastIndexOf(' ', currentPosition);
-    const nextSpaceIndex = isSpace ? inputString.indexOf(' ', currentPosition+1) : inputString.indexOf(' ', currentPosition);
+    let prevSpaceIndex = isSpace ? inputString.lastIndexOf(' ', currentPosition-1) : inputString.lastIndexOf(' ', currentPosition);
+    let nextSpaceIndex = isSpace ? inputString.indexOf(' ', currentPosition+1) : inputString.indexOf(' ', currentPosition);
+
+    if (nextSpaceIndex === -1){
+      nextSpaceIndex = inputString.length;
+    };
   
     // Calculate the distance to the previous and next space characters
     const distanceToPrevSpace = currentPosition - prevSpaceIndex;
@@ -214,8 +294,13 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
 
     const q0Lines = (q0 === "") ? "" : q0.split('\n');
     const q1Lines = (q1 === "") ? "" : q1.split('\n');
-    
-    if ( q0Lines !== "") {
+
+    if ( q0 !== "") {
+      // const indexes0 = [...q0.matchAll(new RegExp('\n', 'g'))].map(a => a.index);
+      // const indexes1 = [...q1.matchAll(new RegExp('\n', 'g'))].map(a => a.index);
+      // console.log(indexes0, indexes1); 
+
+      // getDiffByLine(0, q0, q1);
       // Check on each code line's difference and update marker for each line
       q0Lines.forEach((line, index) => {
         const q1Line = (q1Lines === "" || q1Lines.length <= index) ? "" : q1Lines[index];
@@ -295,8 +380,8 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
             canReplace = true;
           } else {
             // Detect the position for the entire word: seperated by spaces
-            const q0WordDiff = findDistanceToSpaces(q0, q0Index);
-            const q1WordDiff = findDistanceToSpaces(q1, q1Index);
+            const q0WordDiff = findDistanceToSpaces(q0Line, q0Index);
+            const q1WordDiff = findDistanceToSpaces(q1Line, q1Index);
             // Normal Add operation, add marker for the entire word for both q0 and q1
             newq0Markers.push({
               startRow: index,
