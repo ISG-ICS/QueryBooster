@@ -451,3 +451,8 @@ def background_suggest_rewritings(guid):
     log_text += "\n--------------------------------------------------"
 
     return None
+
+#fix 404 issue: set up server side routing
+@app.errorhandler(404)   
+def not_found(e):  
+    return send_from_directory('./static/', 'index.html')
