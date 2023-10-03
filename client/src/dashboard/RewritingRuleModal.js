@@ -225,44 +225,6 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
       }
     }
 
-    // diffs.forEach((diff, index) => {
-    //   if (! diff.removed && ! diff.added) {
-    //     curPos += diff.count;
-    //     if(index < diffs.length - 1 && diffs[index+1].removed && diffs[index+1].value.includes('\n')) {
-    //       if(diff.value.slice(-2) === '\n ' || diff.value.slice(-1) === '\n') {
-    //         newLine.push({position: curPos, segment: ' \n'});
-    //       } else {
-    //         newLine.push({position: curPos, segment: '\n '});
-    //       }
-    //     }
-    //   }
-
-      // if (diff.removed) {
-      //   if(diff.value.includes('\n')) {
-      //     if(diffs[index-1].value.slice(-2) === '\n ' || (diffs[index-1].value.slice(-1) === '\n')){
-      //       console.log('yes:', diff);
-      //       newLine.push({position: curPos, segment: ' \n'});
-      //     } else {
-      //       console.log('no:', diff);
-      //       newLine.push({position: curPos, segment: '\n '});
-      //     }
-      //   }
-      // } else {
-      //   curPos += diff.count;
-      // }
-    // });
-
-    // let newq1 = q1Format;
-    // let placeHolder = 0;
-    // console.log(newLine);
-
-    // // Iterate through the reversed positions
-    // newLine.sort((a, b) => a.position - b.position);
-    // for (const eachNew of newLine) {
-    //   newq1 = newq1.slice(0, eachNew.position + placeHolder) + eachNew.segment + newq1.slice(eachNew.position + placeHolder);
-    // }
-    // console.log(newq1);
-
     setQ0(newq0);
     setQ1(newq1);
   }
@@ -499,6 +461,9 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
                     <Grid item xs={4} sm={4} md={4} lg={4} xl={4}>
                       <FormLabel>Formulating a Rule using Rewriting Example</FormLabel>
                     </Grid>
+                    <Grid item xs={3} sm={3} md={3} lg={3} xl={3}>
+                      <Button variant="outlined" color="primary" onClick={onBeautifyQuery}>Beautify both Queries</Button>
+                    </Grid>
                     <Grid item xs={2} sm={2} md={2} lg={2} xl={2}>
                       <FormControl fullWidth>
                         <InputLabel>Select SQL Dialect</InputLabel>
@@ -508,11 +473,6 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
                           ))}
                         </Select>
                       </FormControl>
-                    </Grid>
-                    <Grid item xs={4} sm={4} md={4} lg={4} xl={4}>
-                    </Grid>
-                    <Grid item xs={2} sm={2} md={2} lg={2} xl={2}>
-                      <Button variant="outlined" color="primary" onClick={onBeautifyQuery}>Beautify Query</Button>
                     </Grid>
                   </Grid>
                 </Grid>
