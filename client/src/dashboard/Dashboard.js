@@ -96,7 +96,7 @@ const mdTheme = createTheme();
 
 function DashboardContent() {
   const [user, setUser] = React.useState(() => {
-    return JSON.parse(localStorage.getItem('userInfo')) || {}
+    return JSON.parse(sessionStorage.getItem('userInfo')) || {}
   });
   const [open, setOpen] = React.useState(true);
   const toggleDrawer = () => {
@@ -138,13 +138,13 @@ function DashboardContent() {
 
   const logout = () => {
     googleLogout();
-    localStorage.removeItem('userInfo');
+    sessionStorage.removeItem('userInfo');
     setUser({});
     forceUpdate();
 };
 
   React.useEffect(() => {
-    localStorage.setItem('userInfo', JSON.stringify(user));
+    sessionStorage.setItem('userInfo', JSON.stringify(user));
   }, [user]);
 
   return (
