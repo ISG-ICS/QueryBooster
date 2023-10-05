@@ -201,40 +201,51 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
     let newq0 = '';
     let newq1 = '';
 
-    // Align two queries
-    while (q0Pos < q0Lines.length && q1Pos < q1Lines.length) {
-      const diffs = diffChars(q0Lines[q0Pos], q1Lines[q1Pos]);
-      // console.log(q0Lines[q0Pos], q1Lines[q1Pos]);
-      // console.log(diffs);
-      if (diffs.length == 1 && ! diffs[0].added && ! diffs[0].removed) {
-        newq0 += q0Lines[q0Pos] + '\n';
-        newq1 += q1Lines[q1Pos] + '\n';
-        q0Pos += 1;
-        q1Pos += 1;
-      } else {
-        if (diffs.filter(diff => (! diff.added && ! diff.removed && !(/^\s*$/.test(diff.value)))).length > 0) {
-          newq0 += q0Lines[q0Pos] + '\n';
-          newq1 += q1Lines[q1Pos] + '\n';
-          q0Pos += 1;
-          q1Pos += 1;
-        } else {
-          newq0 += q0Lines[q0Pos] + '\n';
-          newq1 += ' \n';
-          q0Pos += 1;
-        }
-      }
-    }
+    // // Align two queries
+    // while (q0Pos < q0Lines.length && q1Pos < q1Lines.length) {
+    //   const diffs = diffChars(q0Lines[q0Pos], q1Lines[q1Pos]);
+    //   // console.log(q0Lines[q0Pos], q1Lines[q1Pos]);
+    //   // console.log(diffs);
+    //   if (diffs.length == 1 && ! diffs[0].added && ! diffs[0].removed) {
+    //     newq0 += q0Lines[q0Pos] + '\n';
+    //     newq1 += q1Lines[q1Pos] + '\n';
+    //     q0Pos += 1;
+    //     q1Pos += 1;
+    //   } else {
+    //     if (diffs.filter(diff => (! diff.added && ! diff.removed && !(/^\s*$/.test(diff.value)))).length > 0) {
+    //       newq0 += q0Lines[q0Pos] + '\n';
+    //       newq1 += q1Lines[q1Pos] + '\n';
+    //       q0Pos += 1;
+    //       q1Pos += 1;
+    //     } else {
+    //       newq0 += q0Lines[q0Pos] + '\n';
+    //       newq1 += ' \n';
+    //       q0Pos += 1;
+    //     }
+    //   }
+    // }
 
-    setQ0(newq0);
-    setQ1(newq1);
+    setQ0(q0Format);
+    setQ1(q1Format);
   }
 
-  function findDistanceToSpaces(inputString, currentPosition) {
+  function findDistanceToWords(inputString, currentPosition) {
     // Special case: if current character is a space
-    const isSpace = (inputString[currentPosition] === ' ');
-    let prevSpaceIndex = isSpace ? inputString.lastIndexOf(' ', currentPosition-1) : inputString.lastIndexOf(' ', currentPosition);
-    let nextSpaceIndex = isSpace ? inputString.indexOf(' ', currentPosition+1) : inputString.indexOf(' ', currentPosition);
+    const isSeperate = (inputString[currentPosition] === ' ');
 
+    const spaceBefore = isSeperate ? inputString.lastIndexOf(' ', currentPosition-1) : inputString.lastIndexOf(' ', currentPosition);
+    const lineBefore = isSeperate ? inputString.lastIndexOf('\n', currentPosition-1) : inputString.lastIndexOf('\n', currentPosition);
+    let prevSpaceIndex = Math.max(spaceBefore, lineBefore);
+
+    const spaceAfter = isSeperate ? inputString.indexOf(' ', currentPosition+1) : inputString.indexOf(' ', currentPosition);
+    const lineAfter = isSeperate ? inputString.indexOf('\n', currentPosition+1) : inputString.indexOf('\n', currentPosition);
+    let nextSpaceIndex = Math.min(spaceAfter, lineAfter);
+    if(spaceAfter === -1){
+      nextSpaceIndex = lineAfter;
+    } 
+    if(lineAfter === -1){
+      nextSpaceIndex = spaceAfter;
+    }
     if (nextSpaceIndex === -1){
       nextSpaceIndex = inputString.length;
     };
@@ -249,6 +260,53 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
     };
   };
 
+  function updateLineMarker(originalMarker, lineInfo){
+    const newMarkers = [];
+    let curStartLine = 0;
+    let curStartPos = 0;
+    let curEndLine = 0;
+    let curEndPos = 0;
+
+    originalMarker.forEach(marker => {
+      curStartLine = findLargestSmallerNumberIndex(lineInfo, marker.startCol) + 1;
+      curStartPos = marker.startCol - lineInfo[curStartLine-1] - 1;
+      curEndLine = findLargestSmallerNumberIndex(lineInfo, marker.endCol) + 1;
+      curEndPos = marker.endCol - lineInfo[curEndLine-1] - 1;
+      
+      newMarkers.push({
+        startRow: curStartLine,
+        startCol: curStartPos,
+        endRow: curEndLine,
+        endCol: curEndPos,
+        className: marker.className,
+      });
+
+    });
+
+    return newMarkers;
+  }
+
+  function findLargestSmallerNumberIndex(arr, target) {
+    let left = 0;
+    let right = arr.length - 1;
+    let result = 0; // Initialize with a default value, in case there's no such element
+  
+    while (left <= right) {
+      const mid = Math.floor((left + right) / 2);
+  
+      if (arr[mid] < target) {
+        // The current element is smaller than the target
+        result = mid; // Update the result to this index
+        left = mid + 1; // Search in the right half
+      } else {
+        // The current element is greater than or equal to the target
+        right = mid - 1; // Search in the left half
+      }
+    }
+  
+    return result;
+  };
+
   const updateMarkers = () => {
     // Clear previous markers
     setq0Markers([]);
@@ -258,16 +316,31 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
     const q1Lines = (q1 === "") ? "" : q1.split('\n');
 
     if ( q0 !== "") {
-      // const indexes0 = [...q0.matchAll(new RegExp('\n', 'g'))].map(a => a.index);
-      // const indexes1 = [...q1.matchAll(new RegExp('\n', 'g'))].map(a => a.index);
-      // console.log(indexes0, indexes1); 
 
       // getDiffByLine(0, q0, q1);
       // Check on each code line's difference and update marker for each line
-      q0Lines.forEach((line, index) => {
-        const q1Line = (q1Lines === "" || q1Lines.length <= index) ? "" : q1Lines[index];
-        getDiffByLine(index, line, q1Line);
-      });
+      // q0Lines.forEach((line, index) => {
+      //   const q1Line = (q1Lines === "" || q1Lines.length <= index) ? "" : q1Lines[index];
+      //   getDiffByLine(index, line, q1Line);
+      // });
+      let newMarkers = getDiffByLine(0, q0, q1);
+
+      //format by line 
+      const indexes0 = [...q0.matchAll(new RegExp('\n', 'g'))].map(a => a.index);
+      const finalq0Markers = (indexes0.length > 0)? updateLineMarker(newMarkers.newq0Markers, indexes0) : newMarkers.newq0Markers;
+
+      const indexes1 = [...q1.matchAll(new RegExp('\n', 'g'))].map(a => a.index);
+      console.log('before:',newMarkers.newq1Markers);
+      const finalq1Markers = (indexes1.length > 0)? updateLineMarker(newMarkers.newq1Markers, indexes1) : newMarkers.newq1Markers;
+
+      // Resolve marker overlap
+      finalq0Markers.sort((a, b) => a.className.localeCompare(b.className));
+      finalq1Markers.sort((a, b) => a.className.localeCompare(b.className));
+
+      // Set New Markers 
+      console.log('after:',finalq1Markers);
+      setq0Markers(finalq0Markers);
+      setq1Markers(finalq1Markers);
     }
   }
 
@@ -279,6 +352,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
     //        1: {count: 30, added: true, removed: undefined, value: "this is the string being added"},
     //        2: {count: 33, added: undefined, removed: undefined, value: "this is the string without change"}]
     const diffs = diffChars(q0Line, q1Line);
+    console.log(diffs);
 
     const newq0Markers = [];
     const newq1Markers = [];
@@ -342,8 +416,8 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
             canReplace = true;
           } else {
             // Detect the position for the entire word: seperated by spaces
-            const q0WordDiff = findDistanceToSpaces(q0Line, q0Index);
-            const q1WordDiff = findDistanceToSpaces(q1Line, q1Index);
+            const q0WordDiff = findDistanceToWords(q0Line, q0Index);
+            const q1WordDiff = findDistanceToWords(q1Line, q1Index);
             // Normal Add operation, add marker for the entire word for both q0 and q1
             newq0Markers.push({
               startRow: index,
@@ -397,13 +471,10 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
       }
     });
 
-    // Resolve marker overlap
-    newq0Markers.sort((a, b) => a.className.localeCompare(b.className));
-    newq1Markers.sort((a, b) => a.className.localeCompare(b.className));
-
-    // Set New Markers for current line
-    setq0Markers(q0Markers => [...q0Markers, ...newq0Markers]);
-    setq1Markers(q1Markers => [...q1Markers, ...newq1Markers]);
+    return {
+      newq0Markers,
+      newq1Markers
+    };
   }
 
   React.useEffect(() => {updateMarkers();}, [q0, q1]);
