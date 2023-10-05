@@ -22,7 +22,7 @@ import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import { mainListItems, secondaryListItems } from './listItems';
-import { Routes, Route, UNSAFE_RouteContext } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import RewritingRules from './RewritingRules';
 import RuleFormulator from './RuleFormulator';
 import QueryLogs from './QueryLogs';
@@ -95,7 +95,9 @@ const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' 
 const mdTheme = createTheme();
 
 function DashboardContent() {
-  const [user, setUser] = React.useState({});
+  const [user, setUser] = React.useState(() => {
+    return JSON.parse(sessionStorage.getItem('userInfo')) || {}
+  });
   const [open, setOpen] = React.useState(true);
   const toggleDrawer = () => {
     setOpen(!open);
@@ -136,11 +138,14 @@ function DashboardContent() {
 
   const logout = () => {
     googleLogout();
+    sessionStorage.removeItem('userInfo');
     setUser({});
     forceUpdate();
 };
 
-  React.useEffect(() => {}, []);
+  React.useEffect(() => {
+    sessionStorage.setItem('userInfo', JSON.stringify(user));
+  }, [user]);
 
   return (
     <userContext.Provider value={user}>
@@ -242,7 +247,6 @@ function DashboardContent() {
                 <Grid item xs={12}>
                   <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
                     <Routes>
-                      {/* <RewritingRules /> */}
                       <Route exact path="/" element={<RewritingRules />} />
                       <Route path="/formulator" element={<RuleFormulator />} />
                       <Route path="/jdbc" element={<JDBCDrivers />} />
