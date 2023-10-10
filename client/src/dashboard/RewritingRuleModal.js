@@ -190,41 +190,6 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
     const q1Format = format(q1, { "language": sqlLanguage,
                                   "tabWidth": 1});
 
-    const newLine = [];           
-    let curPos = 0;
-
-    const q0Lines = (q0Format === "") ? "" : q0Format.split('\n');
-    const q1Lines = (q1Format === "") ? "" : q1Format.split('\n');
-
-    let q0Pos = 0;
-    let q1Pos = 0;
-    let newq0 = '';
-    let newq1 = '';
-
-    // // Align two queries
-    // while (q0Pos < q0Lines.length && q1Pos < q1Lines.length) {
-    //   const diffs = diffChars(q0Lines[q0Pos], q1Lines[q1Pos]);
-    //   // console.log(q0Lines[q0Pos], q1Lines[q1Pos]);
-    //   // console.log(diffs);
-    //   if (diffs.length == 1 && ! diffs[0].added && ! diffs[0].removed) {
-    //     newq0 += q0Lines[q0Pos] + '\n';
-    //     newq1 += q1Lines[q1Pos] + '\n';
-    //     q0Pos += 1;
-    //     q1Pos += 1;
-    //   } else {
-    //     if (diffs.filter(diff => (! diff.added && ! diff.removed && !(/^\s*$/.test(diff.value)))).length > 0) {
-    //       newq0 += q0Lines[q0Pos] + '\n';
-    //       newq1 += q1Lines[q1Pos] + '\n';
-    //       q0Pos += 1;
-    //       q1Pos += 1;
-    //     } else {
-    //       newq0 += q0Lines[q0Pos] + '\n';
-    //       newq1 += ' \n';
-    //       q0Pos += 1;
-    //     }
-    //   }
-    // }
-
     setQ0(q0Format);
     setQ1(q1Format);
   }
@@ -232,7 +197,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
   function findDistanceToWords(inputString, currentPosition) {
     // Special case: if current character is a space
     const isSeperate = (inputString[currentPosition] === ' ');
-
+    // words are seperated by space or newline(end of line)
     const spaceBefore = isSeperate ? inputString.lastIndexOf(' ', currentPosition-1) : inputString.lastIndexOf(' ', currentPosition);
     const lineBefore = isSeperate ? inputString.lastIndexOf('\n', currentPosition-1) : inputString.lastIndexOf('\n', currentPosition);
     let prevSpaceIndex = Math.max(spaceBefore, lineBefore);
@@ -261,6 +226,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
   };
 
   function updateLineMarker(originalMarker, lineInfo){
+    // Edit initial marker based on formatted lines
     const newMarkers = [];
     let curStartLine = 0;
     let curStartPos = 0;
@@ -268,9 +234,11 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
     let curEndPos = 0;
 
     originalMarker.forEach(marker => {
-      curStartLine = findLargestSmallerNumberIndex(lineInfo, marker.startCol) + 1;
+      // Update index of where current marker starts
+      curStartLine = findPrevLineIndex(lineInfo, marker.startCol) + 1;
       curStartPos = marker.startCol - lineInfo[curStartLine-1] - 1;
-      curEndLine = findLargestSmallerNumberIndex(lineInfo, marker.endCol) + 1;
+      // Update index of where current marker ends
+      curEndLine = findPrevLineIndex(lineInfo, marker.endCol) + 1;
       curEndPos = marker.endCol - lineInfo[curEndLine-1] - 1;
       
       newMarkers.push({
@@ -286,21 +254,20 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
     return newMarkers;
   }
 
-  function findLargestSmallerNumberIndex(arr, target) {
+  function findPrevLineIndex(arr, target) {
+    // Using binary sort to find the index of where the previous line ends
     let left = 0;
     let right = arr.length - 1;
-    let result = 0; // Initialize with a default value, in case there's no such element
+    let result = 0; 
   
     while (left <= right) {
       const mid = Math.floor((left + right) / 2);
   
       if (arr[mid] < target) {
-        // The current element is smaller than the target
-        result = mid; // Update the result to this index
-        left = mid + 1; // Search in the right half
+        result = mid; 
+        left = mid + 1; 
       } else {
-        // The current element is greater than or equal to the target
-        right = mid - 1; // Search in the left half
+        right = mid - 1; 
       }
     }
   
@@ -316,13 +283,6 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
     const q1Lines = (q1 === "") ? "" : q1.split('\n');
 
     if ( q0 !== "") {
-
-      // getDiffByLine(0, q0, q1);
-      // Check on each code line's difference and update marker for each line
-      // q0Lines.forEach((line, index) => {
-      //   const q1Line = (q1Lines === "" || q1Lines.length <= index) ? "" : q1Lines[index];
-      //   getDiffByLine(index, line, q1Line);
-      // });
       let newMarkers = getDiffByLine(0, q0, q1);
 
       //format by line 
