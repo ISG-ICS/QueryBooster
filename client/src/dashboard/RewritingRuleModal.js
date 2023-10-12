@@ -184,6 +184,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
   };
 
   const onBeautifyQuery = () => {
+    // Beautify original query based on selected sql languages(mysql or pgsql)
     const sqlLanguage = (queryLanguage === 'pgsql') ? "postgresql" : queryLanguage;
     const q0Format = format(q0, {"language": sqlLanguage,
                                   "tabWidth": 1});
@@ -195,6 +196,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
   }
 
   function findDistanceToWords(inputString, currentPosition) {
+    // Find the distance to previous or next words inside the query
     // Special case: if current character is a space
     const isSeperate = (inputString[currentPosition] === ' ');
     // words are seperated by space or newline(end of line)
@@ -278,9 +280,6 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
     // Clear previous markers
     setq0Markers([]);
     setq1Markers([]);
-
-    const q0Lines = (q0 === "") ? "" : q0.split('\n');
-    const q1Lines = (q1 === "") ? "" : q1.split('\n');
 
     if ( q0 !== "") {
       let newMarkers = getDiffByLine(0, q0, q1);
