@@ -311,7 +311,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
     //        1: {count: 30, added: true, removed: undefined, value: "this is the string being added"},
     //        2: {count: 33, added: undefined, removed: undefined, value: "this is the string without change"}]
     const diffs = diffChars(q0Line, q1Line);
-    console.log(diffs);
+    console.log('[DEBUG - getDiffByLine] difference between q0 and q1 using diffChars():', diffs);
 
     const newq0Markers = [];
     const newq1Markers = [];
