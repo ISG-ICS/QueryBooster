@@ -22,6 +22,7 @@ import MenuItem from '@mui/material/MenuItem';
 import RuleGraph from './RuleGraph';
 import AceEditor from "react-ace";
 import { diffChars } from 'diff';
+import { format } from 'sql-formatter';
 import "ace-builds/src-noconflict/theme-textmate";
 import "ace-builds/src-noconflict/mode-mysql";
 import "ace-builds/src-noconflict/mode-pgsql";
@@ -182,11 +183,39 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
     });
   };
 
-  function findDistanceToSpaces(inputString, currentPosition) {
+  const onBeautifyQuery = () => {
+    // Beautify original query based on selected sql languages(mysql or pgsql)
+    const sqlLanguage = (queryLanguage === 'pgsql') ? "postgresql" : queryLanguage;
+    const q0Format = format(q0, {"language": sqlLanguage,
+                                  "tabWidth": 1});
+    const q1Format = format(q1, { "language": sqlLanguage,
+                                  "tabWidth": 1});
+
+    setQ0(q0Format);
+    setQ1(q1Format);
+  }
+
+  function findDistanceToWords(inputString, currentPosition) {
+    // Find the distance to previous or next words inside the query
     // Special case: if current character is a space
-    const isSpace = (inputString[currentPosition] === ' ');
-    const prevSpaceIndex = isSpace ? inputString.lastIndexOf(' ', currentPosition-1) : inputString.lastIndexOf(' ', currentPosition);
-    const nextSpaceIndex = isSpace ? inputString.indexOf(' ', currentPosition+1) : inputString.indexOf(' ', currentPosition);
+    const isSeperate = (inputString[currentPosition] === ' ');
+    // words are seperated by space or newline(end of line)
+    const spaceBefore = isSeperate ? inputString.lastIndexOf(' ', currentPosition-1) : inputString.lastIndexOf(' ', currentPosition);
+    const lineBefore = isSeperate ? inputString.lastIndexOf('\n', currentPosition-1) : inputString.lastIndexOf('\n', currentPosition);
+    let prevSpaceIndex = Math.max(spaceBefore, lineBefore);
+
+    const spaceAfter = isSeperate ? inputString.indexOf(' ', currentPosition+1) : inputString.indexOf(' ', currentPosition);
+    const lineAfter = isSeperate ? inputString.indexOf('\n', currentPosition+1) : inputString.indexOf('\n', currentPosition);
+    let nextSpaceIndex = Math.min(spaceAfter, lineAfter);
+    if(spaceAfter === -1){
+      nextSpaceIndex = lineAfter;
+    } 
+    if(lineAfter === -1){
+      nextSpaceIndex = spaceAfter;
+    }
+    if (nextSpaceIndex === -1){
+      nextSpaceIndex = inputString.length;
+    };
   
     // Calculate the distance to the previous and next space characters
     const distanceToPrevSpace = currentPosition - prevSpaceIndex;
@@ -198,20 +227,79 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
     };
   };
 
+  function updateLineMarker(originalMarker, lineInfo){
+    // Edit initial marker based on formatted lines
+    const newMarkers = [];
+    let curStartLine = 0;
+    let curStartPos = 0;
+    let curEndLine = 0;
+    let curEndPos = 0;
+
+    originalMarker.forEach(marker => {
+      // Update index of where current marker starts
+      curStartLine = findPrevLineIndex(lineInfo, marker.startCol) + 1;
+      curStartPos = marker.startCol - lineInfo[curStartLine-1] - 1;
+      // Update index of where current marker ends
+      curEndLine = findPrevLineIndex(lineInfo, marker.endCol) + 1;
+      curEndPos = marker.endCol - lineInfo[curEndLine-1] - 1;
+      
+      newMarkers.push({
+        startRow: curStartLine,
+        startCol: curStartPos,
+        endRow: curEndLine,
+        endCol: curEndPos,
+        className: marker.className,
+      });
+
+    });
+
+    return newMarkers;
+  }
+
+  function findPrevLineIndex(arr, target) {
+    // Using binary sort to find the index of where the previous line ends
+    let left = 0;
+    let right = arr.length - 1;
+    let result = 0; 
+  
+    while (left <= right) {
+      const mid = Math.floor((left + right) / 2);
+  
+      if (arr[mid] < target) {
+        result = mid; 
+        left = mid + 1; 
+      } else {
+        right = mid - 1; 
+      }
+    }
+  
+    return result;
+  };
+
   const updateMarkers = () => {
     // Clear previous markers
     setq0Markers([]);
     setq1Markers([]);
 
-    const q0Lines = (q0 === "") ? "" : q0.split('\n');
-    const q1Lines = (q1 === "") ? "" : q1.split('\n');
-    
-    if ( q0Lines !== "") {
-      // Check on each code line's difference and update marker for each line
-      q0Lines.forEach((line, index) => {
-        const q1Line = (q1Lines === "" || q1Lines.length <= index) ? "" : q1Lines[index];
-        getDiffByLine(index, line, q1Line);
-      });
+    if ( q0 !== "") {
+      let newMarkers = getDiffByLine(0, q0, q1);
+
+      //format by line 
+      const indexes0 = [...q0.matchAll(new RegExp('\n', 'g'))].map(a => a.index);
+      const finalq0Markers = (indexes0.length > 0)? updateLineMarker(newMarkers.newq0Markers, indexes0) : newMarkers.newq0Markers;
+
+      const indexes1 = [...q1.matchAll(new RegExp('\n', 'g'))].map(a => a.index);
+      console.log('before:',newMarkers.newq1Markers);
+      const finalq1Markers = (indexes1.length > 0)? updateLineMarker(newMarkers.newq1Markers, indexes1) : newMarkers.newq1Markers;
+
+      // Resolve marker overlap
+      finalq0Markers.sort((a, b) => a.className.localeCompare(b.className));
+      finalq1Markers.sort((a, b) => a.className.localeCompare(b.className));
+
+      // Set New Markers 
+      console.log('after:',finalq1Markers);
+      setq0Markers(finalq0Markers);
+      setq1Markers(finalq1Markers);
     }
   }
 
@@ -223,6 +311,7 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
     //        1: {count: 30, added: true, removed: undefined, value: "this is the string being added"},
     //        2: {count: 33, added: undefined, removed: undefined, value: "this is the string without change"}]
     const diffs = diffChars(q0Line, q1Line);
+    console.log('[DEBUG - getDiffByLine] difference between q0 and q1 using diffChars():', diffs);
 
     const newq0Markers = [];
     const newq1Markers = [];
@@ -286,8 +375,8 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
             canReplace = true;
           } else {
             // Detect the position for the entire word: seperated by spaces
-            const q0WordDiff = findDistanceToSpaces(q0, q0Index);
-            const q1WordDiff = findDistanceToSpaces(q1, q1Index);
+            const q0WordDiff = findDistanceToWords(q0Line, q0Index);
+            const q1WordDiff = findDistanceToWords(q1Line, q1Index);
             // Normal Add operation, add marker for the entire word for both q0 and q1
             newq0Markers.push({
               startRow: index,
@@ -341,13 +430,10 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
       }
     });
 
-    // Resolve marker overlap
-    newq0Markers.sort((a, b) => a.className.localeCompare(b.className));
-    newq1Markers.sort((a, b) => a.className.localeCompare(b.className));
-
-    // Set New Markers for current line
-    setq0Markers(q0Markers => [...q0Markers, ...newq0Markers]);
-    setq1Markers(q1Markers => [...q1Markers, ...newq1Markers]);
+    return {
+      newq0Markers,
+      newq1Markers
+    };
   }
 
   React.useEffect(() => {updateMarkers();}, [q0, q1]);
@@ -404,6 +490,9 @@ const RewritingRuleModal = NiceModal.create(({user_id, rule=null, query=null}) =
                   <Grid container justifyContent="flex-start" alignItems="center" spacing={1}>
                     <Grid item xs={4} sm={4} md={4} lg={4} xl={4}>
                       <FormLabel>Formulating a Rule using Rewriting Example</FormLabel>
+                    </Grid>
+                    <Grid item xs={3} sm={3} md={3} lg={3} xl={3}>
+                      <Button variant="outlined" color="primary" onClick={onBeautifyQuery}>Beautify both Queries</Button>
                     </Grid>
                     <Grid item xs={2} sm={2} md={2} lg={2} xl={2}>
                       <FormControl fullWidth>
