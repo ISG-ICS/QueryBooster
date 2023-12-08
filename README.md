@@ -28,10 +28,12 @@ pip install -r requirements.txt
 #### Compile and Deploy QueryBooster client
 ```bash
 cd client/
+npm i
 npm run build
 ```
 
 #### Run QueryBooster server
+go back to the project directory and type the following command
 ```bash
 gunicorn -w 4 -b 127.0.0.1:8000 'server.server:app'
 ```
