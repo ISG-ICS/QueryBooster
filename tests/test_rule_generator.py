@@ -1611,8 +1611,7 @@ def test_generate_general_rule_2():
     assert type(rule) is dict
 
     assert rule['pattern'] == "STRPOS(LOWER(<x1>), '<x2>') > 0"
-    assert rule['rewrite'] == "ILIKE(<x1>, '%<x2>%')"
-
+    assert rule['rewrite'] == "<x1> ILIKE '%<x2>%'"
 
 def test_generate_general_rule_3():
     q0 = '''
@@ -1872,7 +1871,7 @@ def test_generate_general_rule_9():
         STRPOS(LOWER(<x1>), '<x2>') > 0
     '''))
     assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
-        ILIKE(<x1>, '%<x2>%')
+        <x> ILIKE '%<x>%'
     '''))
 
 
