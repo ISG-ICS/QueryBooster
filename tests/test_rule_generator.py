@@ -1613,6 +1613,7 @@ def test_generate_general_rule_2():
     assert rule['pattern'] == "STRPOS(LOWER(<x1>), '<x2>') > 0"
     assert rule['rewrite'] == "<x1> ILIKE '%<x2>%'"
 
+
 def test_generate_general_rule_3():
     q0 = '''
         select e1.name, e1.age, e2.salary
