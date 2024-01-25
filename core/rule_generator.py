@@ -1421,9 +1421,9 @@ class RuleGenerator:
         # Case-3: var
         #
         if QueryRewriter.is_var(astJson):
-            # special case for single Var under SELECT
+            # special case for single Var under SELECT, WHERE
             #
-            if len(path) >= 1 and path[-1] in ['select']:
+            if len(path) >= 1 and path[-1] in ['select', 'where']:
                 res.append([astJson])
         
         return res
@@ -1543,9 +1543,9 @@ class RuleGenerator:
         # Case-3: var
         #
         if QueryRewriter.is_var(astJson):
-            # special case for single Var under SELECT
+            # special case for single Var under SELECT, WHERE
             #
-            if len(path) >= 1 and path[-1] in ['select']:
+            if len(path) >= 1 and path[-1] in ['select', 'where']:
                 if len(variableList) == 1 and astJson == variableList[0]:
                     return varList
         

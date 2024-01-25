@@ -4,6 +4,7 @@ from core.rule_parser import RuleParser
 import json
 import mo_sql_parsing as mosql
 from .string_util import StringUtil
+import re
 
 
 # def test_minDiffSubtree_1():
@@ -1592,6 +1593,53 @@ def test_generate_rule_graph_1():
 #     assert len(recommendRules) == 1
 
 
+def unify_variable_names(q0, q1):
+    # Variable pattern
+    pattern = r'<<[^>]*>>|<[^>]*>'
+
+    # Find all variables in q0 and q1, and unify their names into xi in ascending order
+    substrings = re.findall(pattern, q0 + q1)
+    unique_substrings = []
+    for substr in substrings:
+        if substr not in unique_substrings:
+            unique_substrings.append(substr)
+
+    # Mapping from original variable names to new variable names
+    mapping = {substr: f'{"<" * substr.count("<") }x{i+1}{">" * substr.count(">") }'
+               for i, substr in enumerate(unique_substrings)}
+
+    # Function for replacement using the mapping
+    def replacer(match):
+        return mapping[match.group(0)]
+
+    # Replace all occurrences in one go using re.sub
+    q0_unified = re.sub(pattern, replacer, q0)
+    q1_unified = re.sub(pattern, replacer, q1)
+
+    return q0_unified, q1_unified
+
+def test_unify_variable_names_1():
+    q0 = "FROM <<x9>> INNER JOIN <x10> ON <<x9>>.<x5> = <x10>.<x6>"
+    q1 = "FROM <x10>"
+    a, b = unify_variable_names(q0, q1)
+    assert a == "FROM <<x1>> INNER JOIN <x2> ON <<x1>>.<x3> = <x2>.<x4>"
+    assert b == "FROM <x2>"
+
+def test_unify_variable_names_2():
+    q0 = "<x2> <<x1>>"
+    q1 = "<x2>"
+    a, b = unify_variable_names(q0, q1)
+    assert a == "<x1> <<x2>>"
+    assert b == "<x1>"
+
+def test_unify_variable_names_3():
+    q0 = "<x> <<x1>> <x> <x> <y>"
+    q1 = "<x> <<x1>> <y>"
+    a, b = unify_variable_names(q0, q1)
+    assert a == "<x1> <<x2>> <x1> <x1> <x3>"
+    assert b == "<x1> <<x2>> <x3>"
+
+
 def test_generate_general_rule_1():
     q0 = "SELECT CAST(created_at AS DATE)"
     q1 = "SELECT created_at"
@@ -1940,6 +1988,18 @@ def test_generate_general_rule_11():
     assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
         FROM <x1>
     '''))
+
+
+def test_generate_general_rule_12():
+    q0 = "SELECT student.ids from student WHERE student.id = 100 AND student.abc = 100"
+    q1 = "SELECT student.id from student WHERE student.id = 100"
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    assert q0_rule== "SELECT <x1>.<x2> FROM <x1> WHERE <<x3>> AND <x1>.<x4> = <x5>"
+    assert q1_rule == "SELECT <x1>.<x6> FROM <x1> WHERE <<x3>>"
 
 
 def test_suggest_rules_bf_1():
