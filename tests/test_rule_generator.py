@@ -1719,20 +1719,23 @@ def test_generate_general_rule_4():
     rule = RuleGenerator.generate_general_rule(q0, q1)
     assert type(rule) is dict
 
-    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    pattern, rewrite = unify_variable_names('''
         FROM       <x1>
         INNER JOIN <x2>
-        ON         <x9>
+        ON         <<x9>>
         INNER JOIN <x3>
         ON         <x2>.<x5> = <x3>.<x5>
         WHERE      <x3>.<x5> = <x7>
-    '''))
-    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+    ''', '''
         FROM       <x1>
         INNER JOIN <x2>
-        ON         <x9>
+        ON         <<x9>>
         WHERE      <x2>.<x5> = <x7>
-    '''))
+    ''')
+
+    assert StringUtil.strim(q0_rule) == StringUtil.strim(pattern)
+    assert StringUtil.strim(q1_rule) == StringUtil.strim(rewrite)
 
 
 def test_generate_general_rule_5():
@@ -1772,26 +1775,28 @@ def test_generate_general_rule_5():
     rule = RuleGenerator.generate_general_rule(q0, q1)
     assert type(rule) is dict
 
-    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    pattern, rewrite = unify_variable_names('''
         FROM       <x1>
         INNER JOIN <x2>
-        ON         <x9>
+        ON         <<x9>>
         INNER JOIN <x3>
         ON         <x2>.<x5> = <x3>.<x5>
         WHERE      <<y1>>
         AND        <x3>.<x5> = <x7>
-    '''))
-    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+    ''', '''
         FROM       <x1>
         INNER JOIN <x2>
-        ON         <x9>
+        ON         <<x9>>
         WHERE      <<y1>>
         AND        <x2>.<x5> = <x7>
-    '''))
+    ''')
+
+    assert StringUtil.strim(q0_rule) == StringUtil.strim(pattern)
+    assert StringUtil.strim(q1_rule) == StringUtil.strim(rewrite)
 
 
 def test_generate_general_rule_6():
-
     q0 = '''
         SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
         FROM   blc_admin_permission adminpermi0_
@@ -1816,22 +1821,25 @@ def test_generate_general_rule_6():
     rule = RuleGenerator.generate_general_rule(q0, q1)
     assert type(rule) is dict
 
-    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    pattern, rewrite = unify_variable_names('''
         FROM       <x1>
         INNER JOIN <x2>
-        ON         <x9>
+        ON         <<x9>>
         INNER JOIN <x3>
         ON         <x2>.<x5> = <x3>.<x5>
         WHERE      <<y1>>
         AND        <x3>.<x5> = <x7>
-    '''))
-    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+    ''', '''
         FROM       <x1>
         INNER JOIN <x2>
-        ON         <x9>
+        ON         <<x9>>
         WHERE      <x2>.<x5> = <x7>
         AND        <<y1>>
-    '''))
+    ''')
+
+    assert StringUtil.strim(q0_rule) == StringUtil.strim(pattern)
+    assert StringUtil.strim(q1_rule) == StringUtil.strim(rewrite)
 
 
 def test_generate_general_rule_7():
@@ -2000,6 +2008,40 @@ def test_generate_general_rule_12():
     q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
     assert q0_rule== "SELECT <x1>.<x2> FROM <x1> WHERE <<x3>> AND <x1>.<x4> = <x5>"
     assert q1_rule == "SELECT <x1>.<x6> FROM <x1> WHERE <<x3>>"
+
+
+def test_generate_general_rule_13():
+    q0 = '''
+        SELECT COUNT(adminpermi0_.admin_permission_id) AS col_0_0_ 
+        FROM blc_admin_permission adminpermi0_ 
+        INNER JOIN blc_admin_role_permission_xref allroles1_ 
+        ON adminpermi0_.admin_permission_id=allroles1_.admin_permission_id 
+        INNER JOIN blc_admin_role adminrolei2_ 
+        ON allroles1_.admin_role_id=adminrolei2_.admin_role_id 
+        WHERE adminpermi0_.is_friendly=1 AND adminrolei2_.admin_role_id=1
+    '''
+    q1 = '''
+        SELECT COUNT(adminpermi0_.admin_permission_id) AS col_0_0_ 
+        FROM blc_admin_permission AS adminpermi0_ 
+        INNER JOIN blc_admin_role_permission_xref AS allroles1_ 
+        ON adminpermi0_.admin_permission_id = allroles1_.admin_permission_id 
+        WHERE allroles1_.admin_role_id = 1 
+        AND adminpermi0_.is_friendly = 1
+    '''
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    pattern, rewrite = unify_variable_names('''
+        FROM <x1> INNER JOIN <x2> ON <<x3>> INNER JOIN <x4> ON <x2>.<x5> = <x4>.<x5> 
+        WHERE <<x6>> AND <x4>.<x5> = <x7>
+    ''','''
+        FROM <x1> INNER JOIN <x2> ON <<x3>> WHERE <x2>.<x5> = <x7> AND <<x6>>
+    ''')
+
+    assert StringUtil.strim(q0_rule) == StringUtil.strim(pattern)
+    assert StringUtil.strim(q1_rule) == StringUtil.strim(rewrite)
 
 
 def test_suggest_rules_bf_1():
