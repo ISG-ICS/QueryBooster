@@ -8,6 +8,9 @@ import mo_sql_parsing as mosql
 import numbers
 import re
 import time
+from collections import deque 
+from typing import Dict, Tuple
+
 
 
 MAX_INT = 2147483647
@@ -2028,6 +2031,78 @@ class RuleGenerator:
         
         return graphRoots
 
+    # Recommend simplified rules set that cover all examples
+    #   e.g., a example set = [
+    #                            {'q0': "SELECT * FROM tweets WHERE STRPOS(UPPER(text), 'iphone') > 0", 
+    #                             'q1': "SELECT * FROM tweets WHERE text ILIKE '%iphone%'"
+    #                            },
+    #                            {'q0': "SELECT * FROM tweets WHERE STRPOS(UPPER(state_name), 'iphone') > 0", 
+    #                             'q1': "SELECT * FROM tweets WHERE state_name ILIKE '%iphone%'"
+    #                            }
+    #                         ]
+    #
+    @staticmethod
+    def recommend_simple_rules(examples: list) -> list:
+        globalVisited = {}
+        ans = []
+        uncoveredExamples = set(range(len(examples)))
+        
+        for num, example in enumerate(examples):
+            if num not in uncoveredExamples:
+                continue
+            if uncoveredExamples:
+                graphRoot = RuleGenerator.generate_minimal_rule(
+                    example['q0'], example['q1'], globalVisited, examples, uncoveredExamples, num)
+                if graphRoot:  # If a new rule is found that covers uncovered examples
+                    ans.append(graphRoot)
+            else:
+                break  # All examples are covered
+
+        return ans
+
+
+    @staticmethod
+    def generate_minimal_rule(q0: str, q1: str, visited: dict, examples: list, uncoveredExamples: set, num: int) -> dict:
+        ans = {}
+
+        seedRule = RuleGenerator.initialize_seed_rule(q0, q1)
+        seedRuleFingerPrint = RuleGenerator.fingerPrint(seedRule)
+        
+        queue = [seedRule]
+        visited[seedRuleFingerPrint] = seedRule
+        seedRule['coveredExamples'] = RuleGenerator.coveredExamples(seedRule, examples)
+
+        while queue and uncoveredExamples:
+            baseRule = queue.pop(0)
+            baseRule['children'] = []
+
+            for transform in RuleGenerator.RuleTransformations.keys():
+                childrenRules = getattr(RuleGenerator, transform)(baseRule)
+
+                for childRule in childrenRules:
+                    childRuleFingerPrint = RuleGenerator.fingerPrint(childRule)
+
+                    # If the child rule is new, mark it as visited.
+                    if childRuleFingerPrint not in visited:
+                        visited[childRuleFingerPrint] = childRule
+                        childRule['coveredExamples'] = RuleGenerator.coveredExamples(childRule, examples)
+                        coveredExamplesSet = set(childRule['coveredExamples'])
+
+                        # If the new rule covers any uncovered examples, update the uncovered examples set.
+                        if uncoveredExamples.intersection(coveredExamplesSet):
+                            uncoveredExamples -= coveredExamplesSet
+                            queue.append(childRule)
+                            baseRule['children'].append(childRule)
+
+                            ans = childRule
+
+                            if not uncoveredExamples:  # All examples are covered
+                                return childRule
+                    else:
+                        baseRule['children'].append(visited[childRuleFingerPrint])
+
+        return ans
+    
     # Compute covered examples' indexes for a given rule
     #
     @staticmethod
