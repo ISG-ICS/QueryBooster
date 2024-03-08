@@ -8,8 +8,6 @@ import mo_sql_parsing as mosql
 import numbers
 import re
 import time
-from collections import deque 
-from typing import Dict, Tuple
 
 
 
