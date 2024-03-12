@@ -206,8 +206,8 @@ def recommend_rules():
 
         database = request_data.get('database')
         examples = request_data.get('examples')
-        root_rules_json = RuleGenerator.generate_rules_graph(examples)
-        recommend_rules_json = RuleGenerator.recommend_rules(root_rules_json, len(examples))
+
+        recommend_rules_json = RuleGenerator.recommend_simple_rules(examples)
 
         # Patch pattern and rewrite in recommended rules
         for rule in recommend_rules_json:
