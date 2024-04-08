@@ -19,6 +19,7 @@ The QueryBooster customized JDBC drivers repository are listed below:
 ## Run QueryBooster
 
 #### Requirements
+In `QueryBooster` folder,
 ```bash
 python3 -m venv venv
 source venv/bin/activate
@@ -26,6 +27,7 @@ pip install -r requirements.txt
 ```
 
 #### Compile and Deploy QueryBooster client
+In `QueryBooster` folder,
 ```bash
 cd client/
 npm i
@@ -33,9 +35,10 @@ npm run build
 ```
 
 #### Run QueryBooster server
-go back to the project directory and type the following command
+In `QueryBooster` folder,
 ```bash
-gunicorn -w 4 -b 127.0.0.1:8000 'server.server:app'
+cd server
+gunicorn -w 4 -b 127.0.0.1:8000 'wsgi:app'
 ```
 
 #### Access QueryBooster web interface
@@ -43,6 +46,7 @@ Go to the link http://localhost:8000 to access the web interface.
 
 
 #### Test
+In `QueryBooster` folder,
 ```bash
 python3 -m pytest
 ```
