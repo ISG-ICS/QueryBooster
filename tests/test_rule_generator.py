@@ -2560,3 +2560,82 @@ def test_suggest_rules_mpn_m10_5():
     assert StringUtil.strim(RuleGenerator._fingerPrint(suggestRule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
         <x1>
     '''))
+
+def test_recommend_simple_rules_1():
+    examples = [
+        {'q0': "SELECT * FROM employee WHERE workdept IN (SELECT deptno FROM department WHERE deptname = 'OPERATIONS')",
+        'q1': "SELECT DISTINCT * FROM employee, department where employee.workdept = department.deptno AND department.deptname = 'OPERATIONS'"
+        }
+    ]
+    recommend_rules_json = RuleGenerator.recommend_simple_rules(examples)
+
+    assert StringUtil.strim(recommend_rules_json[0]["pattern"]) == StringUtil.strim("SELECT * FROM <x1> WHERE workdept IN (SELECT deptno FROM department WHERE deptname = 'OPERATIONS')")
+    assert StringUtil.strim(recommend_rules_json[0]["rewrite"]) == StringUtil.strim("SELECT DISTINCT * FROM <x1>, department WHERE <x1>.workdept = department.deptno AND department.deptname = 'OPERATIONS'")
+
+def test_recommend_simple_rules_2():
+    examples = [
+        {'q0': "SELECT Count(*) FROM   (SELECT 1 AS one FROM   group_histories WHERE  group_histories.group_id = 2578 AND group_histories.action = 2 ORDER  BY group_histories.created_at DESC LIMIT  25 offset 0) subquery_for_count",
+        'q1': "SELECT Count(*) FROM   (SELECT 1 AS one FROM   group_histories WHERE  group_histories.group_id = 2578 AND group_histories.action = 2 LIMIT  25 offset 0) AS subquery_for_count"
+        },
+        {'q0': "SELECT Count(*) FROM   (SELECT 1 AS one FROM   gh WHERE  gh.group_id = 2578 AND gh.action = 2 ORDER  BY gh.created_at DESC LIMIT  25 offset 0) subquery_for_count",
+        'q1': "SELECT Count(*) FROM   (SELECT 1 AS one FROM   gh WHERE  gh.group_id = 2578 AND gh.action = 2 LIMIT  25 offset 0) AS subquery_for_count"
+        }
+    ]
+    recommend_rules_json = RuleGenerator.recommend_simple_rules(examples)
+
+    assert StringUtil.strim(recommend_rules_json[0]["pattern"]) == StringUtil.strim(
+        "SELECT COUNT(*) FROM (SELECT 1 AS one FROM <x1> WHERE <x1>.group_id = 2578 AND <x1>.action = 2 ORDER BY <x1>.created_at DESC LIMIT 25 OFFSET 0) AS subquery_for_count")
+    assert StringUtil.strim(recommend_rules_json[0]["rewrite"]) == StringUtil.strim(
+        "SELECT COUNT(*) FROM (SELECT 1 AS one FROM <x1> WHERE <x1>.group_id = 2578 AND <x1>.action = 2 LIMIT 25 OFFSET 0) AS subquery_for_count")
+
+def test_recommend_simple_rules_3():
+    examples = [
+        {'q0': "SELECT CAST(create_at as DATE)",
+        'q1': "SELECT create_at"
+        },
+        {'q0': "SELECT CAST(create_at1 as DATE)", 
+        'q1': "SELECT create_at1"
+        },
+        {'q0': "SELECT STRPOS(LOWER(text), 'iphone') > 0", 
+        'q1': "SELECT ILIKE(text, '%iphone%')"
+        },
+        {'q0': "SELECT STRPOS(LOWER(text1), 'iphone') > 0", 
+        'q1': "SELECT ILIKE(text1, '%iphone%')"
+        },
+        {'q0': "SELECT STRPOS(LOWER(text), 'iphone1') > 0", 
+        'q1': "SELECT ILIKE(text, '%iphone1%')"
+        }
+    ]
+    recommend_rules_json = RuleGenerator.recommend_simple_rules(examples)
+
+    assert StringUtil.strim(recommend_rules_json[0]["pattern"]) == StringUtil.strim("SELECT CAST(<x1> AS DATE)")
+    assert StringUtil.strim(recommend_rules_json[0]["rewrite"]) == StringUtil.strim("SELECT <x1>")
+    assert StringUtil.strim(recommend_rules_json[1]["pattern"]) == StringUtil.strim("SELECT STRPOS(LOWER(text), '<x1>') > 0")
+    assert StringUtil.strim(recommend_rules_json[1]["rewrite"]) == StringUtil.strim("SELECT text ILIKE '%<x1>%'")
+
+def test_recommend_simple_rules_4():
+    examples = [
+        {'q0': "SELECT e1.name, e1.age, e2.salary FROM employee e1, employee e2 WHERE e1.id = e2.id AND e1.age > 17 AND e2.salary > 35000",
+        'q1': "SELECT e1.name, e1.age, e1.salary FROM employee e1 WHERE e1.age > 17 AND e1.salary > 35000"
+        },
+        {'q0': "SELECT e1.name, e1.ages, e2.salary FROM employee e1, employee e2 WHERE e1.id = e2.id AND e1.ages > 17 AND e2.salary > 35000",
+        'q1': "SELECT e1.name, e1.ages, e1.salary FROM employee e1 WHERE e1.ages > 17 AND e1.salary > 35000"
+        },
+        {'q0': "SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
+        'q1': "SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+        },
+        {'q0': "SELECT s.ids from s WHERE s.x = 100 AND s.abc = 100",
+        'q1': "SELECT s.x from s WHERE s.x = 100"
+        },
+        {'q0': "SELECT student.ids from student WHERE student.id = 100 AND student.abc = 100",
+        'q1': "SELECT student.id from student WHERE student.id = 100"
+        }
+    ]
+    recommend_rules_json = RuleGenerator.recommend_simple_rules(examples)
+
+    assert StringUtil.strim(recommend_rules_json[0]["pattern"]) == StringUtil.strim("SELECT e1.name, e1.<x1>, e2.salary FROM employee AS e1, employee AS e2 WHERE e1.id = e2.id AND e1.<x1> > 17 AND e2.salary > 35000")
+    assert StringUtil.strim(recommend_rules_json[0]["rewrite"]) == StringUtil.strim("SELECT e1.name, e1.<x1>, e1.salary FROM employee AS e1 WHERE e1.<x1> > 17 AND e1.salary > 35000")
+    assert StringUtil.strim(recommend_rules_json[1]["pattern"]) == StringUtil.strim("SELECT * FROM <x1> WHERE CAST(created_at AS DATE) = TIMESTAMP('2016-10-01 00:00:00.000')")
+    assert StringUtil.strim(recommend_rules_json[1]["rewrite"]) == StringUtil.strim("SELECT * FROM <x1> WHERE created_at = TIMESTAMP('2016-10-01 00:00:00.000')")
+    assert StringUtil.strim(recommend_rules_json[2]["pattern"]) == StringUtil.strim("SELECT <x1>.ids FROM <x1> WHERE <x1>.<x2> = 100 AND <x1>.abc = 100")
+    assert StringUtil.strim(recommend_rules_json[2]["rewrite"]) == StringUtil.strim("SELECT <x1>.<x2> FROM <x1> WHERE <x1>.<x2> = 100")
