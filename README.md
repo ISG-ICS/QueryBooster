@@ -1,5 +1,7 @@
 # QueryBooster
 
+We gave a talk about this project at Cornell University, here is the [recording](https://drive.google.com/file/d/1JZt94sB2dTzICERljDoxNfcctCD_VBtx/view?usp=sharing). 
+
 ## Introduction
 QueryBooster is a middleware-based **query rewriting** framework.
 
