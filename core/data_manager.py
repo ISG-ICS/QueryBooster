@@ -219,9 +219,7 @@ class DataManager:
     def delete_rule(self, rule: dict) -> bool:
         try:
             cur = self.db_conn.cursor()
-            cur.execute('''PRAGMA foreign_keys=on;''')
             cur.execute('''DELETE FROM rules WHERE id = ?''', [rule['id']])
-            cur.execute('''PRAGMA foreign_keys=off;''')
             self.db_conn.commit()
             return True
         except Error as e:
