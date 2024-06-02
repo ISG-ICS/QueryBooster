@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS applications(
     CONSTRAINT fk_users
         FOREIGN KEY (user_id) 
         REFERENCES users(id) 
+        ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS enabled(
@@ -71,10 +72,12 @@ CREATE TABLE IF NOT EXISTS rewriting_paths(
     PRIMARY KEY (query_id, seq),
     CONSTRAINT fk_queries 
         FOREIGN KEY (query_id) 
-        REFERENCES queries(id),
+        REFERENCES queries(id)
+        ON DELETE CASCADE,
     CONSTRAINT fk_rules 
         FOREIGN KEY (rule_id) 
         REFERENCES rules(id) 
+        ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS suggestions(
@@ -95,10 +98,12 @@ CREATE TABLE IF NOT EXISTS suggestion_rewriting_paths(
     PRIMARY KEY (query_id, seq),
     CONSTRAINT fk_queries 
         FOREIGN KEY (query_id) 
-        REFERENCES suggestions(query_id),
+        REFERENCES suggestions(query_id)
+        ON DELETE CASCADE,
     CONSTRAINT fk_rules 
         FOREIGN KEY (rule_id) 
-        REFERENCES rules(id) 
+        REFERENCES rules(id)
+        ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS tables(
