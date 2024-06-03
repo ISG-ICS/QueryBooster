@@ -342,11 +342,10 @@ class DataManager:
             if(app['id'] == -1):
                 cur.execute('''SELECT IFNULL(MAX(id), 0) + 1 FROM applications;''')
                 app['id'] = cur.fetchone()[0]
-            print(app)
-            cur.execute('''INSERT INTO applications (id, name, user_id) 
-                                    VALUES (?, ?, ?) ON CONFLICT (id) DO UPDATE SET
+            cur.execute('''INSERT INTO applications (id, name, guid, user_id) 
+                                    VALUES (?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET
                                     name=excluded.name''', 
-                        [app['id'], app['name'], app['user_id']])
+                        [app['id'], app['name'], app['guid'], app['user_id']])
             self.db_conn.commit()
         except Error as e:
             print('[Error] in save_application:')

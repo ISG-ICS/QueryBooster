@@ -1,3 +1,4 @@
+import uuid
 import sys
 # append the path of the parent directory
 sys.path.append("..")
@@ -23,6 +24,7 @@ class AppManager:
         return res
     
     def save_application(self, app: dict) -> bool:
+        app['guid'] = str(uuid.uuid1())
         return self.dm.save_application(app)
 
     def delete_application(self, app: dict) -> bool:
