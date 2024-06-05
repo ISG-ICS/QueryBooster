@@ -14,7 +14,11 @@ export default function JDBCDrivers() {
     { database: "postgresql",
       version: "v42.3.3", 
       download: "postgresql-42.3.3-SNAPSHOT.jar", 
-      href: "https://github.com/ISG-ICS/smart-pgjdbc/releases/download/smart_v42.3.3_new/postgresql-42.3.3-SNAPSHOT.jar"
+      href: "https://github.com/ISG-ICS/smart-pgjdbc/releases/download/smart_v42.3.3_new/postgresql-42.3.3-SNAPSHOT.jar",
+      config: {
+        download: "smart-pgjdbc.config", 
+        href: "https://github.com/ISG-ICS/smart-pgjdbc/releases/download/smart_v42.3.3_new/smart-pgjdbc.config",
+      }
     },
     { database: "mysql",
       version: "v8.0.28",
@@ -39,6 +43,7 @@ export default function JDBCDrivers() {
             <TableCell>Database</TableCell>
             <TableCell>Driver Version</TableCell>
             <TableCell>JDBC Driver</TableCell>
+            <TableCell>Config File</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -49,6 +54,11 @@ export default function JDBCDrivers() {
               <TableCell>
                 <Button onClick={() => onDownload(driver.download, driver.href)} variant="contained" color="primary">
                   Download
+                </Button>
+              </TableCell>
+              <TableCell>
+                <Button onClick={() => onDownload(driver.config.download, driver.config.href)} variant="contained" color="secondary">
+                  Config File
                 </Button>
               </TableCell>
             </TableRow>
