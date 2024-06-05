@@ -365,7 +365,8 @@ class DataManager:
         try:
             cur = self.db_conn.cursor()
             cur.execute('''SELECT id,
-                                  name
+                                  name,
+                                  guid
                            FROM applications
                            WHERE applications.user_id = ?''', [user_id])
             return cur.fetchall()

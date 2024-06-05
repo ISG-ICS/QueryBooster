@@ -92,6 +92,7 @@ export default function Applications() {
             <TableRow>
               <TableCell>ID</TableCell>
               <TableCell>Name</TableCell>
+              <TableCell>GUID</TableCell>
               <TableCell align="center">Assigned Rules</TableCell>
               <TableCell align="center">Edit</TableCell>
               <TableCell align="center">Delete</TableCell>
@@ -102,6 +103,7 @@ export default function Applications() {
               <TableRow key={app.id}>
                 <TableCell>{app.id}</TableCell>
                 <TableCell>{app.name}</TableCell>
+                <TableCell>{app.guid}</TableCell>
                 <TableCell align="center">
                   <Button variant="outlined" color="primary" onClick={() => viewAssignedRules(app)} >View</Button>
                 </TableCell>

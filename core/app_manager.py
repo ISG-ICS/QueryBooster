@@ -19,7 +19,8 @@ class AppManager:
         for app in applications:
             res.append({
                 'id': app[0],
-                'name': app[1]
+                'name': app[1],
+                'guid': app[2]
             })
         return res
     
