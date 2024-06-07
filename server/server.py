@@ -30,82 +30,85 @@ am = AppManager(dm)
 um = UserManager(dm)
 
 # Members API Route
-@app.route("/", methods=["GET", "POST"])
+@app.route("/", methods=["GET"])
+def index():
+    return send_from_directory('./static/', 'index.html')
+
+@app.route("/<path:name>", methods=["GET"])
+def get(name):
+    return send_from_directory('./static/', name)
+
+@app.route("/", methods=["POST"])
 def post_query():
     try:
-        if request.method == "GET":
-            return send_from_directory('./static/', 'index.html')
+        request_data = json.loads(request.data, strict=False)
 
-        elif request.method == "POST":
-            # request_data
-            request_data = json.loads(request.data, strict=False)
+        # Logging
+        print("\n[/] request:")
+        print(request)
 
-            # Logging
-            print("\n[/] request:")
-            print(request)
+        cmd = request_data['cmd']
+        appguid = request_data['appguid']
+        guid = request_data['guid']
 
-            cmd = request_data['cmd']
-            appguid = request_data['appguid']
-            guid = request_data['guid']
+        # rewrite
+        if cmd == 'rewrite':
+            original_query = request_data['query']
+            database = request_data['db']
 
-            # rewrite
-            if cmd == 'rewrite':
-                original_query = request_data['query']
-                database = request_data['db']
+            log_text = "\n=================================================="
+            log_text += "\n    Original query"
+            log_text += "\n--------------------------------------------------"
+            log_text += "\n appguid: " + appguid
+            log_text += "\n guid: " + guid
+            log_text += "\n db: " + database
+            log_text += "\n" + QueryRewriter.beautify(original_query)
+            log_text += "\n--------------------------------------------------"
+            print(log_text)
 
-                log_text = "\n=================================================="
-                log_text += "\n    Original query"
-                log_text += "\n--------------------------------------------------"
-                log_text += "\n appguid: " + appguid
-                log_text += "\n guid: " + guid
-                log_text += "\n db: " + database
-                log_text += "\n" + QueryRewriter.beautify(original_query)
-                log_text += "\n--------------------------------------------------"
-                print(log_text)
+            # Fetch enabled rules
+            rules = rm.fetch_enabled_rules(appguid)
 
-                # Fetch enabled rules
-                rules = rm.fetch_enabled_rules(appguid)
+            # Rewrite the query
+            rewritten_query, rewriting_path = QueryRewriter.rewrite(original_query, rules)
+            rewritten_query = QueryPatcher.patch(rewritten_query, database)
 
-                # Rewrite the query
-                rewritten_query, rewriting_path = QueryRewriter.rewrite(original_query, rules)
-                rewritten_query = QueryPatcher.patch(rewritten_query, database)
+            for rewriting in rewriting_path:
+                rewriting[1] = QueryPatcher.patch(rewriting[1], database)
 
-                for rewriting in rewriting_path:
-                    rewriting[1] = QueryPatcher.patch(rewriting[1], database)
+            formatted_original_query = QueryRewriter.reformat(original_query)
+            qm.log_query(
+                appguid, guid, QueryPatcher.patch(formatted_original_query, database),
+                rewritten_query, rewriting_path)
+            log_text = "\n=================================================="
+            log_text += "\n    Rewritten query"
+            log_text += "\n--------------------------------------------------"
+            log_text += "\n appguid: " + appguid
+            log_text += "\n guid: " + guid
+            log_text += "\n db: " + database
+            log_text += "\n" + QueryRewriter.beautify(rewritten_query)
+            log_text += "\n--------------------------------------------------"
+            print(log_text)
 
-                formatted_original_query = QueryRewriter.reformat(original_query)
-                qm.log_query(
-                    appguid, guid, QueryPatcher.patch(formatted_original_query, database),
-                    rewritten_query, rewriting_path)
-                log_text = "\n=================================================="
-                log_text += "\n    Rewritten query"
-                log_text += "\n--------------------------------------------------"
-                log_text += "\n appguid: " + appguid
-                log_text += "\n guid: " + guid
-                log_text += "\n db: " + database
-                log_text += "\n" + QueryRewriter.beautify(rewritten_query)
-                log_text += "\n--------------------------------------------------"
-                print(log_text)
+            return rewritten_query
 
-                return rewritten_query
+        # report
+        elif cmd == 'report':
+            query_time_ms = request_data['queryTimeMs']
 
-            # report
-            elif cmd == 'report':
-                query_time_ms = request_data['queryTimeMs']
+            log_text = "\n=================================================="
+            log_text += "\n    Report query time ms"
+            log_text += "\n--------------------------------------------------"
+            log_text += "\n appguid: " + appguid
+            log_text += "\n guid: " + guid
+            log_text += "\n query_time_ms: " + str(query_time_ms)
+            log_text += "\n--------------------------------------------------"
+            logging.info(log_text)
+            qm.report_query(appguid, guid, query_time_ms)
+            # Start a background thread to suggest rewritings for this query
+            threading.Thread(target=background_suggest_rewritings, name='Background Suggest Rewritings', args=[guid]).start()
 
-                log_text = "\n=================================================="
-                log_text += "\n    Report query time ms"
-                log_text += "\n--------------------------------------------------"
-                log_text += "\n appguid: " + appguid
-                log_text += "\n guid: " + guid
-                log_text += "\n query_time_ms: " + str(query_time_ms)
-                log_text += "\n--------------------------------------------------"
-                logging.info(log_text)
-                qm.report_query(appguid, guid, query_time_ms)
-                # Start a background thread to suggest rewritings for this query
-                threading.Thread(target=background_suggest_rewritings, name='Background Suggest Rewritings', args=[guid]).start()
-
-                return 'true'
+            return 'true'
 
     except Exception as e:
         return jsonify(str(e)), 400

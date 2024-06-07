@@ -28,6 +28,7 @@ import RuleFormulator from './RuleFormulator';
 import QueryLogs from './QueryLogs';
 import JDBCDrivers from './JDBCDrivers';
 import Applications from './Applications';
+import ReadMe from './ReadMe';
 import GoogleIcon from '@mui/icons-material/Google';
 import { googleLogout, useGoogleLogin } from '@react-oauth/google';
 // user context
@@ -251,7 +252,8 @@ function DashboardContent() {
                       <Route path="/formulator" element={<RuleFormulator />} />
                       <Route path="/jdbc" element={<JDBCDrivers />} />
                       <Route path="/queries" element={<QueryLogs />} />
-                      <Route path="/applications" element={<Applications />} />
+                      <Route path="/applications" element={<Applications />} /> 
+                      <Route path="/readme" element={<ReadMe />} /> 
                     </Routes>
                   </Paper>
                 </Grid>
