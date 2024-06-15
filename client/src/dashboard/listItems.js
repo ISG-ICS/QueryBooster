@@ -10,6 +10,7 @@ import NotesIcon from '@mui/icons-material/Notes';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import AppRegistrationIcon from '@mui/icons-material/AppRegistration';
+import InfoIcon from '@mui/icons-material/Info';
 
 export const mainListItems = (
   <React.Fragment>
@@ -48,6 +49,12 @@ export const mainListItems = (
         <AppRegistrationIcon fontSize="large" />
       </ListItemIcon>
       <ListItemText primary="Applications" />
+    </ListItemButton>
+    <ListItemButton component={Link} to="/readme">
+      <ListItemIcon>
+        <InfoIcon fontSize="large" />
+      </ListItemIcon>
+      <ListItemText primary="ReadMe" />
     </ListItemButton>
   </React.Fragment>
 );
