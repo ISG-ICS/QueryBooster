@@ -22,6 +22,13 @@ const ManageApplicationModal = NiceModal.create(({user_id, app=null}) => {
 
     const onAddOrEdit = () => {
         if (name !== null && name.replace(/\s/g, '').length ) {
+
+            // check if user is authenticated before sending the request
+            if (!user_id) {
+                alert("Please log in to save the application.");
+                return;
+            }
+
             // post saveApplication request to server
             const request = {
               'name': name,
