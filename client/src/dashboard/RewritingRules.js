@@ -18,6 +18,7 @@ import { Box } from '@mui/material';
 import RewritingRuleModal from './RewritingRuleModal';
 import AppTagCell from './ApplicationTag';
 import {userContext} from '../userContext';
+import FullLayout from './FullLayout';
 
 
 export default function RewrittingRules() {
@@ -114,9 +115,9 @@ export default function RewrittingRules() {
   };
 
   return (
-    <React.Fragment>
+    <FullLayout>
       <Title>Rewriting Rules</Title>
-      <TableContainer sx={{ maxHeight: 500, maxWidth: 1400 }}>
+      <TableContainer sx={{ flex: 1, width: '100%', height: '100%' }}>
         <Table stickyHeader size="small">
           <TableHead>
             <TableRow>
@@ -165,11 +166,11 @@ export default function RewrittingRules() {
       {/* <Link color="primary" href="#" onClick={preventDefault} sx={{ mt: 3 }}>
           See more orders
          </Link> */}
-      <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'center', padding: 2 }}>
         <Fab size="small" color="primary" aria-label="add" onClick={() => AddOrEditRewritingRule()}>
           <AddIcon />
         </Fab>
       </Box>
-    </React.Fragment>
+      </FullLayout>
   );
 }

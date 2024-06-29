@@ -15,6 +15,7 @@ import { Box } from '@mui/material';
 import {userContext} from '../userContext';
 import ManageApplicationModal from './ManageApplicationModal';
 import ViewAssignedRules from './ViewAssignedRules';
+import FullLayout from './FullLayout';
 
 export default function Applications() {
   // Set up a state for list of apps
@@ -84,9 +85,9 @@ export default function Applications() {
   };
 
   return (
-    <React.Fragment>
+    <FullLayout>
       <Title>Applications</Title>
-      <TableContainer sx={{ maxHeight: 500, maxWidth: 1400 }}>
+      <TableContainer sx={{ flex: 1, width: '100%', height: '100%' }}>
         <Table stickyHeader size="small">
           <TableHead>
             <TableRow>
@@ -118,11 +119,11 @@ export default function Applications() {
           </TableBody>
         </Table>
       </TableContainer>
-      <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'center', padding: 2 }}>
         <Fab size="small" color="primary" aria-label="add" onClick={() => manageAppModal()}>
           <AddIcon />
         </Fab>
       </Box>
-    </React.Fragment>
+      </FullLayout>
   );
 }

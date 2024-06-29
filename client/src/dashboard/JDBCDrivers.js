@@ -6,7 +6,7 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Button from "@mui/material/Button";
 import Title from './Title';
-
+import FullLayout from './FullLayout';
 
 export default function JDBCDrivers() {
 
@@ -35,7 +35,7 @@ export default function JDBCDrivers() {
   };
 
   return (
-    <React.Fragment>
+    <FullLayout>
       <Title>JDBC Drivers</Title>
       <Table>
         <TableHead>
@@ -65,6 +65,6 @@ export default function JDBCDrivers() {
           ))}
         </TableBody>
       </Table>
-    </React.Fragment>
+      </FullLayout>
   );
 }
