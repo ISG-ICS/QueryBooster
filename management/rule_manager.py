@@ -1,7 +1,7 @@
 import sys
 # append the path of the parent directory
 sys.path.append("..")
-from core.data_manager import DataManager
+from management.data_manager import DataManager
 from core.rule_parser import RuleParser
 from data.rules import get_rules
 import json
