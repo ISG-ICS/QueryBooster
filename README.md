@@ -24,10 +24,14 @@ The QueryBooster customized JDBC drivers repository are listed below:
 ## Run QueryBooster
 
 #### Requirements
+ - Python 3.9 +
+ - NPM
+
+#### Set up Python Virtual Environement
 In `QueryBooster` folder,
 ```bash
 python3 -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # Windows, .\venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
@@ -35,7 +39,7 @@ pip install -r requirements.txt
 In `QueryBooster` folder,
 ```bash
 cd client/
-npm i
+npm install
 npm run build
 ```
 
@@ -43,7 +47,12 @@ npm run build
 In `QueryBooster` folder,
 ```bash
 cd server
-gunicorn -w 4 -b 127.0.0.1:8000 'wsgi:app'
+
+# Dev mode
+python wsgi.py
+
+# Server mode (only support Linux, Mac OS X)
+gunicorn 'wsgi:app'
 ```
 
 #### Access QueryBooster web interface
