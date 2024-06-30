@@ -2,7 +2,7 @@ import uuid
 import sys
 # append the path of the parent directory
 sys.path.append("..")
-from core.data_manager import DataManager
+from management.data_manager import DataManager
 
 
 class AppManager:

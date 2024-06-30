@@ -11,12 +11,12 @@ from io import BytesIO
 from core.profiler import Profiler
 from core.query_patcher import QueryPatcher
 from core.query_rewriter import QueryRewriter
-from core.data_manager import DataManager
 from core.rule_generator import RuleGenerator
-from core.rule_manager import RuleManager
-from core.query_manager import QueryManager
-from core.app_manager import AppManager
-from core.user_manager import UserManager
+from management.data_manager import DataManager
+from management.rule_manager import RuleManager
+from management.query_manager import QueryManager
+from management.app_manager import AppManager
+from management.user_manager import UserManager
 
 app = Flask(__name__, static_folder="static/static")
 app.wsgi_app = ProxyFix(
