@@ -15,6 +15,7 @@ import QuerySuggestionRewritingPath from './QuerySuggestionRewritingPath';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { vs } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import {userContext} from '../userContext';
+import FullLayout from './FullLayout';
 
 
 export default function QueryLogs() {
@@ -61,7 +62,7 @@ export default function QueryLogs() {
   };
 
   return (
-    <React.Fragment>
+    <FullLayout>
       <Title>Query Logs</Title>
       <TableContainer sx={{ maxHeight: 500, maxWidth: 1400 }}>
         <Table stickyHeader size="small">
@@ -122,6 +123,6 @@ export default function QueryLogs() {
       {/* <Link color="primary" href="#" onClick={preventDefault} sx={{ mt: 3 }}>
         See more orders
       </Link> */}
-    </React.Fragment>
+    </FullLayout>
   );
 }

@@ -19,6 +19,8 @@ import defaultRecommendRulesData from '../mock-api/recommendRules';
 import NiceModal from '@ebay/nice-modal-react';
 import RulesGraph from './RulesGraph';
 
+import FullLayout from './FullLayout';
+
 
 export default function RuleFormulator() {
 
@@ -199,9 +201,9 @@ export default function RuleFormulator() {
   React.useEffect(() => {}, [examples, rules]);
 
   return (
-    <React.Fragment>
+    <FullLayout>
       <Title>Rule Formulator</Title>
-      <Grid sx={{ flexGrow: 1 }} container alignItems="center" spacing={2}>
+      <Grid sx={{ flexGrow: 1 }} container alignItems="top" spacing={2}>
         <Grid item xs={12} sm={12} md={12} lg={12} xl={12}>
           <Grid container justifyContent="center" alignItems="center" spacing={2}>
             <Grid item xs={5} sm={5} md={5} lg={5} xl={5}>
@@ -313,6 +315,6 @@ export default function RuleFormulator() {
           </Grid>
         </Grid>
       </Grid>
-    </React.Fragment>
+      </FullLayout>
   );
 }
