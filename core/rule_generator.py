@@ -344,6 +344,13 @@ class RuleGenerator:
                 # skip value of 'literal' as key
                 if type(key) is str and key.lower() == 'literal':
                     continue
+                # special case: {'all_columns': 'e1'}
+                #  this is a new change in the mo_sql_parser library,
+                #  to make it compatible with our code, 
+                #  make it as before the '*' column name.
+                if type(key) is str and key.lower() == 'all_columns':
+                    res.add('*')
+                    continue
                 # note: key can not be column, only traverse each value
                 res.update(RuleGenerator.columnsOfASTJson(value, path + [key]))
 
