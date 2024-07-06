@@ -64,7 +64,7 @@ export default function QueryLogs() {
   return (
     <FullLayout>
       <Title>Query Logs</Title>
-      <TableContainer sx={{ maxHeight: 500, maxWidth: 1400 }}>
+      <TableContainer sx={{ flex: 1, width: '100%', height: '100%' }}>
         <Table stickyHeader size="small">
           <TableHead>
             <TableRow>
