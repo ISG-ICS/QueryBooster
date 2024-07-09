@@ -1303,6 +1303,15 @@ class RuleGenerator:
                 # if the subtree is the same as the given subtree
                 #
                 if RuleGenerator.sameSubtree(astJson, subtree):
+                    # special case for 'select' list
+                    #  e.g., for {'select': [{'value': 'V001.V002'}, {'value': 'V001.age'}, ...]}
+                    #        astJson = {'value': 'V001.V002'}
+                    #        subtree = {'value': 'V001.V002'}
+                    #        var = 'V005'
+                    #        we should return {'value': 'V005'}
+                    if path[-1] == 'select' and 'value'in astJson.keys():
+                        return {'value': var}
+                    # otherwise
                     return var
             # otherwise
             #
@@ -1431,7 +1440,8 @@ class RuleGenerator:
         if QueryRewriter.is_var(astJson):
             # special case for single Var under SELECT, WHERE, ON
             #
-            if len(path) >= 1 and path[-1] in ['select', 'where', 'on']:
+            # if len(path) >= 1 and path[-1] in ['select', 'where', 'on']:
+            if len(path) >= 1 and path[-1] in ['select', 'where']:
                 res.append([astJson])
         
         return res
