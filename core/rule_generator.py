@@ -489,6 +489,11 @@ class RuleGenerator:
                     continue
                 # note: key can not be column, only traverse each value
                 astJson[key] = RuleGenerator.replaceColumnsOfASTJson(value, path + [key], column, var)
+            # special case for {'all_columns': {}} under 'select' key
+            #   it can match '*', return {'value': var}
+            #
+            if 'all_columns' in astJson.keys() and astJson['all_columns'] == {}:
+                return {'value': var}
             return astJson
 
         # Case-2: list
@@ -1303,6 +1308,15 @@ class RuleGenerator:
                 # if the subtree is the same as the given subtree
                 #
                 if RuleGenerator.sameSubtree(astJson, subtree):
+                    # special case for 'select' list
+                    #  e.g., for {'select': [{'value': 'V001.V002'}, {'value': 'V001.age'}, ...]}
+                    #        astJson = {'value': 'V001.V002'}
+                    #        subtree = {'value': 'V001.V002'}
+                    #        var = 'V005'
+                    #        we should return {'value': 'V005'}
+                    if len(path) > 0 and path[-1] == 'select' and 'value'in astJson.keys():
+                        return {'value': var}
+                    # otherwise
                     return var
             # otherwise
             #
@@ -1432,6 +1446,7 @@ class RuleGenerator:
             # special case for single Var under SELECT, WHERE, ON
             #
             if len(path) >= 1 and path[-1] in ['select', 'where', 'on']:
+            #if len(path) >= 1 and path[-1] in ['select', 'where']:
                 res.append([astJson])
         
         return res
@@ -1485,7 +1500,10 @@ class RuleGenerator:
             #
             if len(path) >= 1 and path[-1] in ['select'] and 'value' in astJson and 'name' not in astJson and QueryRewriter.is_var(astJson['value']):
                 if len(variableList) == 1 and astJson['value'] == variableList[0]:
-                    return varList
+                    #   in new mo_sql_parser, the child of 'select' can not be the column var directly,
+                    #   but has to be like {'value': 'VL001'}
+                    #
+                    return {'value': varList}
             # recursively traverse the dict
             #
             for key, value in astJson.items():
@@ -1540,9 +1558,11 @@ class RuleGenerator:
                 #
                 elif QueryRewriter.is_dict(child) and 'value' in child and 'name' not in child and QueryRewriter.is_var(child['value']) and child['value'] in candidateVariableList:
                     # append the varList into the result children only once
-                    # 
-                    if varList not in res:
-                        res.append(varList) 
+                    #   in new mo_sql_parser, the child of 'select' can not be the column var directly,
+                    #   but has to be like {'value': 'VL001'}
+                    #
+                    if {'value': varList} not in res:
+                        res.append({'value': varList})
                 else:
                     res.append(RuleGenerator.replaceVariableListsOfASTJson(child, path, variableList, varList))
 
@@ -1814,7 +1834,12 @@ class RuleGenerator:
         # check if it has un-variablized columns
         #
         columns = RuleGenerator.columnsOfASTJson(astJson, [])
+        # special case for {'select': {'all_columns': {}}}, which should be a branch
+        #   columns = {'*'}
+        #
         if len(columns) > 0:
+            if len(columns) == 1 and list(columns)[0] == '*':
+                return True
             return False
         
         # check if it has un-variablized literals
