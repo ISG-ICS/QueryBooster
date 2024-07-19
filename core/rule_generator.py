@@ -323,10 +323,8 @@ class RuleGenerator:
         patternASTJson = json.loads(pattern_json)
         rewriteASTJson = json.loads(rewrite_json)
 
-        print(f"patternASTJson: {patternASTJson}")
         # traverse the AST jsons to get all columns
         patternColumns = RuleGenerator.columnsOfASTJson(patternASTJson, [])
-        print(f"patternColumns: {patternColumns}")
         rewriteColumns = RuleGenerator.columnsOfASTJson(rewriteASTJson, [])
 
         # TODO - patternColumns should be superset of rewriteColumns
@@ -815,9 +813,7 @@ class RuleGenerator:
         rewriteASTJson = json.loads(rewrite_json)
 
         # traverse the AST jsons to get all tables
-        print("tables-patternASTJson", patternASTJson)
         patternTables = RuleGenerator.tablesOfASTJson(patternASTJson, [])
-        print("tables-patternTables", patternTables)
         rewriteTables = RuleGenerator.tablesOfASTJson(rewriteASTJson, [])
 
         # TODO - patternTables should be superset of rewriteTables
@@ -2296,7 +2292,6 @@ class RuleGenerator:
         # 1. Get candidate columns from rule
         #
         columns = RuleGenerator.columns(rule['pattern_json'], rule['rewrite_json'])
-        print(columns)
 
         # 2. Make all candidate columns variables, and generate a new rule
         #
@@ -2625,10 +2620,8 @@ class RuleGenerator:
         preRuleFingerprint = RuleGenerator.fingerPrint(generalRule)
         diff = True
         while diff:
-            print("new diff loop")
             for generalization in RuleGenerator.RuleGeneralizations.keys():
                 generalRule = getattr(RuleGenerator, generalization)(generalRule)
-                print(f"{generalization}: {generalRule['pattern']}")
             newRuleFingerprint = RuleGenerator.fingerPrint(generalRule)
             if newRuleFingerprint == preRuleFingerprint:
                 diff = False
