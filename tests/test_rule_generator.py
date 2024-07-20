@@ -2095,6 +2095,52 @@ def test_generate_general_rule_13():
     assert StringUtil.strim(q1_rule) == StringUtil.strim(rewrite)
 
 
+def test_generate_general_rule_14():
+    q0 = """select
+            distinct c.customer_id
+            from table1 c
+            join table2 l
+            on c.customer_id = l.customer_id
+            join table3 cal
+            on c.customer_id = cal.customer_id
+            WHERE
+            (l.customer_group_id = 'loyalty' and c.loyalty_number = '123456789')
+            or
+            (cal.account_id = '123456789' and cal.account_type  = 'loyalty')"""
+    q1 = """SELECT customer_id
+            FROM   table1 c
+            JOIN   table2 l   USING (customer_id)
+            JOIN   table3 cal USING (customer_id)
+            WHERE  l.customer_group_id = 'loyalty'
+            AND    c.loyalty_number = '123456789'
+            UNION
+            SELECT customer_id
+            FROM   table1 c
+            JOIN   table2 l   USING (customer_id)
+            JOIN   table3 cal USING (customer_id)
+            WHERE  cal.account_id = '123456789'
+            AND    cal.account_type  = 'loyalty'"""
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    assert q0_rule == "SELECT DISTINCT <x1>.<x2> FROM <x1> JOIN <x3> ON <x1>.<x2> = <x3>.<x2> JOIN <x4> ON <x1>.<x2> = <x4>.<x2> WHERE <x5> OR <x6>"
+    assert q1_rule == "SELECT <x2> FROM <x1> JOIN <x3> USING <x2> JOIN <x4> USING <x2> WHERE <x5> UNION SELECT <x2> FROM <x1> JOIN <x3> USING <x2> JOIN <x4> USING <x2> WHERE <x6>"
+
+
+def test_generate_general_rule_15():
+    q0 = "select * from A a left join B b on a.id = b.cid where b.cl1 = 's1' or b.cl1 ='s2' or b.cl1 ='s3'"
+    q1 = "select * from A a left join B b  on a.id = b.cid where b.cl1 in ('s1','s2','s3')"
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    assert q0_rule== "<x1>.<x2> = '<x3>' OR <x1>.<x2> = '<x4>' OR <x1>.<x2> = '<x5>'"
+    assert q1_rule == "<x1>.<x2> IN ('<x3>', '<x4>', '<x5>')"
+
+
 # def test_suggest_rules_bf_1():
 #     examples = [
 #         {
