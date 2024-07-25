@@ -817,9 +817,14 @@ class RuleGenerator:
         rewriteTables = RuleGenerator.tablesOfASTJson(rewriteASTJson, [])
 
         # TODO - patternTables should be superset of rewriteTables
-        #
+        for table in rewriteTables:
+            if table not in patternTables:
+                patternTables.append(table)
+
         # deduplicate the list
         #
+        print(f"patternTables: {patternTables}")
+        print(f"rewriteTables: {rewriteTables}")
         fingerprints = set()
         ans = []
         for table in patternTables:
@@ -2618,10 +2623,12 @@ class RuleGenerator:
         #
         generalRule = seedRule
         preRuleFingerprint = RuleGenerator.fingerPrint(generalRule)
+        print(f"preRuleFingerprint: {preRuleFingerprint}")
         diff = True
         while diff:
             for generalization in RuleGenerator.RuleGeneralizations.keys():
                 generalRule = getattr(RuleGenerator, generalization)(generalRule)
+                print(f"generalRule from {generalization}: {generalRule['pattern']} -> {generalRule['rewrite']}")
             newRuleFingerprint = RuleGenerator.fingerPrint(generalRule)
             if newRuleFingerprint == preRuleFingerprint:
                 diff = False
