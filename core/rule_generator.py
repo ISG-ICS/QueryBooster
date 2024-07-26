@@ -2652,7 +2652,6 @@ class RuleGenerator:
         #
         generalRule = seedRule
         preRuleFingerprint = RuleGenerator.fingerPrint(generalRule)
-        
         diff = True
         while diff:
             for generalization in RuleGenerator.RuleGeneralizations.keys():
