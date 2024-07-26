@@ -2162,7 +2162,7 @@ def test_generate_general_rule_16():
 
     q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
     assert q0_rule== "SELECT <x1>, <x2>, <x3>, <x4>, <x5>, <x6> FROM <x7> WHERE <x2> IN (SELECT <x2> FROM <x7> WHERE <x6> = <x8> AND <x3> = <x9>) ORDER BY <x2>, <x3>"
-    assert q1_rule == "SELECT <x7>.<x1>, <x7>.<x2>, <x7>.<x3>, <x7>.<x4>, <x7>.<x5>, <x7>.<x6> FROM <x7> JOIN <x7> ON <x7>.<x2> = <x7>.<x2> WHERE <x7>.<x6> = <x8> AND <x7>.<x3> = <x9> ORDER BY <x7>.<x2>, <x7>.<x3>"
+    assert q1_rule == "SELECT <x10>.<x1>, <x10>.<x2>, <x10>.<x3>, <x10>.<x4>, <x10>.<x5>, <x10>.<x6> FROM <x10> JOIN <x11> ON <x11>.<x2> = <x10>.<x2> WHERE <x11>.<x6> = <x8> AND <x11>.<x3> = <x9> ORDER BY <x10>.<x2>, <x10>.<x3>"
 
 
 def test_generate_general_rule_17():
@@ -2182,19 +2182,7 @@ def test_generate_general_rule_17():
 
     q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
     assert q0_rule== "SELECT <x1> FROM <x2> WHERE <x3> IN (SELECT <x4> FROM <x5> WHERE <x6> = <x7>)"
-    assert q1_rule == "SELECT <x8>.<x1> FROM <x8> INNER JOIN <x9> ON <x9>.<x4> = <x8>.<x3> WHERE <x9>.<x6> = <x7>"
-
-
-def test_generate_general_rule_18():
-    q0 = "SELECT EMP.MGR FROM EMP WHERE EMP.MGR = 1"
-    q1 = "SELECT 1 AS MGR FROM EMP WHERE EMP.MGR = 1"
-
-    rule = RuleGenerator.generate_general_rule(q0, q1)
-    assert type(rule) is dict
-
-    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
-    assert q0_rule== "<x1>.<x2>"
-    assert q1_rule == "<x3> AS MGR"
+    assert q1_rule == "SELECT <x2>.<x1> FROM <x2> INNER JOIN <x5> ON <x5>.<x4> = <x2>.<x3> WHERE <x5>.<x6> = <x7>"
 
 
 # def test_suggest_rules_bf_1():

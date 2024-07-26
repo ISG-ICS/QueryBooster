@@ -1,3 +1,4 @@
+from collections import defaultdict
 from typing import Any, Union, Tuple
 import copy
 from core.profiler import Profiler
@@ -816,23 +817,42 @@ class RuleGenerator:
         patternTables = RuleGenerator.tablesOfASTJson(patternASTJson, [])
         rewriteTables = RuleGenerator.tablesOfASTJson(rewriteASTJson, [])
 
-        # TODO - patternTables should be superset of rewriteTables
+        # patternTables should be superset of rewriteTables
+        patternSet = defaultdict(list)
+        rewriteSet = defaultdict(list)
+
+        for table in patternTables:
+            if type(table['value']) is str and type(table['name']) is str:
+                patternSet[table['value']].append(table['name'])
+
         for table in rewriteTables:
-            if table not in patternTables:
-                patternTables.append(table)
+            if type(table['value']) is str and type(table['name']) is str:
+                rewriteSet[table['value']].append(table['name'])
+
+        superSet = []
+        for patternValue, patternNames in patternSet.items():
+            rewriteNames = rewriteSet.get(patternValue, [])
+            # special case: 
+            #   if patternTable ONLY have {'value': 'employee', 'name': 'employee'}
+            #   and rewriteTable ONLY have {'value': 'employee', 'name': 'e1'}, 
+            #   we replace 'employee' with 'e1' as table alias
+            if len(patternNames) == 1 and len(rewriteNames) == 1 and patternNames[0] == patternValue:
+                patternNames = rewriteNames
+            else:
+                patternNames += [name for name in rewriteNames if name not in patternNames]
+            superSet += [{'value': patternValue, 'name': name} for name in patternNames]
+
+        patternTables = superSet
 
         # deduplicate the list
         #
-        print(f"patternTables: {patternTables}")
-        print(f"rewriteTables: {rewriteTables}")
         fingerprints = set()
         ans = []
         for table in patternTables:
-            if type(table['value']) is str and type(table['name']) is str:
-                fingerprint = table['value'] + '-' + table['name']
-                if fingerprint not in fingerprints:
-                    ans.append(table)
-                    fingerprints.add(fingerprint)
+            fingerprint = table['value'] + '-' + table['name']
+            if fingerprint not in fingerprints:
+                ans.append(table)
+                fingerprints.add(fingerprint)
         patternTables = ans
 
         return patternTables
@@ -1003,7 +1023,6 @@ class RuleGenerator:
     #
     @staticmethod
     def replaceTablesOfASTJson(astJson: Any, path: list, table: dict, var: str) -> Any:
-        
         # Case-1: dict
         #
         if QueryRewriter.is_dict(astJson):
@@ -1016,30 +1035,40 @@ class RuleGenerator:
                 #
                 if len(path) >= 1 and path[-1] == 'from':
                     if astJson['value'] == table['value'] and astJson['name'] == table['name']:
+                        return var 
+                    elif astJson['value'] == table['value'] and astJson['value'] == astJson['name']:
                         return var
                 # case-2: {'inner join': {'value': 'employee', 'name': 'e1'}}
                 #         path = ['inner join']
                 #
                 elif len(path) >= 1 and path[-1] == 'inner join':
                     if astJson['value'] == table['value'] and astJson['name'] == table['name']:
+                        return var 
+                    elif astJson['value'] == table['value'] and astJson['value'] == astJson['name']:
                         return var
                 # case-3: {'left outer join': {'value': 'employee', 'name': 'e1'}}
                 #         path = ['left outer join']
                 #
                 elif len(path) >= 1 and path[-1] == 'left outer join':
                     if astJson['value'] == table['value'] and astJson['name'] == table['name']:
+                        return var 
+                    elif astJson['value'] == table['value'] and astJson['value'] == astJson['name']:
                         return var
                 # case-4: {'left join': {'value': 'employee', 'name': 'e1'}}
                 #         path = ['left join']
                 #
                 elif len(path) >= 1 and path[-1] == 'left join':
                     if astJson['value'] == table['value'] and astJson['name'] == table['name']:
+                        return var 
+                    elif astJson['value'] == table['value'] and astJson['value'] == astJson['name']:
                         return var
                 # case-5: {'join': {'value': 'employee', 'name': 'e1'}}
                 #         path = ['join']
                 #
                 elif len(path) >= 1 and path[-1] == 'join':
                     if astJson['value'] == table['value'] and astJson['name'] == table['name']:
+                        return var 
+                    elif astJson['value'] == table['value'] and astJson['value'] == astJson['name']:
                         return var
             # recursively traverse the dict
             #
@@ -2623,12 +2652,11 @@ class RuleGenerator:
         #
         generalRule = seedRule
         preRuleFingerprint = RuleGenerator.fingerPrint(generalRule)
-        print(f"preRuleFingerprint: {preRuleFingerprint}")
+        
         diff = True
         while diff:
             for generalization in RuleGenerator.RuleGeneralizations.keys():
                 generalRule = getattr(RuleGenerator, generalization)(generalRule)
-                print(f"generalRule from {generalization}: {generalRule['pattern']} -> {generalRule['rewrite']}")
             newRuleFingerprint = RuleGenerator.fingerPrint(generalRule)
             if newRuleFingerprint == preRuleFingerprint:
                 diff = False
