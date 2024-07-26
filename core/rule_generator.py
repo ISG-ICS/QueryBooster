@@ -1036,6 +1036,7 @@ class RuleGenerator:
                 if len(path) >= 1 and path[-1] == 'from':
                     if astJson['value'] == table['value'] and astJson['name'] == table['name']:
                         return var 
+                    # special case: if it's a general table with no alias, e.g., {'value': 'employee', 'name': 'employee'}
                     elif astJson['value'] == table['value'] and astJson['value'] == astJson['name']:
                         return var
                 # case-2: {'inner join': {'value': 'employee', 'name': 'e1'}}
@@ -1044,6 +1045,7 @@ class RuleGenerator:
                 elif len(path) >= 1 and path[-1] == 'inner join':
                     if astJson['value'] == table['value'] and astJson['name'] == table['name']:
                         return var 
+                    # special case: if it's a general table with no alias, e.g., {'value': 'employee', 'name': 'employee'}
                     elif astJson['value'] == table['value'] and astJson['value'] == astJson['name']:
                         return var
                 # case-3: {'left outer join': {'value': 'employee', 'name': 'e1'}}
@@ -1052,6 +1054,7 @@ class RuleGenerator:
                 elif len(path) >= 1 and path[-1] == 'left outer join':
                     if astJson['value'] == table['value'] and astJson['name'] == table['name']:
                         return var 
+                    # special case: if it's a general table with no alias, e.g., {'value': 'employee', 'name': 'employee'}
                     elif astJson['value'] == table['value'] and astJson['value'] == astJson['name']:
                         return var
                 # case-4: {'left join': {'value': 'employee', 'name': 'e1'}}
@@ -1060,6 +1063,7 @@ class RuleGenerator:
                 elif len(path) >= 1 and path[-1] == 'left join':
                     if astJson['value'] == table['value'] and astJson['name'] == table['name']:
                         return var 
+                    # special case: if it's a general table with no alias, e.g., {'value': 'employee', 'name': 'employee'}
                     elif astJson['value'] == table['value'] and astJson['value'] == astJson['name']:
                         return var
                 # case-5: {'join': {'value': 'employee', 'name': 'e1'}}
@@ -1068,6 +1072,7 @@ class RuleGenerator:
                 elif len(path) >= 1 and path[-1] == 'join':
                     if astJson['value'] == table['value'] and astJson['name'] == table['name']:
                         return var 
+                    # special case: if it's a general table with no alias, e.g., {'value': 'employee', 'name': 'employee'}
                     elif astJson['value'] == table['value'] and astJson['value'] == astJson['name']:
                         return var
             # recursively traverse the dict
