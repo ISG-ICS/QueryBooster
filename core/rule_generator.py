@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Any, Union, Tuple
+from typing import Any, Dict, Union, Tuple
 import copy
 from core.profiler import Profiler
 from core.query_rewriter import QueryRewriter
@@ -641,34 +641,43 @@ class RuleGenerator:
     #
     @staticmethod
     def literals(pattern_json: str, rewrite_json: str) -> list:
-        
         patternASTJson = json.loads(pattern_json)
         rewriteASTJson = json.loads(rewrite_json)
 
-        # traverse the AST jsons to get all literals
-        patternLiterals = RuleGenerator.literalsOfASTJson(patternASTJson, [])
-        rewriteLiterals = RuleGenerator.literalsOfASTJson(rewriteASTJson, [])
+        # traverse the AST jsons to get all literals with their counts
+        #   e.g. patternLiterals: {'%iphone%': 1}
+        patternLiterals = RuleGenerator.literalsOfASTJson(patternASTJson, {})
+        rewriteLiterals = RuleGenerator.literalsOfASTJson(rewriteASTJson, {})
 
-        return list(patternLiterals.intersection(rewriteLiterals))
+        # filter out literals that appear more than once in either patternLiterals or rewriteLiterals
+        variablizeLiterals = [
+            literal for literal, count in patternLiterals.items() if count > 1
+        ] + [
+            literal for literal, count in rewriteLiterals.items() if count > 1
+        ]
+
+        # get the literals that appear in both patternLiterals and rewriteLiterals
+        intersectLiterals = set(patternLiterals.keys()).intersection(set(rewriteLiterals.keys()))
+
+        # return all literals that either appear more than once or appear in both patternLiterals and rewriteLiterals
+        return list(set(variablizeLiterals).union(intersectLiterals))
     
-    # recursively get set of literals in a rule pattern/rewrite's AST Json
+    # recursively get a dictionary of literals with their counts in a rule pattern/rewrite's AST Json
     #
     @staticmethod
-    def literalsOfASTJson(astJson: Any, path: list) -> set:
-        res = set()
-
+    def literalsOfASTJson(astJson: Any, literalCounts: Dict[str, int], path: list = []) -> Dict[str, int]:
         # Case-1: dict
         #
         if QueryRewriter.is_dict(astJson):
             for key, value in astJson.items():
                 # note: key can not be literal, only traverse each value
-                res.update(RuleGenerator.literalsOfASTJson(value, path + [key]))
+                RuleGenerator.literalsOfASTJson(value, literalCounts, path + [key])
 
         # Case-2: list
-        # 
+        #
         if QueryRewriter.is_list(astJson):
             for child in astJson:
-                res.update(RuleGenerator.literalsOfASTJson(child, path))
+                RuleGenerator.literalsOfASTJson(child, literalCounts, path)
 
         # Case-3: string
         if QueryRewriter.is_string(astJson):
@@ -677,22 +686,24 @@ class RuleGenerator:
                 # special case for {'literal': '%iphone%'}
                 #   get rid of wildcard chars in a literal
                 #
-                res.add(str(astJson).replace('%', ''))
-        
-        # Case-4: dot expression (false postive, if it is value of 'literal' key)
+                literal = str(astJson).replace('%', '')
+                literalCounts[literal] = literalCounts.get(literal, 0) + 1
+
+        # Case-4: dot expression (false positive, if it is value of 'literal' key)
         if QueryRewriter.is_dot_expression(astJson):
             # literal is the value of 'literal' key
             if len(path) >= 1 and type(path[-1]) is str and path[-1].lower() == 'literal':
                 # special case for {'literal': '%iphone.14%'}
                 #   get rid of wildcard chars in a literal
                 #
-                res.add(str(astJson).replace('%', ''))
-        
+                literal = str(astJson).replace('%', '')
+                literalCounts[literal] = literalCounts.get(literal, 0) + 1
+
         # Case-5: number
         if QueryRewriter.is_number(astJson):
-            res.add(astJson)
-        
-        return res
+            literalCounts[astJson] = literalCounts.get(astJson, 0) + 1
+
+        return literalCounts
     
     # variablize the given literal in given rule and generate a new rule
     #
@@ -1965,8 +1976,8 @@ class RuleGenerator:
         
         # check if it has un-variablized literals
         #
-        literals = RuleGenerator.literalsOfASTJson(astJson, [])
-        if len(literals) > 0:
+        literals = RuleGenerator.literalsOfASTJson(astJson, {})
+        if len(literals.keys()) > 0:
             return False
         
         # ignore this check for now
