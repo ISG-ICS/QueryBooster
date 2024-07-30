@@ -818,6 +818,12 @@ class RuleGenerator:
         rewriteTables = RuleGenerator.tablesOfASTJson(rewriteASTJson, [])
 
         # patternTables should be superset of rewriteTables
+        #
+        # the patternSet and the rewriteSet are re-structured from patternTables and rewriteTables.
+        # they are dictioanries with key as table value and value as a list of alias names for that table value
+        #   e.g. patternTables: [{'value': 'employee', 'name': 'e1'}, {'value': 'employee', 'name': 'e2'}]
+        #        patternSet: {'employee': ['e1', 'e2']}
+        #
         patternSet = defaultdict(list)
         rewriteSet = defaultdict(list)
 
@@ -833,9 +839,15 @@ class RuleGenerator:
         for patternValue, patternNames in patternSet.items():
             rewriteNames = rewriteSet.get(patternValue, [])
             # special case: 
-            #   if patternTable ONLY have {'value': 'employee', 'name': 'employee'}
-            #   and rewriteTable ONLY have {'value': 'employee', 'name': 'e1'}, 
-            #   we replace 'employee' with 'e1' as table alias
+            #   if the patternTable ONLY has {'value': 'employee', 'name': 'employee'}
+            #   and the rewriteTable ONLY has {'value': 'employee', 'name': 'e1'},
+            #   we replace 'employee' with 'e1' as table alias  
+            #   the purpose is for the next step when we replace tables with variables, 
+            #   we should be able to know the patternTable and rewriteTable should be replaced with the same variable.  
+            #   This logic will much simpler once we complete refactoring the code to introduce an internal tree structure  
+            #   to represent the AST instead of the current JSON structure, where can easily determine if two tables  
+            #   are the same table with different alias names.
+            #
             if len(patternNames) == 1 and len(rewriteNames) == 1 and patternNames[0] == patternValue:
                 patternNames = rewriteNames
             else:
