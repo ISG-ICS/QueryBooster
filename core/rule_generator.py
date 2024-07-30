@@ -674,7 +674,7 @@ class RuleGenerator:
                 RuleGenerator.literalsOfASTJson(value, literalCounts, path + [key])
 
         # Case-2: list
-        #
+        # 
         if QueryRewriter.is_list(astJson):
             for child in astJson:
                 RuleGenerator.literalsOfASTJson(child, literalCounts, path)
