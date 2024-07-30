@@ -2141,6 +2141,50 @@ def test_generate_general_rule_15():
     assert q1_rule == "<x1>.<x2> IN ('<x3>', '<x4>', '<x5>')"
 
 
+def test_generate_general_rule_16():
+    q0 = """SELECT historicoestatusrequisicion_id, requisicion_id, estatusrequisicion_id, 
+            comentario, fecha_estatus, usuario_id
+            FROM historicoestatusrequisicion
+            WHERE requisicion_id IN
+            (
+            SELECT requisicion_id FROM historicoestatusrequisicion
+            WHERE usuario_id = 27 AND estatusrequisicion_id = 1
+            )
+            ORDER BY requisicion_id, estatusrequisicion_id"""
+    q1 = """SELECT hist1.historicoestatusrequisicion_id, hist1.requisicion_id, hist1.estatusrequisicion_id, hist1.comentario, hist1.fecha_estatus, hist1.usuario_id
+            FROM historicoestatusrequisicion hist1
+            JOIN historicoestatusrequisicion hist2 ON hist2.requisicion_id = hist1.requisicion_id
+            WHERE hist2.usuario_id = 27 AND hist2.estatusrequisicion_id = 1
+            ORDER BY hist1.requisicion_id, hist1.estatusrequisicion_id"""
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    assert q0_rule== "SELECT <x1>, <x2>, <x3>, <x4>, <x5>, <x6> FROM <x7> WHERE <x2> IN (SELECT <x2> FROM <x7> WHERE <x6> = <x8> AND <x3> = <x9>) ORDER BY <x2>, <x3>"
+    assert q1_rule == "SELECT <x10>.<x1>, <x10>.<x2>, <x10>.<x3>, <x10>.<x4>, <x10>.<x5>, <x10>.<x6> FROM <x10> JOIN <x11> ON <x11>.<x2> = <x10>.<x2> WHERE <x11>.<x6> = <x8> AND <x11>.<x3> = <x9> ORDER BY <x10>.<x2>, <x10>.<x3>"
+
+
+def test_generate_general_rule_17():
+    q0 = """select wpis_id from spoleczniak_oznaczone
+            where etykieta_id in(
+            select tag_id
+            from spoleczniak_subskrypcje
+            where postac_id = 376476
+            )"""
+    q1 = """select o.wpis_id 
+            from spoleczniak_oznaczone o
+            inner join spoleczniak_subskrypcje s on s.tag_id = o.etykieta_id
+            where s.postac_id = 376476"""
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    assert q0_rule== "SELECT <x1> FROM <x2> WHERE <x3> IN (SELECT <x4> FROM <x5> WHERE <x6> = <x7>)"
+    assert q1_rule == "SELECT <x2>.<x1> FROM <x2> INNER JOIN <x5> ON <x5>.<x4> = <x2>.<x3> WHERE <x5>.<x6> = <x7>"
+
+
 # def test_suggest_rules_bf_1():
 #     examples = [
 #         {

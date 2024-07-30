@@ -1,3 +1,4 @@
+from collections import defaultdict
 from typing import Any, Union, Tuple
 import copy
 from core.profiler import Profiler
@@ -816,18 +817,54 @@ class RuleGenerator:
         patternTables = RuleGenerator.tablesOfASTJson(patternASTJson, [])
         rewriteTables = RuleGenerator.tablesOfASTJson(rewriteASTJson, [])
 
-        # TODO - patternTables should be superset of rewriteTables
+        # patternTables should be superset of rewriteTables
         #
+        # the patternSet and the rewriteSet are re-structured from patternTables and rewriteTables.
+        # they are dictioanries with key as table value and value as a list of alias names for that table value
+        #   e.g. patternTables: [{'value': 'employee', 'name': 'e1'}, {'value': 'employee', 'name': 'e2'}]
+        #        patternSet: {'employee': ['e1', 'e2']}
+        #
+        patternSet = defaultdict(list)
+        rewriteSet = defaultdict(list)
+
+        for table in patternTables:
+            if type(table['value']) is str and type(table['name']) is str:
+                patternSet[table['value']].append(table['name'])
+
+        for table in rewriteTables:
+            if type(table['value']) is str and type(table['name']) is str:
+                rewriteSet[table['value']].append(table['name'])
+
+        superSet = []
+        for patternValue, patternNames in patternSet.items():
+            rewriteNames = rewriteSet.get(patternValue, [])
+            # special case: 
+            #   if the patternTable ONLY has {'value': 'employee', 'name': 'employee'}
+            #   and the rewriteTable ONLY has {'value': 'employee', 'name': 'e1'},
+            #   we replace 'employee' with 'e1' as table alias  
+            #   the purpose is for the next step when we replace tables with variables, 
+            #   we should be able to know the patternTable and rewriteTable should be replaced with the same variable.  
+            #   This logic will much simpler once we complete refactoring the code to introduce an internal tree structure  
+            #   to represent the AST instead of the current JSON structure, where can easily determine if two tables  
+            #   are the same table with different alias names.
+            #
+            if len(patternNames) == 1 and len(rewriteNames) == 1 and patternNames[0] == patternValue:
+                patternNames = rewriteNames
+            else:
+                patternNames += [name for name in rewriteNames if name not in patternNames]
+            superSet += [{'value': patternValue, 'name': name} for name in patternNames]
+
+        patternTables = superSet
+
         # deduplicate the list
         #
         fingerprints = set()
         ans = []
         for table in patternTables:
-            if type(table['value']) is str and type(table['name']) is str:
-                fingerprint = table['value'] + '-' + table['name']
-                if fingerprint not in fingerprints:
-                    ans.append(table)
-                    fingerprints.add(fingerprint)
+            fingerprint = table['value'] + '-' + table['name']
+            if fingerprint not in fingerprints:
+                ans.append(table)
+                fingerprints.add(fingerprint)
         patternTables = ans
 
         return patternTables
@@ -998,7 +1035,6 @@ class RuleGenerator:
     #
     @staticmethod
     def replaceTablesOfASTJson(astJson: Any, path: list, table: dict, var: str) -> Any:
-        
         # Case-1: dict
         #
         if QueryRewriter.is_dict(astJson):
@@ -1011,30 +1047,45 @@ class RuleGenerator:
                 #
                 if len(path) >= 1 and path[-1] == 'from':
                     if astJson['value'] == table['value'] and astJson['name'] == table['name']:
+                        return var 
+                    # special case: if it's a general table with no alias, e.g., {'value': 'employee', 'name': 'employee'}
+                    elif astJson['value'] == table['value'] and astJson['value'] == astJson['name']:
                         return var
                 # case-2: {'inner join': {'value': 'employee', 'name': 'e1'}}
                 #         path = ['inner join']
                 #
                 elif len(path) >= 1 and path[-1] == 'inner join':
                     if astJson['value'] == table['value'] and astJson['name'] == table['name']:
+                        return var 
+                    # special case: if it's a general table with no alias, e.g., {'value': 'employee', 'name': 'employee'}
+                    elif astJson['value'] == table['value'] and astJson['value'] == astJson['name']:
                         return var
                 # case-3: {'left outer join': {'value': 'employee', 'name': 'e1'}}
                 #         path = ['left outer join']
                 #
                 elif len(path) >= 1 and path[-1] == 'left outer join':
                     if astJson['value'] == table['value'] and astJson['name'] == table['name']:
+                        return var 
+                    # special case: if it's a general table with no alias, e.g., {'value': 'employee', 'name': 'employee'}
+                    elif astJson['value'] == table['value'] and astJson['value'] == astJson['name']:
                         return var
                 # case-4: {'left join': {'value': 'employee', 'name': 'e1'}}
                 #         path = ['left join']
                 #
                 elif len(path) >= 1 and path[-1] == 'left join':
                     if astJson['value'] == table['value'] and astJson['name'] == table['name']:
+                        return var 
+                    # special case: if it's a general table with no alias, e.g., {'value': 'employee', 'name': 'employee'}
+                    elif astJson['value'] == table['value'] and astJson['value'] == astJson['name']:
                         return var
                 # case-5: {'join': {'value': 'employee', 'name': 'e1'}}
                 #         path = ['join']
                 #
                 elif len(path) >= 1 and path[-1] == 'join':
                     if astJson['value'] == table['value'] and astJson['name'] == table['name']:
+                        return var 
+                    # special case: if it's a general table with no alias, e.g., {'value': 'employee', 'name': 'employee'}
+                    elif astJson['value'] == table['value'] and astJson['value'] == astJson['name']:
                         return var
             # recursively traverse the dict
             #
