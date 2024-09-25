@@ -839,17 +839,17 @@ class RuleGenerator:
         rewriteSet = defaultdict(list)
 
         for table in patternTables:
-            if type(table['value']) is str and type(table['name']) is str:
+            if type(table['value']) is str and type(table['name']) is str and table['name'] not in patternSet[table['value']]:
                 patternSet[table['value']].append(table['name'])
 
         for table in rewriteTables:
-            if type(table['value']) is str and type(table['name']) is str:
-                rewriteSet[table['value']].append(table['name'])
+            if type(table['value']) is str and type(table['name']) is str and table['name'] not in rewriteSet[table['value']]:
+                rewriteSet[table['value']].append(table['name'])      
 
         superSet = []
         for patternValue, patternNames in patternSet.items():
             rewriteNames = rewriteSet.get(patternValue, [])
-            # special case: 
+            # special case 1: 
             #   if the patternTable ONLY has {'value': 'employee', 'name': 'employee'}
             #   and the rewriteTable ONLY has {'value': 'employee', 'name': 'e1'},
             #   we replace 'employee' with 'e1' as table alias  
@@ -861,6 +861,15 @@ class RuleGenerator:
             #
             if len(patternNames) == 1 and len(rewriteNames) == 1 and patternNames[0] == patternValue:
                 patternNames = rewriteNames
+            # special case 2:
+            #   if the patternTable ONLY has {'value': 'employee', 'name': 'employee'}
+            #   and the rewriteTable has multiple alias to the same table, e.g., {'value': 'employee', 'name': 'e1'}, {'value': 'employee', 'name': 'e2'}
+            #   we directly append 'e1' and 'e2' as table alias to the superSet as IN MOST CASES patternTable's name should be included in rewriteTable's alias name
+            #   the purpose is for the next step when we replace tables with variables
+            #
+            elif len(patternNames) == 1 and len(rewriteNames) != 0 and patternNames[0] == patternValue:
+                superSet += [{'value': patternValue, 'name': name} for name in rewriteNames]
+                continue
             else:
                 patternNames += [name for name in rewriteNames if name not in patternNames]
             superSet += [{'value': patternValue, 'name': name} for name in patternNames]

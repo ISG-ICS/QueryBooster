@@ -2162,7 +2162,7 @@ def test_generate_general_rule_16():
 
     q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
     assert q0_rule== "SELECT <x1>, <x2>, <x3>, <x4>, <x5>, <x6> FROM <x7> WHERE <x2> IN (SELECT <x2> FROM <x7> WHERE <x6> = <x8> AND <x3> = <x9>) ORDER BY <x2>, <x3>"
-    assert q1_rule == "SELECT <x10>.<x1>, <x10>.<x2>, <x10>.<x3>, <x10>.<x4>, <x10>.<x5>, <x10>.<x6> FROM <x10> JOIN <x11> ON <x11>.<x2> = <x10>.<x2> WHERE <x11>.<x6> = <x8> AND <x11>.<x3> = <x9> ORDER BY <x10>.<x2>, <x10>.<x3>"
+    assert q1_rule == "SELECT <x7>.<x1>, <x7>.<x2>, <x7>.<x3>, <x7>.<x4>, <x7>.<x5>, <x7>.<x6> FROM <x7> JOIN <x10> ON <x10>.<x2> = <x7>.<x2> WHERE <x10>.<x6> = <x8> AND <x10>.<x3> = <x9> ORDER BY <x7>.<x2>, <x7>.<x3>"
 
 
 def test_generate_general_rule_17():
