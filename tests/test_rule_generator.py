@@ -2184,6 +2184,18 @@ def test_generate_general_rule_17():
     assert q0_rule== "SELECT <x1> FROM <x2> WHERE <x3> IN (SELECT <x4> FROM <x5> WHERE <x6> = <x7>)"
     assert q1_rule == "SELECT <x2>.<x1> FROM <x2> INNER JOIN <x5> ON <x5>.<x4> = <x2>.<x3> WHERE <x5>.<x6> = <x7>"
 
+def test_generate_general_rule_18():
+    q0 = "SELECT EMP.EMPNO FROM EMP WHERE EMP.EMPNO > 10 AND EMP.EMPNO <= 10"
+    q1 = "SELECT EMPNO FROM EMP WHERE FALSE"
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    # TODO: there's a bug when calling unify_variable_names on this test case
+    # q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    q0_rule, q1_rule = rule['pattern'], rule['rewrite']
+    assert q0_rule== "SELECT <x1>.<x2> FROM <x1> WHERE <x1>.<x2> > <x3> AND <x1>.<x2> <= <x3>"
+    assert q1_rule == "SELECT <x2> FROM <x1> WHERE False"
 
 # def test_suggest_rules_bf_1():
 #     examples = [
