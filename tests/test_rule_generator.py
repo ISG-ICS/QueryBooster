@@ -2144,10 +2144,10 @@ def test_generate_general_rule_15():
 def test_generate_general_rule_16():
     q0 = """SELECT historicoestatusrequisicion_id, requisicion_id, estatusrequisicion_id, 
             comentario, fecha_estatus, usuario_id
-            FROM historicoestatusrequisicion
+            FROM historicoestatusrequisicion hist1
             WHERE requisicion_id IN
             (
-            SELECT requisicion_id FROM historicoestatusrequisicion
+            SELECT requisicion_id FROM historicoestatusrequisicion hist2
             WHERE usuario_id = 27 AND estatusrequisicion_id = 1
             )
             ORDER BY requisicion_id, estatusrequisicion_id"""
@@ -2161,8 +2161,8 @@ def test_generate_general_rule_16():
     assert type(rule) is dict
 
     q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
-    assert q0_rule== "SELECT <x1>, <x2>, <x3>, <x4>, <x5>, <x6> FROM <x7> WHERE <x2> IN (SELECT <x2> FROM <x7> WHERE <x6> = <x8> AND <x3> = <x9>) ORDER BY <x2>, <x3>"
-    assert q1_rule == "SELECT <x7>.<x1>, <x7>.<x2>, <x7>.<x3>, <x7>.<x4>, <x7>.<x5>, <x7>.<x6> FROM <x7> JOIN <x10> ON <x10>.<x2> = <x7>.<x2> WHERE <x10>.<x6> = <x8> AND <x10>.<x3> = <x9> ORDER BY <x7>.<x2>, <x7>.<x3>"
+    assert q0_rule== "SELECT <x1>, <x2>, <x3>, <x4>, <x5>, <x6> FROM <x7> WHERE <x2> IN (SELECT <x2> FROM <x8> WHERE <x6> = <x9> AND <x3> = <x10>) ORDER BY <x2>, <x3>"
+    assert q1_rule == "SELECT <x7>.<x1>, <x7>.<x2>, <x7>.<x3>, <x7>.<x4>, <x7>.<x5>, <x7>.<x6> FROM <x7> JOIN <x8> ON <x8>.<x2> = <x7>.<x2> WHERE <x8>.<x6> = <x9> AND <x8>.<x3> = <x10> ORDER BY <x7>.<x2>, <x7>.<x3>"
 
 
 def test_generate_general_rule_17():
@@ -2172,10 +2172,10 @@ def test_generate_general_rule_17():
             from spoleczniak_subskrypcje
             where postac_id = 376476
             )"""
-    q1 = """select o.wpis_id 
-            from spoleczniak_oznaczone o
-            inner join spoleczniak_subskrypcje s on s.tag_id = o.etykieta_id
-            where s.postac_id = 376476"""
+    q1 = """select spoleczniak_oznaczone.wpis_id 
+            from spoleczniak_oznaczone
+            inner join spoleczniak_subskrypcje on spoleczniak_subskrypcje.tag_id = spoleczniak_oznaczone.etykieta_id
+            where spoleczniak_subskrypcje.postac_id = 376476"""
 
     rule = RuleGenerator.generate_general_rule(q0, q1)
     assert type(rule) is dict
