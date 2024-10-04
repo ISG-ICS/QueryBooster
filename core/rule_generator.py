@@ -839,30 +839,18 @@ class RuleGenerator:
         rewriteSet = defaultdict(list)
 
         for table in patternTables:
-            if type(table['value']) is str and type(table['name']) is str:
+            if type(table['value']) is str and type(table['name']) is str and table['name'] not in patternSet[table['value']]:
                 patternSet[table['value']].append(table['name'])
 
         for table in rewriteTables:
-            if type(table['value']) is str and type(table['name']) is str:
-                rewriteSet[table['value']].append(table['name'])
+            if type(table['value']) is str and type(table['name']) is str and table['name'] not in rewriteSet[table['value']]:
+                rewriteSet[table['value']].append(table['name'])      
 
         superSet = []
         for patternValue, patternNames in patternSet.items():
             rewriteNames = rewriteSet.get(patternValue, [])
-            # special case: 
-            #   if the patternTable ONLY has {'value': 'employee', 'name': 'employee'}
-            #   and the rewriteTable ONLY has {'value': 'employee', 'name': 'e1'},
-            #   we replace 'employee' with 'e1' as table alias  
-            #   the purpose is for the next step when we replace tables with variables, 
-            #   we should be able to know the patternTable and rewriteTable should be replaced with the same variable.  
-            #   This logic will much simpler once we complete refactoring the code to introduce an internal tree structure  
-            #   to represent the AST instead of the current JSON structure, where can easily determine if two tables  
-            #   are the same table with different alias names.
-            #
-            if len(patternNames) == 1 and len(rewriteNames) == 1 and patternNames[0] == patternValue:
-                patternNames = rewriteNames
-            else:
-                patternNames += [name for name in rewriteNames if name not in patternNames]
+            patternNames += [name for name in rewriteNames if name not in patternNames]
+            
             superSet += [{'value': patternValue, 'name': name} for name in patternNames]
 
         patternTables = superSet
