@@ -1052,6 +1052,33 @@ def test_rewrite_rule_query_rule_wetune_90():
     assert format(parse(q1)) == format(parse(_q1))
 
 
+def test_rewrite_stackoverflow_1():
+    q0 = '''
+        SELECT DISTINCT my_table.foo, your_table.boo
+        FROM my_table, your_table
+        WHERE my_table.num = 1 OR your_table.num = 2
+        '''
+    q1 = '''
+        SELECT
+            my_table.foo,
+            your_table.boo
+        FROM
+            my_table,
+            your_table
+        WHERE
+            my_table.num = 1
+            OR your_table.num = 2
+        GROUP BY
+            my_table.foo,
+            your_table.boo
+            '''
+    rule_keys = ['stackoverflow_1', 'remove_self_join']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
 # TODO - TBI
 # 
 def test_rewrite_postgresql():

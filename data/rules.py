@@ -392,6 +392,17 @@ SELECT t6.<x3>, MIN(MIN(<x1>.<x4>))
         # 'mapping': "{\"x\": \"V1\", \"y\": \"V2\"}",
         'database': 'mysql'
     },
+
+    {
+        'id': 103,
+        'key': 'stackoverflow_1',
+        'name': 'Stackoverflow 1',
+        'pattern': 'SELECT DISTINCT <<x2>> FROM <<x1>> WHERE <<y1>>',
+        'constraints': '',
+        'rewrite': 'SELECT <<x2>> FROM <<x1>> WHERE <<y1>> GROUP BY <<x2>>',
+        'actions': '',
+        'database': 'postgresql'
+    },
 ]
 
 # fetch one rule by key (json attributes are in json)

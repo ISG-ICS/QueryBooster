@@ -138,7 +138,7 @@ class QueryRewriter:
             # handle case when query_node = {'all_columns': {}} and rule_node = {"value": "V001"}
             # we want "V001" to match "all_columns"
             #
-            if QueryRewriter.is_var(rule_node['value']) and not QueryRewriter.is_list(query_node) and 'all_columns' in query_node.keys(): 
+            if QueryRewriter.is_var(rule_node['value']) and QueryRewriter.is_dict(query_node) and 'all_columns' in query_node.keys(): 
                 memo[rule_node['value']] = list(query_node.keys())[0]
                 return True
         
