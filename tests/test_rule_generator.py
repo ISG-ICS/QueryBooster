@@ -2792,3 +2792,161 @@ def test_recommend_simple_rules_4():
     assert StringUtil.strim(recommend_rules_json[1]["rewrite"]) == StringUtil.strim("SELECT * FROM <x1> WHERE created_at = TIMESTAMP('2016-10-01 00:00:00.000')")
     assert StringUtil.strim(recommend_rules_json[2]["pattern"]) == StringUtil.strim("SELECT <x1>.ids FROM <x1> WHERE <x1>.<x2> = 100 AND <x1>.abc = 100")
     assert StringUtil.strim(recommend_rules_json[2]["rewrite"]) == StringUtil.strim("SELECT <x1>.<x2> FROM <x1> WHERE <x1>.<x2> = 100")
+
+
+
+
+#sucess
+def test_parse_validator_1():
+    
+  pattern = 'CAST(<x> AS DATE)'
+  rewrite = '<x>'
+  sucess, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
+  assert True == sucess
+
+#fails becasue <y> is not mapped to anythig in pattern so you cant rewrite it
+def test_parse_validator_2():
+    
+  pattern = 'CAST(<x> AS DATE)'
+  rewrite = '<y>'
+  sucess, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
+  assert False == sucess
+  assert index == 0
+  assert "not in first rule" in errormessage
+
+#spelling error in DATEE
+def test_parse_validator_3():
+    
+  pattern = 'CAST(<x> AS DATEE)'
+  rewrite = '<x>'
+  sucess, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
+  assert False == sucess
+  assert index == 13
+  assert "DATEE" in errormessage
+
+#spelling error in CAST
+def test_parse_validator_4():
+    
+  pattern = 'CA NT(<x> AS DATE)'
+  rewrite = '<x>' 
+  sucess, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
+  assert False == sucess
+  assert index == 3
+  assert "NT" in errormessage
+
+#esucess
+def test_parse_validator_5():
+    
+  pattern = '''SELECT <x>
+            FROM <y>
+            WHERE <x> > 10 
+            AND <x> <= 10
+            '''
+  
+  rewrite = '''SELECT <x> 
+            FROM <x> 
+            WHERE FALSE
+            '''
+
+  sucess, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
+  assert True == sucess
+  assert index == 0
+
+#cant check spelling error for whure
+def test_parse_validator_6():
+    
+  pattern = '''FRUM <y> 
+            WHERE <x> > 10 
+            AND <x> <= 10
+            '''
+  
+  rewrite = ''' 
+            FROM <y> 
+            WHERE FALSE
+            '''
+
+  sucess, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
+  assert False == sucess
+  assert index == 0
+  assert "spelling" in errormessage
+
+
+#cant check spelling error for whure
+def test_parse_validator_7():
+    
+  pattern = '''WHURE <x> > 10 
+            AND <x> <= 10
+            '''
+  
+  rewrite = '''
+            WHERE FALSE
+            '''
+
+  sucess, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
+  assert False == sucess
+  assert index == 0
+  assert "spelling" in errormessage
+
+def test_parse_validator_8():
+    
+  pattern = '''SELUCT <x>
+            FROM <y>
+            WHERE <x> >> 10 
+            AND <x> <= 10
+            '''
+  
+  rewrite = '''SELECT <x> 
+            FROM <y>
+            WHERE FALSE
+            '''
+
+  sucess, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
+  assert False == sucess
+  assert index == 0
+  assert "spelling" in errormessage
+
+def test_parse_validator_9():
+    
+  pattern = '''FRUM <x>, EN END 
+            '''
+  
+  rewrite = ''' 
+            FROM <x>
+            '''
+
+  sucess, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
+  assert False == sucess
+  assert index == 0
+  assert "spelling" in errormessage
+
+#extra numbers
+def test_parse_validator_10():
+    
+  pattern = '''WHERE <x> > 11 5 10
+            AND <x> <= 11
+            '''
+  
+  rewrite = '''
+            WHERE FALSE
+            '''
+
+  sucess, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
+  assert False == sucess
+  assert index == 16
+  assert "5 10" in errormessage
+
+#extra a 
+def test_parse_validator_13():
+    
+  pattern = '''WHERE a <4x> > 11
+            AND <x> a <= 11
+            '''
+  
+  rewrite = '''
+            WHERE FALSE
+            '''
+
+  sucess, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
+  assert False == sucess
+  assert index == 8
+  assert "<4x>" in errormessage
