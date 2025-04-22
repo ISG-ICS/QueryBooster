@@ -3552,3 +3552,87 @@ class RuleGenerator:
         elif QueryRewriter.is_dot_expression(node):
             ans = max(ans, 1)
         return ans
+
+
+#copied the pseduo code from wikipedia, https://en.wikipedia.org/wiki/Levenshtein_distance
+    @staticmethod
+    def levDistance(a: str, b: str) -> int:
+        if len(b) == 0:
+            return len(a)
+        if len(a) == 0:
+            return len(b)
+        if a[0] == b[0]:
+            return RuleGenerator.levDistance(a[1:], b[1:])
+        return 1 + min(RuleGenerator.levDistance(a[1:], b), RuleGenerator.levDistance(a, b[1:]), RuleGenerator.levDistance(a[1:], b[1:]))
+
+    # Case 1: varsql variable in rewrite that is not in original rule <-
+    # Case 2: Parse exception, expecting... found
+    # output, bool: sucess or fail, str: message, int: index 
+    @staticmethod
+    def parse_validate(pattern: str, rewrite: str) -> Tuple[bool, str, int]:
+        ScopeInfo = {
+            Scope.SELECT: "SELECT",
+            Scope.FROM: "FROM",
+            Scope.WHERE: "WHERE",
+            Scope.CONDITION: "CONDITION",
+        }
+        ScopeInfoLength = {
+            Scope.SELECT: 0,
+            Scope.FROM: 9,
+            Scope.WHERE: 16,
+            Scope.CONDITION: 22,
+        }
+        pattern = pattern.replace("\n", "")
+        rewrite = rewrite.replace("\n", "")
+
+        pattern_split = pattern.split(" ")
+        rewrite_split = rewrite.split(" ")
+
+        for value in ScopeInfo.values():
+            if value != "CONDITION":
+                if RuleGenerator.levDistance(value, pattern_split[0]) == 1:
+                    return False, "possible spelling error at query 1" +  pattern_split[0] + " instead of " + value, 0
+                if RuleGenerator.levDistance(value, rewrite_split[0]) == 1:
+                    return False, "possible spelling error at query 2" +  pattern_split[0] + " instead of " + value, 0
+
+        pattern, rewrite, mapping = RuleParser.replaceVars(pattern, rewrite)
+
+        pattern, patternScope = RuleParser.extendToFullSQL(pattern)
+        rewrite, rewriteScope = RuleParser.extendToFullSQL(rewrite)
+
+        try:
+            patternASTJson = mosql.parse(pattern)
+        except Exception as e:
+            #if not partial sql mosql error works
+
+            #if patternScope == Scope.SELECT:
+            #    return False, e.message
+        
+            partialSQL = RuleGenerator.extractPartialSQL(pattern, patternScope)
+
+            #'Expecting column_type, found "DATEE)" (at char 35)
+            var = re.search("[Ee]xpecting(.*)found \"(.*)\" \(at char (\d+)", RuleGenerator.dereplaceVars(e.message, mapping))
+            if var:
+                errorindex2 = int(var.group(3)) - ScopeInfoLength[patternScope]
+                return False, "Error in first query, current Scope is " + ScopeInfo[patternScope] +  " if that is not intended check spelling at index 0. Expecting "  + var.group(1).strip() + " found " + var.group(2).strip(), errorindex2
+    
+            return False, e.message, -1
+        
+        try:
+            patternASTJson = mosql.parse(rewrite)
+            return True, "Sucess", 0
+        except Exception as e:
+            #checks case that there are variables in the rewrite that are not in the original query
+            partialSQL = RuleGenerator.extractPartialSQL(rewrite, rewriteScope)
+            regexPattern = VarTypesInfo[VarType.Var]['markerStart'] + '(\w+)' + VarTypesInfo[VarType.Var]['markerEnd']
+            var = re.search(regexPattern, partialSQL)
+            if var:
+                return False, str(var.group()) + "not in first rule", var.start()
+            
+            #'Expecting column_type, found "DATEE)" (at char 35)
+            var = re.search("[Ee]xpecting(.*)found \"(.*)\" \(at char (\d+)", RuleGenerator.dereplaceVars(e.message, mapping))
+            if var:
+                errorindex2 = int(var.group(3)) - ScopeInfoLength[patternScope]
+                return False, "Error in second query, current Scope is " + ScopeInfo[patternScope] +  " if that is not intended check spelling at index 0. Expecting "  + var.group(1).strip() + " found " + var.group(2).strip(), errorindex2
+    
+            return False, e.message, -1
