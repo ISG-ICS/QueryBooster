@@ -3598,6 +3598,15 @@ class RuleGenerator:
             Scope.WHERE: 16,
             Scope.CONDITION: 22,
         }
+
+        #check if there are any wrong brackets
+        wrong_bracket_pattern = RuleGenerator.find_malformed_brackets(pattern)
+        wrong_bracket_rewrite = RuleGenerator.find_malformed_brackets(rewrite)
+        if wrong_bracket_pattern > -1:
+            return False, "mismatching brackets in query 1", wrong_bracket_pattern
+        elif wrong_bracket_rewrite > -1:
+            return False, "mismatching brackets in query 2", wrong_bracket_rewrite
+            
         #remove whitespace
         pattern = pattern.replace("\n", "")
         rewrite = rewrite.replace("\n", "")
@@ -3652,3 +3661,29 @@ class RuleGenerator:
                 return False, "Error in second query, current Scope is " + ScopeInfo[patternScope] +  " if that is not intended check spelling at index 0. Expecting "  + var.group(1).strip() + " found " + var.group(2).strip(), errorindex2
     
             return False, e.message, -1
+            
+    # mosql parsing will find the the index after a mismatching bracket so the index could
+    #    be slightly off and confusing so there is a function to find mismatched variables
+    #    with wrong brackets
+    @staticmethod     
+    def find_malformed_brackets(pattern: str) -> int:
+        CommonMistakeVarTypesInfo = {
+            'markerStart': ['\(', '\{', '\['],
+            'markerEnd': ['\)', '\}', '\]'],
+        }
+
+        for i in range(len(CommonMistakeVarTypesInfo['markerStart'])):
+            regexPatternVarStart = CommonMistakeVarTypesInfo['markerStart'][i] + '(\w+)' + VarTypesInfo[VarType.Var]['markerEnd']
+            regexPatternVarEnd = VarTypesInfo[VarType.Var]['markerStart'] + '(\w+)' + CommonMistakeVarTypesInfo['markerEnd'][i]
+        
+            varStart = re.search(regexPatternVarStart, pattern)
+            varEnd = re.search(regexPatternVarEnd, pattern)
+
+            if varStart:
+                return varStart.start()
+            elif varEnd:
+                return varEnd.start()
+        
+        return -1
+
+
