@@ -228,7 +228,31 @@ class RuleParser:
                 actions.append(action)
         return json.dumps(actions)
 
+            
+    # mosql parsing will find the the index after a mismatching bracket so the index could
+    #    be slightly off and confusing so there is a function to find mismatched variables
+    #    with wrong brackets
+    @staticmethod     
+    def find_malformed_brackets(pattern: str) -> int:
+        CommonMistakeVarTypesInfo = {
+            'markerStart': ['\(', '\{', '\['],
+            'markerEnd': ['\)', '\}', '\]'],
+        }
 
+        for i in range(len(CommonMistakeVarTypesInfo['markerStart'])):
+            regexPatternVarStart = CommonMistakeVarTypesInfo['markerStart'][i] + '(\w+)' + VarTypesInfo[VarType.Var]['markerEnd']
+            regexPatternVarEnd = VarTypesInfo[VarType.Var]['markerStart'] + '(\w+)' + CommonMistakeVarTypesInfo['markerEnd'][i]
+        
+            varStart = re.search(regexPatternVarStart, pattern)
+            varEnd = re.search(regexPatternVarEnd, pattern)
+
+            if varStart:
+                return varStart.start()
+            elif varEnd:
+                return varEnd.start()
+        
+        return -1
+    
 if __name__ == '__main__':
 
     def print_rule(_title, _pattern, _rewrite, _constraints="", _actions=""):
