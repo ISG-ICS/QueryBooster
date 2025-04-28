@@ -3552,3 +3552,114 @@ class RuleGenerator:
         elif QueryRewriter.is_dot_expression(node):
             ans = max(ans, 1)
         return ans
+
+
+#copied the pseduo code from wikipedia, https://en.wikipedia.org/wiki/Levenshtein_distance
+#    Function is used to check common mispellings of words. Used to see if
+#    Used to see if query has mispelled key words such as SELECT, FROM or WHERE
+    @staticmethod
+    def levDistance(a: str, b: str) -> int:
+        #    If b is empty, all characters in a are different from b
+        if len(b) == 0:
+            return len(a)
+        #    If a is empty, all character in b are different from a
+        if len(a) == 0:
+            return len(b)
+        #    If the first character is the same, no difference
+        if a[0] == b[0]:
+            #    recursivley check the next characters
+            return RuleGenerator.levDistance(a[1:], b[1:])
+        
+        #   add 1 to the difference and recursivley check the next characters by removing two or one 
+        #    character to see which one causes the minimum difference 
+        return 1 + min(RuleGenerator.levDistance(a[1:], b), RuleGenerator.levDistance(a, b[1:]), RuleGenerator.levDistance(a[1:], b[1:]))
+
+    # Case 1: Check for spelling erros in first word that defines the scope of the query 
+    #    Uses levDistance to see if there is a mispelling in SELECT, FROM or WHERE
+    # Case 2: varsql variable in rewrite that is not in original rule. 
+    #    There is a variable in the rewrite query that is not represented in the
+    #    original query and cannot be determined
+    # Case 3: Parse exception, expecting XXX found
+    #    Error message that occurs when mosql fails to parse a query.
+    # output, bool: sucess or fail, str: message, int: index 
+    @staticmethod
+    def parse_validate(pattern: str, rewrite: str) -> Tuple[bool, str, int]:
+        #define the keywords to define scope
+        ScopeInfo = {
+            Scope.SELECT: "SELECT",
+            Scope.FROM: "FROM",
+            Scope.WHERE: "WHERE",
+            Scope.CONDITION: "CONDITION",
+        }
+        #the length that extendToFullSQL adds to a partial SQL query
+        ScopeInfoLength = {
+            Scope.SELECT: 0,
+            Scope.FROM: 9,
+            Scope.WHERE: 16,
+            Scope.CONDITION: 22,
+        }
+
+        #check if there are any wrong brackets
+        wrong_bracket_pattern = RuleParser.find_malformed_brackets(pattern)
+        wrong_bracket_rewrite = RuleParser.find_malformed_brackets(rewrite)
+        if wrong_bracket_pattern > -1:
+            return False, "mismatching brackets in query 1", wrong_bracket_pattern
+        elif wrong_bracket_rewrite > -1:
+            return False, "mismatching brackets in query 2", wrong_bracket_rewrite
+            
+        #remove whitespace
+        pattern = pattern.replace("\n", "")
+        rewrite = rewrite.replace("\n", "")
+
+        pattern_split = pattern.split(" ")
+        rewrite_split = rewrite.split(" ")
+
+        #case 1, check if there is a mispelling with keywords that define scope
+        for value in ScopeInfo.values():
+            if value != "CONDITION":
+                if RuleGenerator.levDistance(value, pattern_split[0]) == 1:
+                    return False, "possible spelling error at query 1" +  pattern_split[0] + " instead of " + value, 0
+                if RuleGenerator.levDistance(value, rewrite_split[0]) == 1:
+                    return False, "possible spelling error at query 2" +  pattern_split[0] + " instead of " + value, 0
+
+        #replace variables so mosql can parse
+        pattern, rewrite, mapping = RuleParser.replaceVars(pattern, rewrite)
+
+        #extend to full sql
+        pattern, patternScope = RuleParser.extendToFullSQL(pattern)
+        rewrite, rewriteScope = RuleParser.extendToFullSQL(rewrite)
+
+        #see if mosql can parse the pattern
+        try:
+            patternASTJson = mosql.parse(pattern)
+        except Exception as e:
+            #if mosql error, find index of the offending part
+            var = re.search("[Ee]xpecting(.*)found \"(.*)\" \(at char (\d+)", RuleGenerator.dereplaceVars(e.message, mapping))
+            if var:
+                errorindex2 = int(var.group(3)) - ScopeInfoLength[patternScope]
+                return False, "Error in first query, current Scope is " + ScopeInfo[patternScope] +  " if that is not intended check spelling at index 0. Expecting "  + var.group(1).strip() + " found " + var.group(2).strip(), errorindex2
+    
+            return False, e.message, -1
+            
+        #see if mosql can parse the rewrite query
+        try:
+            patternASTJson = mosql.parse(rewrite)
+            return True, "Success", 0
+        except Exception as e:
+            #checks case that there are variables in the rewrite that are not in the original query
+            partialSQL = RuleGenerator.extractPartialSQL(rewrite, rewriteScope)
+            regexPattern = VarTypesInfo[VarType.Var]['markerStart'] + '(\w+)' + VarTypesInfo[VarType.Var]['markerEnd']
+            var = re.search(regexPattern, partialSQL)
+            if var:
+                #returns the index of variable that is not in first query
+                return False, str(var.group()) + "not in first rule", var.start()
+            
+            # if all variables present, then mosql error, find index of the offending part
+            var = re.search("[Ee]xpecting(.*)found \"(.*)\" \(at char (\d+)", RuleGenerator.dereplaceVars(e.message, mapping))
+            if var:
+                errorindex2 = int(var.group(3)) - ScopeInfoLength[patternScope]
+                return False, "Error in second query, current Scope is " + ScopeInfo[patternScope] +  " if that is not intended check spelling at index 0. Expecting "  + var.group(1).strip() + " found " + var.group(2).strip(), errorindex2
+    
+            return False, e.message, -1
+
+

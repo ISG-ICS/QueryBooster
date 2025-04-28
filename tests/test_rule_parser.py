@@ -149,3 +149,65 @@ def test_parse():
         pattern_json, rewrite_json, mapping = RuleParser.parse(rule['pattern'], rule['rewrite'])
         assert pattern_json == internal_rule['pattern_json']
         assert rewrite_json == internal_rule['rewrite_json']
+
+
+#incorrect brackets
+def test_brackets_1():
+    
+  pattern = '''WHERE <x] > 11
+            AND <x> a <= 11
+            '''
+  
+  index = RuleParser.find_malformed_brackets(pattern)
+  assert index == 6
+
+  #incorrect brackets
+  def test_brackets_2():
+        
+    pattern = '''WHERE <x} > 11
+                AND <x> a <= 11
+                '''
+    
+    index = RuleParser.find_malformed_brackets(pattern)
+    assert index == 6
+
+#incorrect brackets
+def test_parse_validator_3():
+    
+  pattern = '''WHERE <x) > 11
+            AND <x> a <= 11
+            '''
+
+  index = RuleParser.find_malformed_brackets(pattern)
+  assert index == 6
+
+#incorrect brackets
+  def test_parse_validator_4():
+        
+    pattern = '''WHERE [x> > 11
+                AND <x> a <= 11
+                '''
+    
+    index = RuleParser.find_malformed_brackets(pattern)
+    assert index == 6
+
+
+#incorrect brackets
+  def test_parse_validator_5():
+        
+    pattern = '''WHERE (x> > 11
+                AND <x> a <= 11
+                '''
+  
+    index = RuleParser.find_malformed_brackets(pattern)
+    assert index == 6
+    
+#incorrect brackets
+  def test_parse_validator_6():
+        
+    pattern = '''WHERE {x> > 11
+                AND <x> a <= 11
+                '''
+    index = RuleParser.find_malformed_brackets(pattern)
+    assert index == 6
+    
