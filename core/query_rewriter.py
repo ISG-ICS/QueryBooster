@@ -108,6 +108,7 @@ class QueryRewriter:
         while len(queue) > 0:
             curr_node = queue.pop(0)
             if QueryRewriter.match_node(curr_node, rule['pattern_json'], rule, memo):
+                # If we don't have early return on 'rule' along partial matching, we set the rule to current returned node
                 if 'rule' not in memo.keys():
                     memo['rule'] = curr_node
                 return True
@@ -167,7 +168,7 @@ class QueryRewriter:
                 if QueryRewriter.match_dict(query_node, rule_node, rule, memo):
                     return True
                 
-                # Generalized Partial Matching for Logical Operations:
+                # Partial Matching:
                 # Handle any logical operator (and, or, etc.) that contains a list of clauses
                 if QueryRewriter.check_logical_operator_list(query_node):
                     return QueryRewriter.partial_logical_match(query_node, rule_node, rule, memo)
@@ -429,8 +430,6 @@ class QueryRewriter:
             else:
                 remaining_in_query.remove(constant)
         
-        if len(remaining_in_query) < len(remaining_in_rule):
-            return False
         # - Part-2) The remaining dicts, Vars and VarList in rule_node should PARTIALLY
         #             match the remaining constants and dicts in query_node 
         # 
@@ -601,10 +600,7 @@ class QueryRewriter:
         # 
         if QueryRewriter.is_dict(query) and 'value' in query.keys() and QueryRewriter.is_varList(query['value']):
             return memo[query['value']]
-        
-        # if query is memo['rule'] and QueryRewriter.is_dict(query) and (op := next(iter(query))) in ['and', 'or']:
-        #     if QueryRewriter.is_list(query[op]) and all():
-        
+
         # Special case for VarList in "and" list:
         #   e.g., query = [{...}, "VL2"]
         #         memo["VL2"] = [{"gt": [...]}, {"gt": [...]}]
@@ -630,6 +626,9 @@ class QueryRewriter:
         if query is memo['rule']:
             # replace query by rule's rewrite
             # 
+
+            # Partial Matching Case: where memo['rule'] only contains the partial matched node
+            # after rewrite, we need to manually put it back to the original operator clause
             if QueryRewriter.is_dict(query):
                 if len(query) == 1 and (op := next(iter(query))) in memo.keys():
                     memo["full_rule"] = [op, memo[op]]
@@ -654,6 +653,7 @@ class QueryRewriter:
                     for key, value in memo_additional_pairs.items():
                         query[key] = value
                 elif QueryRewriter.is_list(memo_additional_pairs):
+                    # Make sure the merged pairs are unique
                     merged_pairs = []
                     for clause in query[memo_key] + memo_additional_pairs:
                         if not any(QueryRewriter.deep_equal(clause, existing) for existing in merged_pairs):
@@ -666,10 +666,10 @@ class QueryRewriter:
             for key, child in query.items():
                 query[key] = QueryRewriter.replace(child, rule, memo)
 
-            # Partial Matching Case 2:
-            # e.g. rule_node = {"and": [{"key1": [...]}, {"key2": [...]}]}
+            # Partial Matching Case:
+            # e.g. rule_node = {"key1": [...]}
             #      query_node = {"and": [{"key1": [...]}, {"key2": [...]}, {"key3": [...]}]}
-            # We need to replace the matched rule_node to the rewrite, while still 'and' the remaining {"key3": [...]} with the rewrite
+            # We need to replace the matched rule_node to the rewrite, while still 'and' the remaining [{"key2": [...]},{"key3": [...]}] with the rewrite
             if 'full_rule' in memo.keys():
                 query = {memo['full_rule'][0]: [query, memo['full_rule'][1]]}
                 del memo['full_rule']
