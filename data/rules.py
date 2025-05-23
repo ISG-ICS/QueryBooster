@@ -432,7 +432,7 @@ SELECT t6.<x3>, MIN(MIN(<x1>.<x4>))
         'rewrite': '<x> IN (<<y>>, <<z>>)',
         'actions': '',
         'database': 'mysql'
-    } ,
+    },
     {
       "id": 2261,
       'key': 'multiple_merge_in',
