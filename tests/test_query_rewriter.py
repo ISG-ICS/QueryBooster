@@ -529,6 +529,7 @@ def test_rewrite_rule_replace_strpos_lower():
 
     rules = [get_rule(k) for k in rule_keys]
     _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    print(format(parse(_q1)))
     assert format(parse(q1)) == format(parse(_q1))
 
 
@@ -1146,7 +1147,7 @@ def test_partial_matching0():
         FROM A a
         LEFT JOIN B b ON a.id = b.cid
         WHERE
-        b.cl1 IN ('s1', 's2') OR b.cl1 = 's3 '
+        b.cl1 IN ('s1', 's2') OR b.cl1 = 's3'
         '''
     rule_keys = ['multiple_equality_comparisons_with_or_to_same_element']
     rules = [get_rule(k) for k in rule_keys]

@@ -88,9 +88,7 @@ class QueryRewriter:
             for rule in rules:
                 memo = {}  # keep track of the matched substrees of the rule, Vars, and VarLists
                 if QueryRewriter.match(query_ast, rule, memo):
-                    print(f"matched!\nMEMO: {memo}")
                     query_ast = QueryRewriter.take_actions(query_ast, rule, memo)
-                    print(f"{'-'*7}START REPLACE{'-'*7}")
                     query_ast = QueryRewriter.replace(query_ast, rule, memo)
                     rewriting_path.append([rule['id'], format(query_ast)])
                     if not cycle_found and iterate:
@@ -127,7 +125,6 @@ class QueryRewriter:
     # 
     @staticmethod
     def match_node(query_node: Any, rule_node: Any, rule: dict, memo: dict) -> bool:
-        #print(f"match_node:\n query_node: {query_node}\n  rule_node: {rule_node}")
         # TODO - Do the escalation in RuleParser
         # Special case for value of 'select' and 'from':
         #   e.g., query_node = [{"value": "e1.name"}, {"value": "e1.age"}, {"value": "e2.salary"}]
@@ -170,15 +167,22 @@ class QueryRewriter:
                 if QueryRewriter.match_dict(query_node, rule_node, rule, memo):
                     return True
                 
+                # Partial Matching Case 1:
+                #   If the rule_node is contained in the query_node
+                #   e.g. rule_node = {V2} and query_node = {"and": [{V1}, {V2}, {V3}]}
+                #
                 if query_node and (op := next(iter(query_node))) in ['and', 'or']:
                     remain_clauses = []
                     for clause in query_node[op]:
                         if not QueryRewriter.match_node(clause, rule_node, rule, memo):
                             remain_clauses.append(clause)
-                        else:
+                        # ONLY set the memo['rule'] to the current matched clause if the entire rule matched current query clause
+                        # if this rule_node is descendant from a larger rule_node, then we should not set the memo['rule'] to the current matched clause
+                        elif rule['pattern_json'] == rule_node:
                             memo['rule'] = clause
 
                     if len(remain_clauses) < len(query_node[op]):
+                        # Add the remaining non-matched clauses in query_node to the memo
                         memo[op] = remain_clauses
                         return True
 
@@ -549,7 +553,10 @@ class QueryRewriter:
     # 
     @staticmethod
     def replace(query: Any, rule: dict, memo: dict) -> Any:
-        print(f"replace:\nQUERY:{query}\nMEMO:{memo}")
+        # Initialize set to track which memo keys have been processed for merging
+        if '_merged_keys' not in memo:
+            memo['_merged_keys'] = set()
+            
         # Special case for value of 'select' and 'from':
         #   e.g., query = {"value": "VL1"}
         #         memo["VL1"] = [{"value": "e1.name"}, {"value": "e1.age"}, {"value": "e1.salary"}]
@@ -600,21 +607,29 @@ class QueryRewriter:
 
         # Depth-First-Search on query
         # 
-        if QueryRewriter.is_dict(query):
-            print(f"query is dict: {query}")            
+        if QueryRewriter.is_dict(query):       
             # Complement the existence matching logic:
             memo_key = ','.join(sorted(query.keys()))
-            if memo_key in memo.keys():
+            
+            # Only do merging if this memo_key hasn't been processed yet
+            if memo_key in memo.keys() and memo_key not in memo['_merged_keys']:
                 memo_additional_pairs = memo[memo_key]
                 if QueryRewriter.is_dict(memo_additional_pairs):
                     for key, value in memo_additional_pairs.items():
                         query[key] = value
-                # elif QueryRewriter.is_list(memo_additional_pairs):
-                #     query[memo_key] += memo_additional_pairs             
+                elif QueryRewriter.is_list(memo_additional_pairs):
+                    merged_pairs = []
+                    for clause in query[memo_key] + memo_additional_pairs:
+                        if not any(QueryRewriter.deep_equal(clause, existing) for existing in merged_pairs):
+                            merged_pairs.append(clause)        
+                    query[memo_key] = merged_pairs 
+                
+                # Mark this memo_key as processed to prevent re-merging
+                memo['_merged_keys'].add(memo_key)
 
             for key, child in query.items():
                 query[key] = QueryRewriter.replace(child, rule, memo)
-            
+
             if 'full_rule' in memo.keys():
                 query = {memo['full_rule'][0]: [query, memo['full_rule'][1]]}
                 del memo['full_rule']
@@ -663,3 +678,18 @@ class QueryRewriter:
                 if key in query:
                     return query.replace(key, memo[key])
         return query
+    
+    # Check if given two objects are deep equal
+    def deep_equal(a, b):
+        if type(a) != type(b):
+            return False
+        if isinstance(a, dict):
+            if a.keys() != b.keys():
+                return False
+            return all(QueryRewriter.deep_equal(a[k], b[k]) for k in a)
+        elif isinstance(a, list):
+            if len(a) != len(b):
+                return False
+            return all(QueryRewriter.deep_equal(x, y) for x, y in zip(a, b))
+        else:
+            return a == b
