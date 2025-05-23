@@ -586,6 +586,10 @@ class QueryRewriter:
         if query is memo['rule']:
             # replace query by rule's rewrite
             # 
+            if QueryRewriter.is_dict(query):
+                if len(query) == 1 and (op := next(iter(query))) in memo.keys():
+                    memo["full_rule"] = [op, memo[op]]
+
             query = copy.deepcopy(rule['rewrite_json'])
                 
         # 2nd case, find rewrite's Var or VarList
@@ -610,6 +614,10 @@ class QueryRewriter:
 
             for key, child in query.items():
                 query[key] = QueryRewriter.replace(child, rule, memo)
+            
+            if 'full_rule' in memo.keys():
+                query = {memo['full_rule'][0]: [query, memo['full_rule'][1]]}
+                del memo['full_rule']
 
         if QueryRewriter.is_list(query):
             ans = []

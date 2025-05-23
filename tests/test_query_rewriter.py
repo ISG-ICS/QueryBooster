@@ -1146,7 +1146,7 @@ def test_partial_matching0():
         FROM A a
         LEFT JOIN B b ON a.id = b.cid
         WHERE
-        b.cl1 IN ('s1', 's2') OR b.cl1 = 's3'
+        b.cl1 IN ('s1', 's2') OR b.cl1 = 's3 '
         '''
     rule_keys = ['multiple_equality_comparisons_with_or_to_same_element']
     rules = [get_rule(k) for k in rule_keys]
