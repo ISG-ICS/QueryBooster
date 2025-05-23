@@ -379,10 +379,10 @@ class QueryRewriter:
         if memo_additional_key_value_pairs != {}:
             memo[memo_key] = memo_additional_key_value_pairs
         # Check child nodes for possible partial matches, and add in current logical operator's memo
-        #   e.g., query_node = {"and": [{"key1": [...]}, {"key2": [...]}]}
-        #         rule_node = {"key1": [...]}
-        #   After matching, we need to add the remaining {"key2": [...]} into the memo, so the memo becomes:
-        #                memo = {"and": [{"key2": [...]}], ...}
+        #   e.g., query_node = {"and": [{"key1": [...]}, {"key2": [...]}, {"key3": [...]}]}
+        #         rule_node = {"and": [{"key1": [...]}, {"key2": [...]}]}
+        #   After matching, we need to add the remaining {"key3": [...]} into the memo, so the memo becomes:
+        #                memo = {"and": [{"key3": [...]}], ...}
         elif "partial_match_list" in memo.keys():
             memo[memo_key] = memo["partial_match_list"]
             del memo["partial_match_list"]
