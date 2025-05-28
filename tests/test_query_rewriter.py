@@ -1094,7 +1094,7 @@ def test_partial_matching_base_case1():
         WHERE
         b.cl1 IN ('s1', 's2')
         '''
-    rule_keys = ['multiple_equality_comparisons_with_or_to_same_element']
+    rule_keys = ['combine_or_to_in']
     rules = [get_rule(k) for k in rule_keys]
     _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
     assert format(parse(q1)) == format(parse(_q1))
@@ -1114,7 +1114,7 @@ def test_partial_matching_base_case2():
         WHERE
         b.cl1 IN ('s3', ('s1', 's2'))
         '''
-    rule_keys = ['merge_or_comparison_with_in_condition']
+    rule_keys = ['merge_or_to_in']
     rules = [get_rule(k) for k in rule_keys]
     _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
     assert format(parse(q1)) == format(parse(_q1))
@@ -1135,7 +1135,7 @@ def test_partial_matching0():
         WHERE
         b.cl1 IN ('s1', 's2') OR b.cl1 = 's3'
         '''
-    rule_keys = ['multiple_equality_comparisons_with_or_to_same_element']
+    rule_keys = ['combine_or_to_in']
     rules = [get_rule(k) for k in rule_keys]
     _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
     assert format(parse(q1)) == format(parse(_q1))

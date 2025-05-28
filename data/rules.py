@@ -405,8 +405,8 @@ SELECT t6.<x3>, MIN(MIN(<x1>.<x4>))
     },
     {
         'id': 2258,
-        'key': 'multiple_equality_comparisons_with_or_to_same_element',
-        'name': 'multiple equality comparisons with or to same element',
+        'key': 'combine_or_to_in',
+        'name': 'combine multiple or to in',
         'pattern': '<x> = <y> OR <x> = <z>',
         'constraints': '',
         'rewrite': '<x> IN (<y>, <z>)',
@@ -415,8 +415,8 @@ SELECT t6.<x3>, MIN(MIN(<x1>.<x4>))
     },
     {
         'id': 2259,
-        'key': 'merge_or_comparison_with_in_condition',
-        'name': 'merge or comparison with in condition',
+        'key': 'merge_or_to_in',
+        'name': 'merge or to in',
         'pattern': '<x> IN (<<y>>) OR <x> = <z>',
         'constraints': '',
         'rewrite': '<x> IN (<<y>>, <z>)',
