@@ -403,6 +403,56 @@ SELECT t6.<x3>, MIN(MIN(<x1>.<x4>))
         'actions': '',
         'database': 'postgresql'
     },
+    {
+        'id': 2258,
+        'key': 'combine_or_to_in',
+        'name': 'combine multiple or to in',
+        'pattern': '<x> = <y> OR <x> = <z>',
+        'constraints': '',
+        'rewrite': '<x> IN (<y>, <z>)',
+        'actions': '',
+        'database': 'mysql'
+    },
+    {
+        'id': 2259,
+        'key': 'merge_or_to_in',
+        'name': 'merge or to in',
+        'pattern': '<x> IN (<<y>>) OR <x> = <z>',
+        'constraints': '',
+        'rewrite': '<x> IN (<<y>>, <z>)',
+        'actions': '',
+        'database': 'mysql'
+    },
+    {
+        'id': 2260,
+        'key': 'merge_in_statements',
+        'name': 'merge statements with in condition',
+        'pattern': '<x> IN <<y>> OR <x> IN <<z>>',
+        'constraints': '',
+        'rewrite': '<x> IN (<<y>>, <<z>>)',
+        'actions': '',
+        'database': 'mysql'
+    },
+    {
+      "id": 2261,
+      'key': 'multiple_merge_in',
+      'name': 'multiple merge in',
+      "pattern": "<x> IN (<<y>>) OR <x> IN (<<z>>)",
+      'constraints': '',
+      "rewrite": "<x> IN (<<y>>, <<z>>)",
+      'actions': '',
+      'database': 'mysql'
+    },
+    {
+      "id": 2262,
+      'key': 'partial_subquery_to_join',
+      'name': 'partial subquery to join',
+      "pattern": "SELECT <x17>, <x16>, <x15>, <x14> FROM <x1> WHERE <x8> IN (SELECT <x4> FROM <x2> WHERE <<y2>>)",
+      'constraints': '',
+      "rewrite": "SELECT DISTINCT <x17>, <x16>, <x15>, <x14> FROM <x1>, <x2> WHERE <x1>.<x8> = <x2>.<x4> AND <<y2>>",
+      'actions': '',
+      'database': 'mysql'
+    }
 ]
 
 # fetch one rule by key (json attributes are in json)

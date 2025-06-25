@@ -1079,6 +1079,91 @@ def test_rewrite_stackoverflow_1():
     assert format(parse(q1)) == format(parse(_q1))
 
 
+def test_partial_matching_base_case1():
+    q0 = '''
+        SELECT *
+        FROM A a
+        LEFT JOIN B b ON a.id = b.cid
+        WHERE
+        b.cl1 = 's1' OR b.cl1 ='s2'
+        '''
+    q1 = '''
+        SELECT *
+        FROM A a
+        LEFT JOIN B b ON a.id = b.cid
+        WHERE
+        b.cl1 IN ('s1', 's2')
+        '''
+    rule_keys = ['combine_or_to_in']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+# TODO: need to rewrite the query as  b.cl1 IN ('s3', 's1', 's2') instead of double parenthesis
+def test_partial_matching_base_case2():
+    q0 = '''
+        SELECT *
+        FROM b
+        WHERE
+        b.cl1 IN ('s1', 's2') OR b.cl1 ='s3'
+        '''
+    q1 = '''
+        SELECT *
+        FROM b
+        WHERE
+        b.cl1 IN ('s3', ('s1', 's2'))
+        '''
+    rule_keys = ['merge_or_to_in']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_partial_matching0(): 
+    q0 = '''
+        SELECT *
+        FROM A a
+        LEFT JOIN B b ON a.id = b.cid
+        WHERE
+        b.cl1 = 's1' OR b.cl1 = 's2' OR b.cl1 = 's3'
+        '''
+    q1 = '''
+        SELECT *
+        FROM A a
+        LEFT JOIN B b ON a.id = b.cid
+        WHERE
+        b.cl1 IN ('s1', 's2') OR b.cl1 = 's3'
+        '''
+    rule_keys = ['combine_or_to_in']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_partial_matching4():
+    q0 = '''
+        select empno, firstname, lastname, phoneno
+        from employee
+        where workdept in
+            (select deptno
+                from department
+                where deptname = 'OPERATIONS')
+        and firstname like 'B%'
+        '''
+    q1 = '''
+        select distinct empno, firstname, lastname, phoneno
+        from employee, department
+        where employee.workdept = department.deptno
+        and deptname = 'OPERATIONS'
+        and firstname like 'B%'
+        '''
+    rule_keys = ['partial_subquery_to_join']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
 # TODO - TBI
 # 
 def test_rewrite_postgresql():
