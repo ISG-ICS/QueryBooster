@@ -646,7 +646,8 @@ class QueryRewriter:
         if QueryRewriter.is_dict(query):       
             memo_key = ','.join(sorted(query.keys()))
             matching_memo_key = None
-            
+
+            # Only do merging if this memo_key hasn't been processed yet
             # Try exact match
             if memo_key in memo.keys() and memo_key not in memo['_merged_keys']:
                 matching_memo_key = memo_key
