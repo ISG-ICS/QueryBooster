@@ -1172,7 +1172,7 @@ def test_remove_where_true():
         '''
     q1 = '''
         SELECT *
-        FROM emp
+        FROM Emp
         '''
 
     rule_keys = ['remove_where_true']

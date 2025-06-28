@@ -645,23 +645,37 @@ class QueryRewriter:
         # 
         if QueryRewriter.is_dict(query):       
             memo_key = ','.join(sorted(query.keys()))
+            matching_memo_key = None
             
-            # Only do merging if this memo_key hasn't been processed yet
+            # Try exact match
             if memo_key in memo.keys() and memo_key not in memo['_merged_keys']:
-                memo_additional_pairs = memo[memo_key]
+                matching_memo_key = memo_key
+            # If no exact match, look for a memo key that contains our query key as subset
+            else:
+                current_keys_set = set(query.keys())
+                for key in memo.keys():
+                    if (',' in key and key not in memo['_merged_keys']):
+                        memo_keys_set = set(key.split(','))
+                        if current_keys_set.issubset(memo_keys_set):
+                            matching_memo_key = key
+                            break
+            
+            # Use the matching key (exact or subset)
+            if matching_memo_key:
+                memo_additional_pairs = memo[matching_memo_key]
                 if QueryRewriter.is_dict(memo_additional_pairs):
                     for key, value in memo_additional_pairs.items():
                         query[key] = value
                 elif QueryRewriter.is_list(memo_additional_pairs):
                     # Make sure the merged pairs are unique
                     merged_pairs = []
-                    for clause in query[memo_key] + memo_additional_pairs:
+                    for clause in query[matching_memo_key] + memo_additional_pairs:
                         if not any(QueryRewriter.deep_equal(clause, existing) for existing in merged_pairs):
                             merged_pairs.append(clause)        
-                    query[memo_key] = merged_pairs 
+                    query[matching_memo_key] = merged_pairs 
                 
                 # Mark this memo_key as processed to prevent re-merging
-                memo['_merged_keys'].add(memo_key)
+                memo['_merged_keys'].add(matching_memo_key)
 
             for key, child in query.items():
                 query[key] = QueryRewriter.replace(child, rule, memo)
