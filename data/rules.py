@@ -268,6 +268,17 @@ SELECT <x3>.<x6>
     },
 
     {
+        'id': 70,
+        'key': 'remove_where_true',
+        'name': 'Remove Where True',
+        'pattern': 'FROM <x1> WHERE <x2> > <x2> - 2',
+        'constraints': '',
+        'rewrite': 'FROM <x1>',
+        'actions': '',
+        'database': 'postgresql'
+    },
+
+    {
         'id': 8090,
         'key': 'test_rule_wetune_90',
         'name': 'Test Rule Wetune 90',
