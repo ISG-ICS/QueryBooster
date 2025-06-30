@@ -403,6 +403,8 @@ class QueryRewriter:
             return True
         if len(query_node) == 0 and len(rule_node) == 0:
             return True
+        if query_node == rule_node:
+            return True
 
         # corner case
         # 
