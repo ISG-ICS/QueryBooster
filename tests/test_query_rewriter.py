@@ -1164,7 +1164,7 @@ def test_partial_matching4():
     assert format(parse(q1)) == format(parse(_q1))
 
 
-def test_remove_where_true():
+def test_rewrite_rule_remove_where_true():
     q0 = '''
         SELECT *
         FROM Emp
