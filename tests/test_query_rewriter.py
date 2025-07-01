@@ -1164,6 +1164,23 @@ def test_partial_matching4():
     assert format(parse(q1)) == format(parse(_q1))
 
 
+def test_rewrite_rule_remove_where_true():
+    q0 = '''
+        SELECT *
+        FROM Emp
+        WHERE age > age - 2;
+        '''
+    q1 = '''
+        SELECT *
+        FROM Emp
+        '''
+
+    rule_keys = ['remove_where_true']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
 # TODO - TBI
 # 
 def test_rewrite_postgresql():
