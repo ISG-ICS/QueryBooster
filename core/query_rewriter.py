@@ -404,7 +404,6 @@ class QueryRewriter:
         if len(query_node) == 0 and len(rule_node) == 0:
             return True
 
-
         # corner case
         # 
         if len(rule_node) == 1 and QueryRewriter.is_varList(rule_node[0]):
