@@ -1181,6 +1181,23 @@ def test_and_on_true():
     assert format(parse(q1)) == format(parse(_q1))
 
 
+def test_multipleand_on_true():
+    q0 = '''
+        SELECT name
+        FROM people
+        WHERE 1 = 1 AND 2 = 2
+        '''
+    q1 = '''
+        SELECT name
+        FROM people
+        '''
+    rule_keys = ['multiple_and_on_true']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    print(_q1)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
 def test_rewrite_rule_remove_where_true():
     q0 = '''
         SELECT *

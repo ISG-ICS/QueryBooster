@@ -467,8 +467,18 @@ SELECT t6.<x3>, MIN(MIN(<x1>.<x4>))
     {
       "id": 2263,
       'key': 'and_on_true',
-      'name': 'where 1 and 1',
+      'name': 'where TRUE and TRUE',
       "pattern": "FROM <x1> WHERE 1 AND 1",
+      'constraints': '',
+      "rewrite": "FROM <x1>",
+      'actions': '',
+      'database': 'mysql'
+    },
+    {
+      "id": 2264,
+      'key': 'multiple_and_on_true',
+      'name': 'where TRUE and TRUE in set representation',
+      "pattern": "FROM <x1> WHERE <<y>>",
       'constraints': '',
       "rewrite": "FROM <x1>",
       'actions': '',
