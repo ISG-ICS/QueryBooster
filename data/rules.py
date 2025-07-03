@@ -463,7 +463,27 @@ SELECT t6.<x3>, MIN(MIN(<x1>.<x4>))
       "rewrite": "SELECT DISTINCT <x17>, <x16>, <x15>, <x14> FROM <x1>, <x2> WHERE <x1>.<x8> = <x2>.<x4> AND <<y2>>",
       'actions': '',
       'database': 'mysql'
-    }
+    },
+    {
+      "id": 2263,
+      'key': 'and_on_true',
+      'name': 'where TRUE and TRUE',
+      "pattern": "FROM <x1> WHERE 1 AND 1",
+      'constraints': '',
+      "rewrite": "FROM <x1>",
+      'actions': '',
+      'database': 'mysql'
+    },
+    {
+      "id": 2264,
+      'key': 'multiple_and_on_true',
+      'name': 'where TRUE and TRUE in set representation',
+      "pattern": "FROM <x1> WHERE <<y>>",
+      'constraints': '',
+      "rewrite": "FROM <x1>",
+      'actions': '',
+      'database': 'mysql'
+    },
 ]
 
 # fetch one rule by key (json attributes are in json)
