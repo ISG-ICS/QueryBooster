@@ -2502,6 +2502,8 @@ class RuleGenerator:
         # 1. Get candidate subtrees from rule
         #
         subtrees = RuleGenerator.subtrees(rule['pattern_json'], rule['rewrite_json'])
+        print(subtrees)
+        print(rule['pattern_json'], rule['rewrite_json'])
 
         # 2. Make all candidate subtrees variables, and generate a new rule
         #
@@ -2519,9 +2521,18 @@ class RuleGenerator:
         new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
 
         for subtree in subtrees:
-            # Find a variable name for the given subtree
-            #
-            new_rule_mapping, newVarInternal = RuleGenerator.findNextVarInternal(new_rule_mapping)
+            # for single-key subtrees, use the inner variable instead of creating new one
+            if len(subtree) == 1:
+                inner_value = list(subtree.values())[0]
+                if QueryRewriter.is_var(inner_value):
+                    # use the existing inner variable
+                    newVarInternal = inner_value
+                else:
+                    # find a variable name for the given subtree
+                    new_rule_mapping, newVarInternal = RuleGenerator.findNextVarInternal(new_rule_mapping)
+            else:
+                # find a variable name for the given subtree
+                new_rule_mapping, newVarInternal = RuleGenerator.findNextVarInternal(new_rule_mapping)
 
             # Replace given subtree into newVarInternal in new rule
             #
