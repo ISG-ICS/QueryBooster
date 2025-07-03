@@ -403,8 +403,7 @@ class QueryRewriter:
             return True
         if len(query_node) == 0 and len(rule_node) == 0:
             return True
-        if query_node == rule_node:
-            return True
+
 
         # corner case
         # 
@@ -431,6 +430,10 @@ class QueryRewriter:
                 return False
             else:
                 remaining_in_query.remove(constant)
+        
+        # If both remaining lists are empty, all constants matched and should return True
+        if len(remaining_in_rule) == 0 and len(remaining_in_query) == 0:
+            return True
         
         # - Part-2) The remaining dicts, Vars and VarList in rule_node should PARTIALLY
         #             match the remaining constants and dicts in query_node 
