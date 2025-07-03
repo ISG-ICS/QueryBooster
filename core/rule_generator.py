@@ -1240,6 +1240,12 @@ class RuleGenerator:
     #
     @staticmethod
     def sameSubtree(left: dict, right: dict) -> bool:
+
+        # remove boolean value like {'distinct': true} in subtree checks
+        # {'distinct': True, 'max': 'V002'} and {'max': 'V002'} will now count as same subtree
+        left = {k: v for k, v in left.items() if not isinstance(v, bool)}
+        right = {k: v for k, v in right.items() if not isinstance(v, bool)}
+                
         for key, leftValue in left.items():
             if key not in right:
                 return False
@@ -1437,15 +1443,45 @@ class RuleGenerator:
                     if len(path) > 0 and path[-1] == 'select' and 'value'in astJson.keys():
                         return {'value': var}
                     # otherwise
-                    return var
+                    # check for boolean flags ex. {'distinct': True}
+                    boolean_flags = {k: v for k, v in astJson.items() if isinstance(v, bool) and v is True}
+                
+                    if boolean_flags:
+                        # Since there's only ever one boolean flag, get the first (and only) key
+                        flag_key = list(boolean_flags.keys())[0]
+                        
+                        # Use the boolean flag as the main key instead of 'value'
+                        result = {flag_key: var}
+                        
+                        return ['contains_bool', result]
+                    else:
+                        return var
             # otherwise
             #
             else:
                 # recursively traverse the dict
                 #
+                keys_to_delete = []
+                items_to_add = {}
+
                 for key, value in astJson.items():
                     # note: key can not be subtree, only traverse each value
-                    astJson[key] = RuleGenerator.replaceSubtreesOfASTJson(value, path + [key], subtree, var)
+                    result = RuleGenerator.replaceSubtreesOfASTJson(value, path + [key], subtree, var)
+                    # replace value with boolean 
+                    # ex. {'select': {'value': {'distinct': 'V003'}}} -> {'select': {'distinct': 'V003'}}
+                    if type(result) == list and result[0] == 'contains_bool':
+                        keys_to_delete.append(key)
+                        for inner_key, inner_value in result[1].items():
+                            items_to_add[inner_key] = inner_value
+                    else:
+                        astJson[key] = result
+                
+                # change dictionary after to avoid errors when changing dictionary during loop
+                for key in keys_to_delete:
+                    del astJson[key]
+                for key, value in items_to_add.items():
+                    astJson[key] = value
+                
                 return astJson
 
         # Case-2: list
@@ -2502,8 +2538,6 @@ class RuleGenerator:
         # 1. Get candidate subtrees from rule
         #
         subtrees = RuleGenerator.subtrees(rule['pattern_json'], rule['rewrite_json'])
-        print(subtrees)
-        print(rule['pattern_json'], rule['rewrite_json'])
 
         # 2. Make all candidate subtrees variables, and generate a new rule
         #
@@ -2521,23 +2555,17 @@ class RuleGenerator:
         new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
 
         for subtree in subtrees:
-            # for single-key subtrees, use the inner variable instead of creating new one
-            if len(subtree) == 1:
-                inner_value = list(subtree.values())[0]
-                if QueryRewriter.is_var(inner_value):
-                    # use the existing inner variable
-                    newVarInternal = inner_value
-                else:
-                    # find a variable name for the given subtree
-                    new_rule_mapping, newVarInternal = RuleGenerator.findNextVarInternal(new_rule_mapping)
-            else:
-                # find a variable name for the given subtree
-                new_rule_mapping, newVarInternal = RuleGenerator.findNextVarInternal(new_rule_mapping)
+            # Find a variable name for the given subtree
+            #
+            new_rule_mapping, newVarInternal = RuleGenerator.findNextVarInternal(new_rule_mapping)
 
             # Replace given subtree into newVarInternal in new rule
             #
             new_rule_pattern_json = RuleGenerator.replaceSubtreesOfASTJson(new_rule_pattern_json, [], subtree, newVarInternal)
             new_rule_rewrite_json = RuleGenerator.replaceSubtreesOfASTJson(new_rule_rewrite_json, [], subtree, newVarInternal)
+
+            new_rule_pattern_json = RuleGenerator.fix_select_distinct(new_rule_pattern_json)
+            new_rule_rewrite_json = RuleGenerator.fix_select_distinct(new_rule_rewrite_json)
 
         new_rule['mapping'] = json.dumps(new_rule_mapping)
         new_rule['pattern_json'] = json.dumps(new_rule_pattern_json)
@@ -3673,4 +3701,16 @@ class RuleGenerator:
     
             return False, e.message, -1
 
-
+    @staticmethod
+    def fix_select_distinct(astJson):
+        # fixes issue where generalizing query leads to unintentional select_distinct
+        # ex. SELECT MAX(DISTINCT id) -> SELECT DISTINCT id
+        if ('select' in astJson and 
+            isinstance(astJson['select'], dict) and 
+            'distinct' in astJson['select']):
+            
+            # Convert select to select_distinct - take the value from distinct key
+            astJson['select_distinct'] = {'value': astJson['select']['distinct']}
+            del astJson['select']
+        
+        return astJson
