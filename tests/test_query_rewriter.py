@@ -1164,7 +1164,7 @@ def test_partial_matching4():
     assert format(parse(q1)) == format(parse(_q1))
 
 
-def test_and_on_true():
+def test_rewrite_and_on_true():
     q0 = '''
         SELECT people.name
         FROM people
@@ -1181,7 +1181,7 @@ def test_and_on_true():
     assert format(parse(q1)) == format(parse(_q1))
 
 
-def test_multipleand_on_true():
+def test_rewrite_multiple_and_on_true():
     q0 = '''
         SELECT name
         FROM people
