@@ -2197,6 +2197,17 @@ def test_generate_general_rule_18():
     assert q0_rule== "SELECT <x1>.<x2> FROM <x1> WHERE <x1>.<x2> > <x3> AND <x1>.<x2> <= <x3>"
     assert q1_rule == "SELECT <x2> FROM <x1> WHERE False"
 
+def test_generate_general_rule_19():
+    q0 = "SELECT max(id) FROM Emp"
+    q1 = "SELECT max(DISTINCT id) FROM Emp"
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    assert q0_rule == "MAX(<x1>)"
+    assert q1_rule == "MAX(DISTINCT <x1>)"
+
 # def test_suggest_rules_bf_1():
 #     examples = [
 #         {

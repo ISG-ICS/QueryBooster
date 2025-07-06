@@ -2527,20 +2527,23 @@ class RuleGenerator:
             #
             new_rule_pattern_json = RuleGenerator.replaceSubtreesOfASTJson(new_rule_pattern_json, [], subtree, newVarInternal)
             new_rule_rewrite_json = RuleGenerator.replaceSubtreesOfASTJson(new_rule_rewrite_json, [], subtree, newVarInternal)
-
-        new_rule['mapping'] = json.dumps(new_rule_mapping)
-        new_rule['pattern_json'] = json.dumps(new_rule_pattern_json)
-        new_rule['rewrite_json'] = json.dumps(new_rule_rewrite_json)
         
-        # Deparse new rule's pattern_json/rewrite_json into pattern/rewrite strings
+        # Only accept the rule if it generalizes both pattern and rewrite
         #
-        new_rule['pattern'] = RuleGenerator.deparse(new_rule_pattern_json)
-        new_rule['rewrite'] = RuleGenerator.deparse(new_rule_rewrite_json)
+        if (new_rule['pattern_json'] != json.dumps(new_rule_pattern_json)) and (new_rule['rewrite_json'] != json.dumps(new_rule_rewrite_json)):
+            new_rule['mapping'] = json.dumps(new_rule_mapping)
+            new_rule['pattern_json'] = json.dumps(new_rule_pattern_json)
+            new_rule['rewrite_json'] = json.dumps(new_rule_rewrite_json)
+        
+            # Deparse new rule's pattern_json/rewrite_json into pattern/rewrite strings
+            #
+            new_rule['pattern'] = RuleGenerator.deparse(new_rule_pattern_json)
+            new_rule['rewrite'] = RuleGenerator.deparse(new_rule_rewrite_json)
 
-        # Dereplace vars from new rule's pattern/rewrite strings
-        #
-        new_rule['pattern'] = RuleGenerator.dereplaceVars(new_rule['pattern'], new_rule_mapping)
-        new_rule['rewrite'] = RuleGenerator.dereplaceVars(new_rule['rewrite'], new_rule_mapping)
+            # Dereplace vars from new rule's pattern/rewrite strings
+            #
+            new_rule['pattern'] = RuleGenerator.dereplaceVars(new_rule['pattern'], new_rule_mapping)
+            new_rule['rewrite'] = RuleGenerator.dereplaceVars(new_rule['rewrite'], new_rule_mapping)
 
         return new_rule
     
