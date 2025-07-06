@@ -1226,8 +1226,6 @@ class RuleGenerator:
         # find the common subtrees in pattern and rewrite
         #
         ans = []
-        print(patternSubtrees)
-        print(rewriteSubtrees)
         while len(patternSubtrees) > 0:
             patternSubtree = patternSubtrees.pop()
             for rewriteSubtree in rewriteSubtrees:
@@ -1242,7 +1240,6 @@ class RuleGenerator:
     #
     @staticmethod
     def sameSubtree(left: dict, right: dict) -> bool:
-        print(left, right)
         for key, leftValue in left.items():
             if key not in right:
                 return False
@@ -1440,9 +1437,7 @@ class RuleGenerator:
                     if len(path) > 0 and path[-1] == 'select' and 'value'in astJson.keys():
                         return {'value': var}
                     # otherwise
-                    # check for boolean flags ex. {'distinct': True}
-                    else:
-                        return var
+                    return var
             # otherwise
             #
             else:
@@ -1451,7 +1446,6 @@ class RuleGenerator:
                 for key, value in astJson.items():
                     # note: key can not be subtree, only traverse each value
                     astJson[key] = RuleGenerator.replaceSubtreesOfASTJson(value, path + [key], subtree, var)
-                                
                 return astJson
 
         # Case-2: list
@@ -2533,11 +2527,8 @@ class RuleGenerator:
             #
             new_rule_pattern_json = RuleGenerator.replaceSubtreesOfASTJson(new_rule_pattern_json, [], subtree, newVarInternal)
             new_rule_rewrite_json = RuleGenerator.replaceSubtreesOfASTJson(new_rule_rewrite_json, [], subtree, newVarInternal)
-
-            print(new_rule_pattern_json)
-            print(new_rule_rewrite_json)
         
-        # Only accept the rule if it generalizes both pattern and rewrite 
+        # Only accept the rule if it generalizes both pattern and rewrite
         #
         if (new_rule['pattern_json'] != json.dumps(new_rule_pattern_json)) and (new_rule['rewrite_json'] != json.dumps(new_rule_rewrite_json)):
             new_rule['mapping'] = json.dumps(new_rule_mapping)
@@ -3673,4 +3664,5 @@ class RuleGenerator:
                 return False, "Error in second query, current Scope is " + ScopeInfo[patternScope] +  " if that is not intended check spelling at index 0. Expecting "  + var.group(1).strip() + " found " + var.group(2).strip(), errorindex2
     
             return False, e.message, -1
+
 
