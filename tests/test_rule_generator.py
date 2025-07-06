@@ -2205,8 +2205,8 @@ def test_generate_general_rule_19():
     assert type(rule) is dict
 
     q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
-    assert q0_rule == "SELECT <x1>"
-    assert q1_rule == "SELECT DISTINCT <x1>"
+    assert q0_rule == "MAX(<x1>)"
+    assert q1_rule == "MAX(DISTINCT <x1>)"
 
 # def test_suggest_rules_bf_1():
 #     examples = [
