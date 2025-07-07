@@ -1,8 +1,6 @@
-from core.query_rewriter import QueryRewriter
 from core.rule_generator import RuleGenerator
 from core.rule_parser import RuleParser
 import json
-import mo_sql_parsing as mosql
 from .string_util import StringUtil
 import re
 
@@ -2125,8 +2123,8 @@ def test_generate_general_rule_14():
     assert type(rule) is dict
 
     q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
-    assert q0_rule == "SELECT DISTINCT <x1>.<x2> FROM <x1> JOIN <x3> ON <x1>.<x2> = <x3>.<x2> JOIN <x4> ON <x1>.<x2> = <x4>.<x2> WHERE <x5> OR <x6>"
-    assert q1_rule == "SELECT <x2> FROM <x1> JOIN <x3> USING <x2> JOIN <x4> USING <x2> WHERE <x5> UNION SELECT <x2> FROM <x1> JOIN <x3> USING <x2> JOIN <x4> USING <x2> WHERE <x6>"
+    assert StringUtil.strim(q0_rule) == StringUtil.strim("SELECT DISTINCT <x1>.<x2> FROM <x1> JOIN <x3> ON <x1>.<x2> = <x3>.<x2> JOIN <x4> ON <x1>.<x2> = <x4>.<x2> WHERE <x5> OR <x6>")
+    assert StringUtil.strim(q1_rule)  == StringUtil.strim("SELECT <x2> FROM <x1> JOIN <x3> USING <x2> JOIN <x4> USING <x2> WHERE <x5> UNION SELECT <x2> FROM <x1> JOIN <x3> USING <x2> JOIN <x4> USING <x2> WHERE <x6>")
 
 
 def test_generate_general_rule_15():
