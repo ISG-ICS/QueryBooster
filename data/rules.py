@@ -279,6 +279,28 @@ SELECT <x3>.<x6>
     },
 
     {
+        'id': 80,
+        'key': 'nested_clause_to_inner_join',
+        'name': 'Nested Clause to INNER JOIN',
+        'pattern': 'SELECT <x3> FROM <x1> WHERE <x4> IN (SELECT <x5> FROM <x2> WHERE <x6> = <x7>)',
+        'constraints': '',
+        'rewrite': 'SELECT <x1>.<x3> FROM <x1> INNER JOIN <x2> ON <x2>.<x5> = <x1>.<x4> WHERE <x2>.<x6> = <x7>',
+        'actions': '',
+        'database': 'postgresql'
+    },
+
+        {
+        'id': 81,
+        'key': 'contradiction_gt_lte',
+        'name': 'Contradiction GT LTE',
+        'pattern': 'SELECT <<x2>> FROM <<x1>> WHERE <x4> > <x3> AND <x4> <= <x3>',
+        'constraints': '',
+        'rewrite': 'SELECT <<x2>> FROM <<x1>> WHERE False',
+        'actions': '',
+        'database': 'postgresql'
+    },
+
+    {
         'id': 8090,
         'key': 'test_rule_wetune_90',
         'name': 'Test Rule Wetune 90',

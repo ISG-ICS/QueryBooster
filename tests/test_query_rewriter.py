@@ -1163,6 +1163,55 @@ def test_partial_matching4():
     _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
     assert format(parse(q1)) == format(parse(_q1))
 
+def test_partial_keeps_remaining_OR():
+    q0 = '''
+        SELECT entities.data
+        FROM entities
+        WHERE entities._id IN (SELECT index_users_email._id 
+                                FROM index_users_email
+                                WHERE index_users_email.key = 'test')
+        OR entities._id IN (SELECT index_users_profile_name._id 
+                                FROM index_users_profile_name
+                                WHERE index_users_profile_name.key = 'test')
+        '''
+    q1 = '''
+        SELECT entities.data
+        FROM entities
+        INNER JOIN index_users_email ON index_users_email._id = entities._id
+        WHERE index_users_email.key = 'test'
+        OR entities._id IN (SELECT index_users_profile_name._id 
+                            FROM index_users_profile_name
+                            WHERE index_users_profile_name.key = 'test')
+        '''
+
+    rule_keys = ['nested_clause_to_inner_join']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    print(_q1)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_partial_keeps_remaining_AND():
+    q0 = '''
+        SELECT Empno
+        FROM EMP
+        WHERE EMPNO > 10 
+        AND EMPNO <= 10
+        AND EMPNAME LIKE '%Jason%'
+        '''
+    q1 = '''
+        SELECT Empno
+        FROM EMP
+        WHERE FALSE
+        AND EMPNAME LIKE '%Jason%'
+        '''
+
+    rule_keys = ['contradiction_gt_lte']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    print(_q1)
+    assert format(parse(q1)) == format(parse(_q1))
+
 
 def test_rewrite_and_on_true():
     q0 = '''
