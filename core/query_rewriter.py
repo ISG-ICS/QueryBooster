@@ -628,7 +628,9 @@ class QueryRewriter:
         # 1st case, find the matched part by the rule
         # 
         if query is memo['rule']:
-
+            # replace query by rule's rewrite
+            # 
+            
             # Partial Matching Case: where memo['rule'] only contains the partial matched node
             # after rewrite, we need to manually put it back to the original operator clause
             if QueryRewriter.is_dict(query):
@@ -642,7 +644,7 @@ class QueryRewriter:
             # is overwritten by rewrite  
             all_keys = QueryRewriter.get_all_keys(original_query)
             ops_to_remove = set()
-            
+
             if QueryRewriter.is_dict(query):
                 for op in memo.keys():                    
                     if op not in all_keys:
