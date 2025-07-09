@@ -215,7 +215,6 @@ class QueryRewriter:
         
         remain_clauses = []
         matched_any = False
-        matched_rule_set = False
         
         for clause in clauses:
             if not QueryRewriter.match_node(clause, rule_node, rule, memo):
@@ -225,30 +224,12 @@ class QueryRewriter:
                 # Set memo['rule'] only if this rule_node is the top-level pattern
                 if rule['pattern_json'] == rule_node:
                     memo['rule'] = clause
-                    matched_rule_set = True
         
-        # If we matched at least one clause, this is a potential successful partial match
+        # If we matched at least one clause, this is a successful partial match
         if matched_any:
-            # Only store remaining clauses if memo['rule'] represents
-            # the entire logical operation, not just a single expression within it
+            # Store the remaining non-matched clauses
             if len(remain_clauses) > 0:
-                if matched_rule_set:
-                    # memo['rule'] was set to the matched clause
-                    # Check if this clause represents the entire logical operation
-                    if (QueryRewriter.is_dict(memo['rule']) and 
-                        len(memo['rule']) == 1 and 
-                        next(iter(memo['rule'])) == op):
-                        # memo['rule'] is the logical operation itself (e.g., {'or': [A, B]} in {'or': [A, B, C]})
-                        # This is a true partial match, store remaining clauses
-                        memo[op] = remain_clauses
-                    else:
-                        # memo['rule'] is just a single expression (e.g., {'gt': [...]} in {'and': [A, gt(...), B]})
-                        # Don't store remaining clauses
-                        return True
-                else:
-                    # memo['rule'] was not set by this match, store remaining clauses
-                    memo[op] = remain_clauses
-            
+                memo[op] = remain_clauses
             return True
         
         return False
@@ -647,42 +628,45 @@ class QueryRewriter:
         # 1st case, find the matched part by the rule
         # 
         if query is memo['rule']:
-            # replace query by rule's rewrite
-            rewrite_result = copy.deepcopy(rule['rewrite_json'])
-            logical_operators = ['and', 'or', 'not', 'union', 'intersect', 'except']
-            handled_partial = False
-            
-            # add back remaining clauses from logical operators
-            for op in logical_operators:
-                if op in memo and QueryRewriter.is_list(memo[op]) and len(memo[op]) > 0:
-                    remaining_clauses = memo[op]
-                    
-                    # Check if we're rewriting a query with WHERE clause
-                    if QueryRewriter.is_dict(rewrite_result) and 'where' in rewrite_result:
-                        # Query-level rewrite
-                        rewritten_where = rewrite_result['where']
-                        combined_where = {op: [rewritten_where] + remaining_clauses}
-                        rewrite_result['where'] = combined_where
-
-                        handled_partial = True
-                        break
-                    else:
-                        # Expression-level rewrite
-                        combined_expression = {op: [rewrite_result] + remaining_clauses}
-                        rewrite_result = combined_expression
-
-                        handled_partial = True
-                        break
 
             # Partial Matching Case: where memo['rule'] only contains the partial matched node
             # after rewrite, we need to manually put it back to the original operator clause
-            if not handled_partial and QueryRewriter.is_dict(query):
+            if QueryRewriter.is_dict(query):
                 if len(query) == 1 and (op := next(iter(query))) in memo.keys():
-                    if op not in logical_operators:
-                        memo["full_rule"] = [op, memo[op]]
+                    memo["full_rule"] = [op, memo[op]]
+
+            original_query = query
+            query = copy.deepcopy(rule['rewrite_json'])
+
+            # For partial matching we must add back remaining clauses before the operator 
+            # is overwritten by rewrite  
+            all_keys = QueryRewriter.get_all_keys(original_query)
+            ops_to_remove = set()
             
-            query = rewrite_result
+            if QueryRewriter.is_dict(query):
+                for op in memo.keys():                    
+                    if op not in all_keys:
+                        continue
+                            
+                    if 'where' in query:
+                        # Add back remaining operators in where
+                        rewritten_where = query['where']
+                        query['where'] = {op: [rewritten_where] + memo[op]}
+                    elif op in query:
+                        # For other clause partial matches (SELECT, FROM, etc.)
+                        current_value = query[op]
+                        if QueryRewriter.is_list(current_value):
+                            query[op] = current_value + memo[op]
+                        else:
+                            query[op] = [current_value] + memo[op]
+                    
+                    # Remove remaining clauses from memo
+                    ops_to_remove.add(op)
                 
+                for op in ops_to_remove:
+                    del memo[op]
+        
+              
         # 2nd case, find rewrite's Var or VarList
         # 
         if QueryRewriter.is_var(query) or QueryRewriter.is_varList(query):
@@ -796,3 +780,15 @@ class QueryRewriter:
             return all(QueryRewriter.deep_equal(x, y) for x, y in zip(a, b))
         else:
             return a == b
+
+    @staticmethod
+    def get_all_keys(obj):
+        keys = set()
+        if isinstance(obj, dict):
+            keys.update(obj.keys())
+            for value in obj.values():
+                keys.update(QueryRewriter.get_all_keys(value))
+        elif isinstance(obj, list):
+            for item in obj:
+                keys.update(QueryRewriter.get_all_keys(item))
+        return keys
