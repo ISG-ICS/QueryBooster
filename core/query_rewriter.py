@@ -630,7 +630,7 @@ class QueryRewriter:
         if query is memo['rule']:
             # replace query by rule's rewrite
             # 
-            
+
             # Partial Matching Case: where memo['rule'] only contains the partial matched node
             # after rewrite, we need to manually put it back to the original operator clause
             if QueryRewriter.is_dict(query):
