@@ -641,7 +641,10 @@ class QueryRewriter:
             query = copy.deepcopy(rule['rewrite_json'])
 
             # For partial matching we must add back remaining clauses before the operator 
-            # is overwritten by rewrite  
+            # is overwritten by rewrite 
+            # 
+            # TODO - Consider using a special flag in memo to differentiate 
+            # partial matching keys from variable names 
             all_keys = QueryRewriter.get_all_keys(original_query)
             ops_to_remove = set()
 
@@ -650,17 +653,19 @@ class QueryRewriter:
                     if op not in all_keys:
                         continue
                             
-                    if 'where' in query:
-                        # Add back remaining operators in where
-                        rewritten_where = query['where']
-                        query['where'] = {op: [rewritten_where] + memo[op]}
-                    elif op in query:
-                        # For other clause partial matches (SELECT, FROM, etc.)
+                    if op in query:
+                        # Match operator to clause in query (SELECT, FROM, etc)
+                        # Ex. adding back remaining {value: EMPNO} in SELECT clause
                         current_value = query[op]
                         if QueryRewriter.is_list(current_value):
                             query[op] = current_value + memo[op]
                         else:
                             query[op] = [current_value] + memo[op]
+                    elif 'where' in query and op:
+                        # Add back remaining operators in WHERE
+                        # Ex. adding back remaining AND clause to WHERE clause
+                        rewritten_where = query['where']
+                        query['where'] = {op: [rewritten_where] + memo[op]}
                     
                     # Remove remaining clauses from memo
                     ops_to_remove.add(op)
