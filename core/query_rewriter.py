@@ -637,8 +637,43 @@ class QueryRewriter:
                 if len(query) == 1 and (op := next(iter(query))) in memo.keys():
                     memo["full_rule"] = [op, memo[op]]
 
+            original_query = query
             query = copy.deepcopy(rule['rewrite_json'])
+
+            # For partial matching we must add back remaining clauses before the operator 
+            # is overwritten by rewrite 
+            # 
+            # TODO - Consider using a special flag in memo to differentiate 
+            # partial matching keys from variable names 
+            all_keys = QueryRewriter.get_all_keys(original_query)
+            ops_to_remove = set()
+
+            if QueryRewriter.is_dict(query):
+                for op in memo.keys():                    
+                    if op not in all_keys:
+                        continue
+                            
+                    if op in query:
+                        # Match operator to clause in query (SELECT, FROM, etc)
+                        # Ex. adding back remaining {value: EMPNO} in SELECT clause
+                        current_value = query[op]
+                        if QueryRewriter.is_list(current_value):
+                            query[op] = current_value + memo[op]
+                        else:
+                            query[op] = [current_value] + memo[op]
+                    elif 'where' in query and op:
+                        # Add back remaining operators in WHERE
+                        # Ex. adding back remaining AND clause to WHERE clause
+                        rewritten_where = query['where']
+                        query['where'] = {op: [rewritten_where] + memo[op]}
+                    
+                    # Remove remaining clauses from memo
+                    ops_to_remove.add(op)
                 
+                for op in ops_to_remove:
+                    del memo[op]
+        
+              
         # 2nd case, find rewrite's Var or VarList
         # 
         if QueryRewriter.is_var(query) or QueryRewriter.is_varList(query):
@@ -752,3 +787,15 @@ class QueryRewriter:
             return all(QueryRewriter.deep_equal(x, y) for x, y in zip(a, b))
         else:
             return a == b
+
+    @staticmethod
+    def get_all_keys(obj):
+        keys = set()
+        if isinstance(obj, dict):
+            keys.update(obj.keys())
+            for value in obj.values():
+                keys.update(QueryRewriter.get_all_keys(value))
+        elif isinstance(obj, list):
+            for item in obj:
+                keys.update(QueryRewriter.get_all_keys(item))
+        return keys
