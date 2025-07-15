@@ -2810,8 +2810,15 @@ def test_parse_validator_1():
     
   pattern = 'CAST(<x> AS DATE)'
   rewrite = '<x>'
-  success, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
-  assert True == success
+
+  success1, errormessage1, index1 = RuleGenerator.parse_validate_single(pattern)
+  assert True == success1
+
+  success2, errormessage2, index2 = RuleGenerator.parse_validate_single(rewrite)
+  assert True == success2
+
+  success3, errormessage3, index3 = RuleGenerator.parse_validate(pattern, rewrite)
+  assert True == success3
 
 #fails becasue <y> is not mapped to anythig in pattern so you cant rewrite it
 def test_parse_validator_2():
@@ -2828,20 +2835,32 @@ def test_parse_validator_3():
     
   pattern = 'CAST(<x> AS DATEE)'
   rewrite = '<x>'
-  success, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
-  assert False == success
-  assert index == 13
-  assert "DATEE" in errormessage
+
+  success1, errormessage1, index1 = RuleGenerator.parse_validate_single(pattern)
+  assert False == success1
+  assert index1 == 13
+  assert "DATEE" in errormessage1
+
+  success2, errormessage2, index2 = RuleGenerator.parse_validate(pattern, rewrite)
+  assert False == success2
+  assert index2 == 13
+  assert "DATEE" in errormessage2
 
 #spelling error in CAST
 def test_parse_validator_4():
     
   pattern = 'CA NT(<x> AS DATE)'
   rewrite = '<x>' 
-  success, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
-  assert False == success
-  assert index == 3
-  assert "NT" in errormessage
+
+  success1, errormessage1, index1 = RuleGenerator.parse_validate_single(pattern)
+  assert False == success1
+  assert index1 == 3
+  assert "NT" in errormessage1
+
+  success2, errormessage2, index2 = RuleGenerator.parse_validate(pattern, rewrite)
+  assert False == success2
+  assert index2 == 3
+  assert "NT" in errormessage2
 
 #success
 def test_parse_validator_5():
@@ -2856,10 +2875,17 @@ def test_parse_validator_5():
             FROM <x> 
             WHERE FALSE
             '''
+  success1, errormessage1, index1 = RuleGenerator.parse_validate_single(pattern)
+  assert True == success1
+  assert index1 == 0
 
-  success, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
-  assert True == success
-  assert index == 0
+  success2, errormessage2, index2 = RuleGenerator.parse_validate_single(rewrite)
+  assert True == success2
+  assert index2 == 0
+
+  success3, errormessage3, index3 = RuleGenerator.parse_validate(pattern, rewrite)
+  assert True == success3
+  assert index3 == 0
 
 #cant check spelling error for from (frum)
 def test_parse_validator_6():
@@ -2874,10 +2900,15 @@ def test_parse_validator_6():
             WHERE FALSE
             '''
 
-  success, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
-  assert False == success
-  assert index == 0
-  assert "spelling" in errormessage
+  success1, errormessage1, index1 = RuleGenerator.parse_validate_single(pattern)
+  assert False == success1
+  assert index1 == 0
+  assert "spelling" in errormessage1
+
+  success2, errormessage2, index2 = RuleGenerator.parse_validate(pattern, rewrite)
+  assert False == success2
+  assert index2 == 0
+  assert "spelling" in errormessage2
 
 
 #cant check spelling error for where (whure)
@@ -2890,11 +2921,15 @@ def test_parse_validator_7():
   rewrite = '''
             WHERE FALSE
             '''
+  success1, errormessage1, index1 = RuleGenerator.parse_validate_single(pattern)
+  assert False == success1
+  assert index1 == 0
+  assert "spelling" in errormessage1
 
-  success, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
-  assert False == success
-  assert index == 0
-  assert "spelling" in errormessage
+  success2, errormessage2, index2 = RuleGenerator.parse_validate(pattern, rewrite)
+  assert False == success2
+  assert index2 == 0
+  assert "spelling" in errormessage2
 
 def test_parse_validator_8():
     
@@ -2908,11 +2943,15 @@ def test_parse_validator_8():
             FROM <y>
             WHERE FALSE
             '''
+  success1, errormessage1, index1 = RuleGenerator.parse_validate_single(pattern)
+  assert False == success1
+  assert index1 == 0
+  assert "spelling" in errormessage1
 
-  success, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
-  assert False == success
-  assert index == 0
-  assert "spelling" in errormessage
+  success2, errormessage2, index2 = RuleGenerator.parse_validate(pattern, rewrite)
+  assert False == success2
+  assert index2 == 0
+  assert "spelling" in errormessage2
 
 def test_parse_validator_9():
     
@@ -2922,11 +2961,15 @@ def test_parse_validator_9():
   rewrite = ''' 
             FROM <x>
             '''
+  success1, errormessage1, index1 = RuleGenerator.parse_validate_single(pattern)
+  assert False == success1
+  assert index1 == 0
+  assert "spelling" in errormessage1
 
-  success, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
-  assert False == success
-  assert index == 0
-  assert "spelling" in errormessage
+  success2, errormessage2, index2 = RuleGenerator.parse_validate(pattern, rewrite)
+  assert False == success2
+  assert index2 == 0
+  assert "spelling" in errormessage2
 
 #extra numbers
 def test_parse_validator_10():
@@ -2938,11 +2981,15 @@ def test_parse_validator_10():
   rewrite = '''
             WHERE FALSE
             '''
+  success1, errormessage1, index1 = RuleGenerator.parse_validate_single(pattern)
+  assert False == success1
+  assert index1 == 16
+  assert "5 10" in errormessage1
 
-  success, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
-  assert False == success
-  assert index == 16
-  assert "5 10" in errormessage
+  success2, errormessage2, index2 = RuleGenerator.parse_validate(pattern, rewrite)
+  assert False == success2
+  assert index2 == 16
+  assert "5 10" in errormessage2
 
 #extra a 
 def test_parse_validator_13():
@@ -2955,7 +3002,26 @@ def test_parse_validator_13():
             WHERE FALSE
             '''
 
-  success, errormessage, index = RuleGenerator.parse_validate(pattern, rewrite)
-  assert False == success
-  assert index == 8
-  assert "<4x>" in errormessage
+  success1, errormessage1, index1 = RuleGenerator.parse_validate_single(pattern)
+  assert False == success1
+  assert index1 == 8
+  assert "<4x>" in errormessage1
+
+  success2, errormessage2, index2 = RuleGenerator.parse_validate(pattern, rewrite)
+  assert False == success2
+  assert index2 == 8
+  assert "<4x>" in errormessage2
+
+def test_parse_validator_14():
+
+  pattern = 'CAST(<x3> AS TEXT)'
+  
+  rewrite = '<x3>'
+  
+  success1, errormessage1, index1 = RuleGenerator.parse_validate_single(pattern)
+  success2, errormessage2, index2 = RuleGenerator.parse_validate_single(rewrite)
+  assert True == success1
+  assert True == success2
+
+  success3, errormessage3, index3 = RuleGenerator.parse_validate(pattern, rewrite)
+  assert True == success3

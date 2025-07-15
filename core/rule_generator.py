@@ -3666,3 +3666,63 @@ class RuleGenerator:
             return False, e.message, -1
 
 
+
+    # Case 1: Check for spelling erros in first word that defines the scope of the query 
+    #    Uses levDistance to see if there is a mispelling in SELECT, FROM or WHERE
+    # Case 2: varsql variable in rewrite that is not in original rule. 
+    #    There is a variable in the rewrite query that is not represented in the
+    #    original query and cannot be determined
+    # Case 3: Parse exception, expecting XXX found
+    #    Error message that occurs when mosql fails to parse a query.
+    # output, bool: sucess or fail, str: message, int: index 
+    @staticmethod
+    def parse_validate_single(pattern: str) -> Tuple[bool, str, int]:
+        #define the keywords to define scope
+        ScopeInfo = {
+            Scope.SELECT: "SELECT",
+            Scope.FROM: "FROM",
+            Scope.WHERE: "WHERE",
+            Scope.CONDITION: "CONDITION",
+        }
+        #the length that extendToFullSQL adds to a partial SQL query
+        ScopeInfoLength = {
+            Scope.SELECT: 0,
+            Scope.FROM: 9,
+            Scope.WHERE: 16,
+            Scope.CONDITION: 22,
+        }
+
+        #check if there are any wrong brackets
+        wrong_bracket_pattern = RuleParser.find_malformed_brackets(pattern)
+        if wrong_bracket_pattern > -1:
+            return False, "mismatching brackets in query 1", wrong_bracket_pattern
+
+        #remove whitespace
+        pattern = pattern.replace("\n", "")
+
+        pattern_split = pattern.split(" ")
+
+        #case 1, check if there is a mispelling with keywords that define scope
+        for value in ScopeInfo.values():
+            if value != "CONDITION":
+                if RuleGenerator.levDistance(value, pattern_split[0]) == 1:
+                    return False, "possible spelling error at query 1" +  pattern_split[0] + " instead of " + value, 0
+            
+        #replace variables so mosql can parse
+        pattern, pattern, mapping = RuleParser.replaceVars(pattern, pattern)
+
+        #extend to full sql
+        pattern, patternScope = RuleParser.extendToFullSQL(pattern)
+
+        #see if mosql can parse the pattern
+        try:
+            patternASTJson = mosql.parse(pattern)
+            return True, "success", 0
+        except Exception as e:
+            #if mosql error, find index of the offending part
+            var = re.search("[Ee]xpecting(.*)found \"(.*)\" \(at char (\d+)", RuleGenerator.dereplaceVars(e.message, mapping))
+            if var:
+                errorindex2 = int(var.group(3)) - ScopeInfoLength[patternScope]
+                return False, "Error in first query, current Scope is " + ScopeInfo[patternScope] +  " if that is not intended check spelling at index 0. Expecting "  + var.group(1).strip() + " found " + var.group(2).strip(), errorindex2
+    
+            return False, e.message, -1
