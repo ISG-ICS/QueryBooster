@@ -86,32 +86,32 @@ class QueryRewriter:
             else:
                 query_trace.add(format(query_ast))
             
-            # store the best rule and memo
-            best_rule = None
-            best_memo = None
+            # store the rule and memo applied
+            rule_applied = None
+            memo_applied = None
             
             # first pass: look for full matches (higher priority)
             for rule in rules:
                 memo = {}
                 if QueryRewriter.match(query_ast, rule, memo, allow_partial_matching=False):
-                    best_rule = rule
-                    best_memo = memo
+                    rule_applied = rule
+                    memo_applied = memo
                     break
             
             # second pass: if no full match found, look for partial matches (lower priority)
-            if best_rule is None:
+            if rule_applied is None:
                 for rule in rules:
                     memo = {}
                     if QueryRewriter.match(query_ast, rule, memo, allow_partial_matching=True):
-                        best_rule = rule
-                        best_memo = memo
+                        rule_applied = rule
+                        memo_applied = memo
                         break
             
-            # apply the best rule found
-            if best_rule is not None:
-                query_ast = QueryRewriter.take_actions(query_ast, best_rule, best_memo)
-                query_ast = QueryRewriter.replace(query_ast, best_rule, best_memo)
-                rewriting_path.append([best_rule['id'], format(query_ast)])
+            # apply the rule and found
+            if rule_applied is not None:
+                query_ast = QueryRewriter.take_actions(query_ast, rule_applied, memo_applied)
+                query_ast = QueryRewriter.replace(query_ast, rule_applied, memo_applied)
+                rewriting_path.append([rule_applied['id'], format(query_ast)])
                 if not cycle_found and iterate:
                     new_query = True
 
