@@ -85,29 +85,49 @@ class QueryRewriter:
             # otherwise, remember it
             else:
                 query_trace.add(format(query_ast))
+            
+            # store the best rule and memo
+            best_rule = None
+            best_memo = None
+            
+            # first pass: look for full matches (higher priority)
             for rule in rules:
-                memo = {}  # keep track of the matched substrees of the rule, Vars, and VarLists
-                if QueryRewriter.match(query_ast, rule, memo):
-                    query_ast = QueryRewriter.take_actions(query_ast, rule, memo)
-                    query_ast = QueryRewriter.replace(query_ast, rule, memo)
-                    rewriting_path.append([rule['id'], format(query_ast)])
-                    if not cycle_found and iterate:
-                        new_query = True
+                memo = {}
+                if QueryRewriter.match(query_ast, rule, memo, allow_partial_matching=False):
+                    best_rule = rule
+                    best_memo = memo
                     break
+            
+            # second pass: if no full match found, look for partial matches (lower priority)
+            if best_rule is None:
+                for rule in rules:
+                    memo = {}
+                    if QueryRewriter.match(query_ast, rule, memo, allow_partial_matching=True):
+                        best_rule = rule
+                        best_memo = memo
+                        break
+            
+            # apply the best rule found
+            if best_rule is not None:
+                query_ast = QueryRewriter.take_actions(query_ast, best_rule, best_memo)
+                query_ast = QueryRewriter.replace(query_ast, best_rule, best_memo)
+                rewriting_path.append([best_rule['id'], format(query_ast)])
+                if not cycle_found and iterate:
+                    new_query = True
 
         return format(query_ast), rewriting_path
     
     # Traverse query AST tree, and check if rule->pattern matches any node of in query
     # 
     @staticmethod
-    def match(query: Any, rule: dict, memo: dict) -> bool:
+    def match(query: Any, rule: dict, memo: dict, allow_partial_matching: bool = False) -> bool:
         
         # Breadth-First-Search on query
         # 
         queue = [query]
         while len(queue) > 0:
             curr_node = queue.pop(0)
-            if QueryRewriter.match_node(curr_node, rule['pattern_json'], rule, memo):
+            if QueryRewriter.match_node(curr_node, rule['pattern_json'], rule, memo, allow_partial_matching):
                 # If we don't have early return on 'rule' along partial matching, we set the rule to current returned node
                 if 'rule' not in memo.keys():
                     memo['rule'] = curr_node
@@ -125,7 +145,7 @@ class QueryRewriter:
     # Recursively check if the query_node matches the rule_node for the given rule
     # 
     @staticmethod
-    def match_node(query_node: Any, rule_node: Any, rule: dict, memo: dict) -> bool:
+    def match_node(query_node: Any, rule_node: Any, rule: dict, memo: dict, allow_partial_matching: bool = False) -> bool:
         # TODO - Do the escalation in RuleParser
         # Special case for value of 'select' and 'from':
         #   e.g., query_node = [{"value": "e1.name"}, {"value": "e1.age"}, {"value": "e2.salary"}]
@@ -165,12 +185,12 @@ class QueryRewriter:
         # 
         if QueryRewriter.is_dict(rule_node):
             if QueryRewriter.is_dict(query_node):
-                if QueryRewriter.match_dict(query_node, rule_node, rule, memo):
+                if QueryRewriter.match_dict(query_node, rule_node, rule, memo, allow_partial_matching):
                     return True
                 
-                # Partial Matching:
+                # Partial Matching: Only allow if flag is set
                 # Handle any logical operator (and, or, etc.) that contains a list of clauses
-                if QueryRewriter.check_logical_operator_list(query_node):
+                if allow_partial_matching and QueryRewriter.check_logical_operator_list(query_node):
                     return QueryRewriter.partial_logical_match(query_node, rule_node, rule, memo)
 
                 return False
@@ -179,7 +199,7 @@ class QueryRewriter:
         # 
         if QueryRewriter.is_list(rule_node):
             if QueryRewriter.is_list(query_node):
-                return QueryRewriter.match_list(query_node, rule_node, rule, memo)
+                return QueryRewriter.match_list(query_node, rule_node, rule, memo, allow_partial_matching)
             
         # Case-6: rule_node is a dot expression, it can match a dot expression
         if QueryRewriter.is_dot_expression(rule_node):
@@ -340,11 +360,11 @@ class QueryRewriter:
     #   - Each value in rule_node should match the value in query_node of the same key
     # 
     @staticmethod
-    def match_dict(query_node: dict, rule_node: dict, rule: dict, memo: dict) -> bool:
+    def match_dict(query_node: dict, rule_node: dict, rule: dict, memo: dict, allow_partial_matching: bool = False) -> bool:
         for key, rule_val in rule_node.items():
             if key not in query_node:
                 return False
-            if not QueryRewriter.match_node(query_node[key], rule_val, rule, memo):
+            if not QueryRewriter.match_node(query_node[key], rule_val, rule, memo, allow_partial_matching):
                 return False
     
 
@@ -396,7 +416,7 @@ class QueryRewriter:
     #               dicts, Vars and VarList in rule_node
     # 
     @staticmethod
-    def match_list(query_node: list, rule_node: list, rule: dict, memo: dict) -> bool:
+    def match_list(query_node: list, rule_node: list, rule: dict, memo: dict, allow_partial_matching: bool = False) -> bool:
         # corner case
         # 
         if query_node is None and rule_node is None:
@@ -407,7 +427,7 @@ class QueryRewriter:
         # corner case
         # 
         if len(rule_node) == 1 and QueryRewriter.is_varList(rule_node[0]):
-            return QueryRewriter.match_node(query_node, rule_node[0], rule, memo)
+            return QueryRewriter.match_node(query_node, rule_node[0], rule, memo, allow_partial_matching)
 
         # - Part-1) Constants in rule_node should match constants in query_node
         # 
@@ -443,17 +463,17 @@ class QueryRewriter:
             for query_element in remaining_in_query:
                 # Snapshot the memo's keys before try this combination
                 memo_keys_snapshot = set(memo.keys())
-                if QueryRewriter.match_node(query_element, rule_element, rule, memo):
+                if QueryRewriter.match_node(query_element, rule_element, rule, memo, allow_partial_matching):
                     query_list = remaining_in_query.copy()
                     query_list.remove(query_element)
                     rule_list = remaining_in_rule.copy()
                     rule_list.remove(rule_element)
-                    if QueryRewriter.match_list(query_list, rule_list, rule, memo):
+                    if QueryRewriter.match_list(query_list, rule_list, rule, memo, allow_partial_matching):
                         return True
                     else:
-                        # Partial Matching for lists
+                        # Partial Matching for lists - only allow if flag is set
                         # Mark remaining elements in query_list, 'partial_match_list' will be catched, added, and removed by the nearest parent
-                        if rule_list == []:
+                        if allow_partial_matching and rule_list == []:
                             memo['partial_match_list'] = query_list
                             return True
                         # The remaining rule_list doesn't match the remaining query_list

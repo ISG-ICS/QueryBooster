@@ -506,6 +506,16 @@ SELECT t6.<x3>, MIN(MIN(<x1>.<x4>))
       'actions': '',
       'database': 'mysql'
     },
+    {
+      "id": 2265,
+      'key': 'multiple_or_to_union',
+      'name': 'multiple or to union',
+      "pattern": "SELECT <<y11>> FROM <x1> WHERE <x1>.<x4> IN (SELECT <<y10>> FROM <x2> WHERE <<y6>>) OR <x1>.<x4> IN (SELECT <<y9>> FROM <x3> WHERE <<y4>>)",
+      'constraints': '',
+      "rewrite": "SELECT <<y11>> FROM <x1> WHERE <x1>.<x4> IN (SELECT <<y10>> FROM <x2> WHERE <<y6>>) UNION SELECT <<y11>> FROM <x1> WHERE <x1>.<x4> IN (SELECT <<y9>> FROM <x3> WHERE <<y4>>)",
+      'actions': '',
+      'database': 'mysql'
+    }
 ]
 
 # fetch one rule by key (json attributes are in json)
