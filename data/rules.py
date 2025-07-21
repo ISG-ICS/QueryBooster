@@ -289,7 +289,7 @@ SELECT <x3>.<x6>
         'database': 'postgresql'
     },
 
-        {
+    {
         'id': 81,
         'key': 'contradiction_gt_lte',
         'name': 'Contradiction GT LTE',
@@ -299,6 +299,27 @@ SELECT <x3>.<x6>
         'actions': '',
         'database': 'postgresql'
     },
+
+    {
+        'id': 90,
+        'key': 'subquery_to_joins',
+        'name': 'Subquery to Joins',
+        'pattern': '''FROM <x1> 
+                      WHERE <<x2>> 
+                      AND <x1>.<x3> 
+                      IN (SELECT <x4>.<x5> FROM <x4> WHERE <<x6>>) 
+                      AND <x1>.<x3> 
+                      IN (SELECT <x7>.<x5> FROM <x7> WHERE <<x8>>)''',
+        'constraints': '',
+        'rewrite': '''FROM <x1> 
+                      JOIN <x4> ON <x1>.<x3> = <x4>.<x5> 
+                      JOIN <x7> ON <x1>.<x3> = <x7>.<x5> 
+                      WHERE <<x2>> 
+                      AND <<x6>> 
+                      AND <<x8>>''',
+        'actions': '',
+        'database': 'postgresql'
+    }, 
 
     {
         'id': 8090,

@@ -1263,6 +1263,37 @@ def test_rewrite_rule_remove_where_true():
     _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
     assert format(parse(q1)) == format(parse(_q1))
 
+def test_rewrite_skips_failed_partial():
+    q0 = '''
+        SELECT * 
+        FROM accounts 
+        WHERE LOWER(accounts.firstname) = LOWER('Sam') 
+            AND accounts.id IN (SELECT addresses.account_id 
+                                            FROM addresses 
+                                    WHERE LOWER(addresses.name) = LOWER('Street1'))         
+            AND accounts.id IN (SELECT alternate_ids.account_id 
+                                    FROM alternate_ids 
+                                    WHERE alternate_ids.alternate_id_glbl = '5'); 
+        '''
+    q1 = '''
+        SELECT * 
+        FROM accounts 
+        JOIN addresses ON accounts.id = addresses.account_id
+        JOIN alternate_ids ON accounts.id = alternate_ids.account_id
+        WHERE LOWER(accounts.firstname) = LOWER('Sam') 
+        AND LOWER(addresses.name) = LOWER('Street1') 
+        AND alternate_ids.alternate_id_glbl = '5';
+        '''
+
+    rule_keys = ['nested_clause_to_inner_join']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+
+    rule_keys = ['subquery_to_joins']
+    rules = [get_rule(k) for k in rule_keys]
+    _q2, _rewrite_path = QueryRewriter.rewrite(_q1, rules)
+    assert format(parse(q1)) == format(parse(_q2))
+
 
 def test_matching_order():
     q0 = '''
