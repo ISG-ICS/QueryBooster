@@ -2206,6 +2206,31 @@ def test_generate_general_rule_19():
     assert q0_rule == "MAX(<x1>)"
     assert q1_rule == "MAX(DISTINCT <x1>)"
 
+def test_generate_general_rule_20():
+    q0 = """SELECT * 
+            FROM   accounts 
+            WHERE  LOWER(accounts.firstname) = LOWER('Sam') 
+                AND accounts.id IN (SELECT addresses.account_id 
+                                                FROM addresses 
+                                        WHERE LOWER(addresses.name) = LOWER('Street1'))         
+                AND accounts.id IN (SELECT alternate_ids.account_id 
+                                        FROM alternate_ids 
+                                        WHERE alternate_ids.alternate_id_glbl = '5'); """
+    q1 = """SELECT * 
+            FROM accounts 
+            JOIN addresses ON accounts.id = addresses.account_id
+            JOIN alternate_ids ON accounts.id = alternate_ids.account_id
+            WHERE LOWER(accounts.firstname) = LOWER('Sam') 
+            AND LOWER(addresses.name) = LOWER('Street1') 
+            AND alternate_ids.alternate_id_glbl = '5';"""
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    assert q0_rule == "FROM <x1> WHERE <<x2>> AND <x1>.<x3> IN (SELECT <x4>.<x5> FROM <x4> WHERE <<x6>>) AND <x1>.<x3> IN (SELECT <x7>.<x5> FROM <x7> WHERE <<x8>>)"
+    assert q1_rule == "FROM <x1> JOIN <x4> ON <x1>.<x3> = <x4>.<x5> JOIN <x7> ON <x1>.<x3> = <x7>.<x5> WHERE <<x2>> AND <<x6>> AND <<x8>>"
+
 # def test_suggest_rules_bf_1():
 #     examples = [
 #         {

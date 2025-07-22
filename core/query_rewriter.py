@@ -108,12 +108,16 @@ class QueryRewriter:
                         break
             
             # apply the rule and found
-            if rule_applied is not None:
-                query_ast = QueryRewriter.take_actions(query_ast, rule_applied, memo_applied)
-                query_ast = QueryRewriter.replace(query_ast, rule_applied, memo_applied)
-                rewriting_path.append([rule_applied['id'], format(query_ast)])
-                if not cycle_found and iterate:
-                    new_query = True
+            try:
+                if rule_applied is not None:
+                    query_ast = QueryRewriter.take_actions(query_ast, rule_applied, memo_applied)
+                    query_ast = QueryRewriter.replace(query_ast, rule_applied, memo_applied)
+                    rewriting_path.append([rule_applied['id'], format(query_ast)])
+                    if not cycle_found and iterate:
+                        new_query = True
+            except:
+                print(f"Failed to rewrite with rule: {rule}")
+                continue
 
         return format(query_ast), rewriting_path
     
