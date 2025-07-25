@@ -759,22 +759,23 @@ class QueryRewriter:
                 # VarList expansion properly
                 if QueryRewriter.is_varList(child):
                     # if the VarList maps to a list, extend ans with its elements
+                    # e.g. memo['V1'] = ['s1', 's2']
                     if QueryRewriter.is_list(memo[child]):
                         ans.extend(memo[child])
                     else:
                         # if not a list, just append the value
+                        # e.g. memo['V3'] = 's3'
                         ans.append(memo[child])
                 else:
                     # regular replacement for non-VarList children
                     replaced_child = QueryRewriter.replace(child, rule, memo)
                     ans.append(replaced_child)
             
-            # special handling for lists that contain only literal dictionaries
             # this handles the case where VarList expansion creates multiple literal elements
             # that need to be merged into a single literal list (common in IN clauses)
+            # e.g. [{'literal': 's1'}, {'literal': 's2'}] to {'literal': ['s1', 's2']}
             if (len(ans) > 1 and 
                 all(QueryRewriter.is_dict(item) and 'literal' in item for item in ans)):
-                
                 # collect all literal values
                 all_literal_values = []
                 for item in ans:
