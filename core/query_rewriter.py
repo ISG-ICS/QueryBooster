@@ -93,14 +93,10 @@ class QueryRewriter:
             # first pass: look for full matches (higher priority)
             for rule in rules:
                 memo = {}
-                if QueryRewriter.match(query_ast, rule, memo, allow_partial_matching=False):
-                    # Only treat it as a full match if it matches the root query
-                    if memo.get('rule') is query_ast:
-                        rule_applied = rule
-                        memo_applied = memo
-                        break
-                    # If it matches a subtree, clear memo and continue
-                    memo.clear()
+                if QueryRewriter.match(query_ast, rule, memo, allow_partial_matching=False) and memo.get('rule') is query_ast:
+                    rule_applied = rule
+                    memo_applied = memo
+                    break
             
             # second pass: if no full match found, look for partial matches (lower priority)
             if rule_applied is None:
