@@ -1284,6 +1284,52 @@ def test_matching_order():
     _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
     assert format(parse(q1)) == format(parse(_q1))
 
+
+def test_no_over_matching():
+    q0 = '''
+    SELECT entities.data FROM entities WHERE 
+    entities._id IN (SELECT index_users_email._id FROM index_users_email WHERE index_users_email.key = 'test')
+    OR 
+    entities._id in (SELECT index_users_profile_name._id FROM index_users_profile_name WHERE index_users_profile_name.key = 'test')
+    '''
+    q1 = '''
+    SELECT
+        entities.data
+    FROM
+        entities
+    INNER JOIN index_users_email ON index_users_email._id = entities._id
+    WHERE
+        index_users_email.key = 'test'
+        OR entities._id IN (
+            SELECT
+                index_users_profile_name._id
+            FROM
+                index_users_profile_name
+            WHERE
+                index_users_profile_name.key = 'test'
+        )
+    '''
+    rule_keys = ['nested_clause_to_inner_join']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_full_matching():
+    q0 = '''
+        SELECT entities.data FROM entities WHERE entities._id IN (SELECT index_users_email._id FROM index_users_email WHERE index_users_email.key = 'test')
+        UNION
+        SELECT entities.data FROM entities WHERE entities._id IN (SELECT index_users_profile_name._id FROM index_users_profile_name WHERE index_users_profile_name.key = 'test')
+        '''
+    q1 = '''
+        SELECT entities.data FROM entities INNER JOIN index_users_email ON index_users_email._id = entities._id WHERE index_users_email.key = 'test'
+        UNION
+        SELECT entities.data FROM entities INNER JOIN index_users_profile_name ON index_users_profile_name._id = entities._id WHERE index_users_profile_name.key = 'test'
+        '''
+    rule_keys = ['nested_clause_to_inner_join']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
 # TODO - TBI
 # 
 def test_rewrite_postgresql():
