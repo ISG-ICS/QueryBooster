@@ -113,6 +113,7 @@ class QueryRewriter:
                     query_ast = QueryRewriter.take_actions(query_ast, rule_applied, memo_applied)
                     query_ast = QueryRewriter.replace(query_ast, rule_applied, memo_applied)
                     rewriting_path.append([rule_applied['id'], format(query_ast)])
+                    query_ast = parse(format(query_ast))
                     if not cycle_found and iterate:
                         new_query = True
             except:
@@ -755,8 +756,38 @@ class QueryRewriter:
         if QueryRewriter.is_list(query):
             ans = []
             for child in query:
-                ans.append(QueryRewriter.replace(child, rule, memo))
-            query = ans
+                # VarList expansion properly
+                if QueryRewriter.is_varList(child):
+                    # if the VarList maps to a list, extend ans with its elements
+                    # e.g. memo['V1'] = ['s1', 's2']
+                    if QueryRewriter.is_list(memo[child]):
+                        ans.extend(memo[child])
+                    else:
+                        # if not a list, just append the value
+                        # e.g. memo['V3'] = 's3'
+                        ans.append(memo[child])
+                else:
+                    # regular replacement for non-VarList children
+                    replaced_child = QueryRewriter.replace(child, rule, memo)
+                    ans.append(replaced_child)
+            
+            # this handles the case where VarList expansion creates multiple literal elements
+            # that need to be merged into a single literal list (common in IN clauses)
+            # e.g. [{'literal': 's1'}, {'literal': 's2'}] to {'literal': ['s1', 's2']}
+            if (len(ans) > 1 and 
+                all(QueryRewriter.is_dict(item) and 'literal' in item for item in ans)):
+                # collect all literal values
+                all_literal_values = []
+                for item in ans:
+                    if QueryRewriter.is_list(item['literal']):
+                        all_literal_values.extend(item['literal'])
+                    else:
+                        all_literal_values.append(item['literal'])
+                
+                # return a single literal dictionary with all values
+                query = {'literal': all_literal_values}
+            else:
+                query = ans
         if QueryRewriter.is_dot_expression(query):
             children = query.split('.')
             ans = []
