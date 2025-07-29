@@ -93,7 +93,7 @@ class QueryRewriter:
             # first pass: look for full matches (higher priority)
             for rule in rules:
                 memo = {}
-                if QueryRewriter.match(query_ast, rule, memo, allow_partial_matching=False):
+                if QueryRewriter.match(query_ast, rule, memo, allow_partial_matching=False) and memo.get('rule') is query_ast:
                     rule_applied = rule
                     memo_applied = memo
                     break
