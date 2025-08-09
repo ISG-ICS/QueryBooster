@@ -2231,6 +2231,24 @@ def test_generate_general_rule_20():
     assert q0_rule == "FROM <x1> WHERE <<x2>> AND <x1>.<x3> IN (SELECT <x4>.<x5> FROM <x4> WHERE <<x6>>) AND <x1>.<x3> IN (SELECT <x7>.<x5> FROM <x7> WHERE <<x8>>)"
     assert q1_rule == "FROM <x1> JOIN <x4> ON <x1>.<x3> = <x4>.<x5> JOIN <x7> ON <x1>.<x3> = <x7>.<x5> WHERE <<x2>> AND <<x6>> AND <<x8>>"
 
+def test_generate_general_rule_21():
+    q0 = """SELECT product.name, category.description, category.category_id, 
+FROM product NATURAL JOIN category
+WHERE product.price > 100
+AND product.category_id = 4"""
+    
+    q1 = """SELECT product.name, category.description, category.category_id 
+FROM product INNER JOIN category ON product.category_id = category.category_id
+WHERE product.price > 100"""
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    assert q0_rule == "FROM <x1> NATURAL JOIN (<x2>) WHERE <<x3>> AND <x1>.<x4> = 4"
+    assert q1_rule == "FROM <x1> INNER JOIN <x2> ON <x1>.<x4> = <x2>.<x4> WHERE <<x3>>"
+
+
 # def test_suggest_rules_bf_1():
 #     examples = [
 #         {
