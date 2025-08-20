@@ -468,6 +468,16 @@ SELECT t6.<x3>, MIN(MIN(<x1>.<x4>))
         'database': 'mysql'
     },
     {
+        'id': 2280,
+        'key': 'combine_3_or_to_in',
+        'name': 'combine multiple or to in',
+        'pattern': '<x> = <y> OR <x> = <z> OR <x> = <w>',
+        'constraints': '',
+        'rewrite': '<x> IN (<y>, <z>, <w>)',
+        'actions': '',
+        'database': 'mysql'
+    },
+    {
         'id': 2259,
         'key': 'merge_or_to_in',
         'name': 'merge or to in',
