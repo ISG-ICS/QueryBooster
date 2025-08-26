@@ -75,6 +75,10 @@ class RuleGenerator:
         # 
         fullSQL = mosql.format(fullASTJson)
 
+        # Fixes edge case where formatting json with NATURAL JOIN into SQL adds comma
+        # This is a bug in the mo_sql library, it correctly formats INNER JOIN and LEFT JOIN but not NATURAL JOIN
+        fullSQL = re.sub(r',\s*NATURAL\s+JOIN\s*\(', ' NATURAL JOIN (', fullSQL)
+
         # Extract partial SQL statement based on scope
         #
         partialSQL = RuleGenerator.extractPartialSQL(fullSQL, scope)
@@ -902,7 +906,12 @@ class RuleGenerator:
                 #
                 elif len(path) >= 1 and path[-1] == 'left join':
                     res.append(astJson)
-                # case-5: {'join': {'value': 'employee', 'name': 'e1'}}
+                # case-5: {'natural join': 'tablespace.employee'}
+                #         path = ['natural join']
+                #
+                elif len(path) >=1 and path[-1] == 'natural join':
+                    res.append(astJson)
+                # case-6: {'join': {'value': 'employee', 'name': 'e1'}}
                 #         path = ['join']
                 #
                 elif len(path) >= 1 and path[-1] == 'join':
@@ -947,7 +956,14 @@ class RuleGenerator:
             #
             elif len(path) >= 1 and path[-1] == 'left join':
                 res.append({'value': astJson, 'name': astJson})
-            # case-5: {'join': 'employee'}
+            # case-5: {'natural join': 'tablespace.employee'}
+            #         path = ['natural join']
+            #
+            elif len(path) >=1 and path[-1] == 'natural join':
+                # treat the table name itself as the alias
+                #
+                res.append({'value': astJson, 'name': astJson})
+            # case-6: {'join': 'employee'}
             #         path = ['join']
             #
             elif len(path) >= 1 and path[-1] == 'join':
@@ -983,7 +999,14 @@ class RuleGenerator:
                 # treat the table name itself as the alias
                 #
                 res.append({'value': astJson, 'name': astJson})
-            # case-5: {'join': 'tablespace.employee'}
+            # case-5: {'natural join': 'tablespace.employee'}
+            #         path = ['natural join']
+            #
+            elif len(path) >=1 and path[-1] == 'natural join':
+                # treat the table name itself as the alias
+                #
+                res.append({'value': astJson, 'name': astJson})
+            # case-6: {'join': 'tablespace.employee'}
             #         path = ['join']
             #
             elif len(path) >=1 and path[-1] == 'join':
@@ -1077,7 +1100,16 @@ class RuleGenerator:
                     # special case: if it's a general table with no alias, e.g., {'value': 'employee', 'name': 'employee'}
                     elif astJson['value'] == table['value'] and astJson['value'] == astJson['name']:
                         return var
-                # case-5: {'join': {'value': 'employee', 'name': 'e1'}}
+                # case-5: {'natural join': {'value': 'employee', 'name': 'e1'}}
+                #         path = ['natural join']
+                #
+                elif len(path) >= 1 and path[-1] == 'natural join':
+                    if astJson['value'] == table['value'] and astJson['name'] == table['name']:
+                        return var 
+                    # special case: if it's a general table with no alias, e.g., {'value': 'employee', 'name': 'employee'}
+                    elif astJson['value'] == table['value'] and astJson['value'] == astJson['name']:
+                        return var
+                # case-6: {'join': {'value': 'employee', 'name': 'e1'}}
                 #         path = ['join']
                 #
                 elif len(path) >= 1 and path[-1] == 'join':
@@ -1127,7 +1159,13 @@ class RuleGenerator:
             elif len(path) >=1 and path[-1] == 'left join':
                 if astJson == table['value']:
                     return var
-            # case-5: {'join': 'employee'}
+            # case-5: {'natural join': 'employee'}
+            #         path = ['natural join']
+            #
+            elif len(path) >=1 and path[-1] == 'natural join':
+                if astJson == table['value']:
+                    return var
+            # case-6: {'join': 'employee'}
             #         path = ['join']
             #
             elif len(path) >=1 and path[-1] == 'join':
@@ -1160,13 +1198,19 @@ class RuleGenerator:
             elif len(path) >=1 and path[-1] == 'left join':
                 if astJson == table['value']:
                     return var
-            # case-5: {'join': 'tablespace.employee'}
+            # case-5: {'natural join': 'tablespace.employee'}
+            #         path = ['natural join']
+            #
+            elif len(path) >=1 and path[-1] == 'natural join':
+                if astJson == table['value']:
+                    return var
+            # case-6: {'join': 'tablespace.employee'}
             #         path = ['join']
             #
             elif len(path) >=1 and path[-1] == 'join':
                 if astJson == table['value']:
                     return var
-            # case-6: table's alias occurs in select or where clause
+            # case-7: table's alias occurs in select or where clause
             #
             else:
                 # split the dot expression into two parts
@@ -1319,8 +1363,8 @@ class RuleGenerator:
     def isSubtree(astJson: dict) -> bool:
         var_count = 0
         for key, value in astJson.items():
-            # key can not be keywords of [SELECT, FROM, WHERE, LIMIT, ORDERBY, SORT, INNER JOIN, LEFT OUTER JOIN, JOIN, LEFT JOIN]
-            if key in ['select', 'from', 'where', 'limit', 'orderby', 'sort', 'inner join', 'left outer join', 'join', 'left join']:
+            # key can not be keywords of [SELECT, FROM, WHERE, LIMIT, ORDERBY, SORT, INNER JOIN, LEFT OUTER JOIN, JOIN, LEFT JOIN, NATURAL JOIN]
+            if key in ['select', 'from', 'where', 'limit', 'orderby', 'sort', 'inner join', 'left outer join', 'join', 'left join', 'natural join']:
                 return False
             # a child cannot be a dict
             if QueryRewriter.is_dict(value):
