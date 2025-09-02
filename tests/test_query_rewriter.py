@@ -1393,7 +1393,7 @@ def test_over_partial_matching():
     _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
     assert format(parse(q1)) == format(parse(_q1))
 
-def test_rewrite_test():
+def test_rewrite_aggregation_to_subquery():
     q0 = '''
 SELECT 
     t1.CPF,
