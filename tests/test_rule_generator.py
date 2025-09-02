@@ -1935,9 +1935,14 @@ def test_generate_general_rule_8():
 
     assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
         CAST(<x1> AS DATE)
+    ''')) or StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        CAST(<<y>> AS DATE)
     '''))
+
     assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
         <x1>
+    ''')) or StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
+        <<y>>
     '''))
 
 
@@ -2247,6 +2252,39 @@ WHERE product.price > 100"""
     q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
     assert q0_rule == "FROM <x1> NATURAL JOIN (<x2>) WHERE <<x3>> AND <x1>.<x4> = 4"
     assert q1_rule == "FROM <x1> INNER JOIN <x2> ON <x1>.<x4> = <x2>.<x4> WHERE <<x3>>"
+
+def test_generate_general_rule_22():
+    q0 = """SELECT 
+    t1.CPF,
+    DATE(t1.data),
+    CASE WHEN SUM(CASE WHEN t1.login_ok = true
+                       THEN 1
+                       ELSE 0
+                  END) >= 1
+         THEN true
+         ELSE false
+    END
+FROM db_risco.site_rn_login AS t1
+GROUP BY t1.CPF, DATE(t1.data)"""
+    
+    q1 = """SELECT
+    t1.CPF,
+    t1.data    
+FROM (
+    SELECT 
+        CPF, 
+        DATE(data)
+    FROM db_risco.site_rn_login
+    WHERE login_ok = true
+) t1
+GROUP BY t1.CPF, t1.data"""
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    assert q0_rule == "SELECT <<x1>>, DATE(<x2>.<x3>), CASE WHEN SUM(CASE WHEN <x2>.<x4> = <x5> THEN <x5> ELSE <x6> END) >= <x5> THEN <x5> ELSE <x6> END FROM <x2> GROUP BY <<x7>>, DATE(<x2>.<x3>)"
+    assert q1_rule == "SELECT <<x1>>, <x2>.<x3> FROM (SELECT <x8>, DATE(<x3>) FROM <x2> WHERE <x4> = <x5>) AS t1 GROUP BY <<x7>>, <x2>.<x3>"
 
 
 # def test_suggest_rules_bf_1():
