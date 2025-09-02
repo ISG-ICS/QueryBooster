@@ -1393,6 +1393,40 @@ def test_over_partial_matching():
     _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
     assert format(parse(q1)) == format(parse(_q1))
 
+def test_rewrite_aggregation_to_subquery():
+    q0 = '''
+SELECT 
+    t1.CPF,
+    DATE(t1.data) AS data,
+    CASE WHEN SUM(CASE WHEN t1.login_ok = true
+                       THEN 1
+                       ELSE 0
+                  END) >= 1
+         THEN true
+         ELSE false
+    END
+FROM db_risco.site_rn_login AS t1
+GROUP BY t1.CPF, DATE(t1.data)
+        '''
+    q1 = '''
+SELECT
+    t1.CPF,
+    t1.data    
+FROM (
+    SELECT 
+        CPF, 
+        DATE(data)
+    FROM db_risco.site_rn_login
+    WHERE login_ok = true
+) t1
+GROUP BY t1.CPF, t1.data
+        '''
+    
+    rule_keys = ['aggregation_to_filtered_subquery']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
 
 # TODO - TBI
 # 

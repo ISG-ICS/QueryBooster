@@ -2563,6 +2563,11 @@ class RuleGenerator:
         new_rule_rewrite_json = json.loads(new_rule['rewrite_json'])
 
         for subtree in subtrees:
+            # Prevents already variablized subtrees from being variablized again in an infinite loop
+            # ex. {"value": "V22"} should not be variablized again
+            if len(subtree) == 1 and 'value' in subtree and QueryRewriter.is_var(subtree['value']):
+                continue
+            
             # Find a variable name for the given subtree
             #
             new_rule_mapping, newVarInternal = RuleGenerator.findNextVarInternal(new_rule_mapping)
