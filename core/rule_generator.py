@@ -2714,15 +2714,14 @@ class RuleGenerator:
         #   recursively until no more differences
         #
         generalRule = seedRule
-        preRuleFingerprint = RuleGenerator.fingerPrint(generalRule)
-        diff = True
-        while diff:
+        visited_fingerprints = set()
+        ruleFingerprint = RuleGenerator.fingerPrint(generalRule)
+
+        while ruleFingerprint not in visited_fingerprints:
+            visited_fingerprints.add(ruleFingerprint)
             for generalization in RuleGenerator.RuleGeneralizations.keys():
                 generalRule = getattr(RuleGenerator, generalization)(generalRule)
-            newRuleFingerprint = RuleGenerator.fingerPrint(generalRule)
-            if newRuleFingerprint == preRuleFingerprint:
-                diff = False
-            preRuleFingerprint = newRuleFingerprint
+            ruleFingerprint = RuleGenerator.fingerPrint(generalRule)
         
         return generalRule
 
