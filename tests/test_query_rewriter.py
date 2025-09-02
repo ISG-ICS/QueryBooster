@@ -1381,6 +1381,19 @@ def test_full_matching():
     _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
     assert format(parse(q1)) == format(parse(_q1))
 
+def test_over_partial_matching():
+    q0 = '''
+        SELECT * FROM table_name WHERE (table_name.title = 1 and table_name.grade = 2) OR (table_name.title = 2 and table_name.debt = 2 and table_name.grade = 3) OR (table_name.prog = 1 and table_name.title =1 and table_name.debt = 3)
+        '''
+    q1 = '''
+        SELECT * FROM table_name WHERE (table_name.title = 1 and table_name.grade = 2) OR (table_name.title = 2 and table_name.debt = 2 and table_name.grade = 3) OR (table_name.prog = 1 and table_name.title =1 and table_name.debt = 3)
+        '''
+    rule_keys = ['combine_3_or_to_in']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
 # TODO - TBI
 # 
 def test_rewrite_postgresql():
