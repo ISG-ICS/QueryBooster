@@ -322,6 +322,17 @@ SELECT <x3>.<x6>
     }, 
 
     {
+        'id': 91,
+        'key': 'aggregation_to_filtered_subquery',
+        'name': 'Aggregation to Filtered Subquery',
+        'pattern': '''SELECT <x2>.<x9>, DATE(<x2>.<x3>), CASE WHEN SUM(CASE WHEN <x2>.<x4> = <x5> THEN <x5> ELSE <x6> END) >= <x5> THEN <x5> ELSE <x6> END FROM <x8> AS <x2> GROUP BY <<x7>>, DATE(<x2>.<x3>)''',
+        'constraints': '',
+        'rewrite': '''SELECT <x2>.<x9>, <x2>.<x3> FROM (SELECT <x9>, DATE(<x3>) FROM <x8> WHERE <x4> = <x5>) AS <x2> GROUP BY <<x7>>, <x2>.<x3>''',
+        'actions': '',
+        'database': 'postgresql'
+    }, 
+
+    {
         'id': 8090,
         'key': 'test_rule_wetune_90',
         'name': 'Test Rule Wetune 90',
