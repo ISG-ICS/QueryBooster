@@ -1427,6 +1427,334 @@ GROUP BY t1.CPF, t1.data
     _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
     assert format(parse(q1)) == format(parse(_q1))
 
+def test_rewrite_spreadsheet_id_2():
+    q0 = '''
+SELECT * 
+FROM place 
+WHERE "select" = TRUE
+   OR exists (SELECT id 
+              FROM bookmark 
+              WHERE user IN (1,2,3,4) 
+                AND bookmark.place = place.id) 
+ LIMIT 10;
+        '''
+    q1 = '''
+SELECT * 
+FROM (
+    (SELECT * 
+    FROM place 
+    WHERE "select" = True 
+    LIMIT 10) 
+UNION 
+    (SELECT * 
+    FROM place 
+    WHERE EXISTS 
+        (SELECT 1 
+        FROM bookmark 
+        WHERE user IN (1, 2, 3, 4) 
+        AND bookmark.place = place.id) 
+    LIMIT 10))
+LIMIT 10
+        '''
+    
+    rule_keys = ['spreadsheet_id_2']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_spreadsheet_id_3():
+    q0 = '''
+SELECT EMPNO FROM EMP WHERE EMPNO > 10 AND EMPNO <= 10
+        '''
+    q1 = '''
+SELECT EMPNO FROM EMP WHERE FALSE
+        '''
+    
+    rule_keys = ['spreadsheet_id_3']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_spreadsheet_id_4():
+    q0 = '''SELECT entities.data FROM entities WHERE 
+  entities._id IN (SELECT index_users_email._id FROM index_users_email WHERE index_users_email.key = 'test')
+ OR 
+  entities._id in (SELECT index_users_profile_name._id FROM index_users_profile_name WHERE index_users_profile_name.key = 'test')
+        '''
+    q1 = '''SELECT entities.data FROM entities 
+WHERE entities._id IN 
+ ( SELECT index_users_email._id 
+   FROM index_users_email 
+   WHERE index_users_email.key = 'test'
+ )
+UNION
+SELECT entities.data FROM entities
+WHERE entities._id in 
+ ( SELECT index_users_profile_name._id 
+   FROM index_users_profile_name 
+   WHERE index_users_profile_name.key = 'test'
+ )'''
+    
+    rule_keys = ['spreadsheet_id_4']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+# Query rewrite for ID 5 is already tested in test_rewrite_skips_failed_partial
+    
+def test_rewrite_spreadsheet_id_6():
+    q0 = '''
+SELECT * 
+FROM
+    table_name 
+ WHERE
+    (table_name.title = 1 and table_name.grade = 2)
+ OR
+    (table_name.title = 2 and table_name.debt = 2 and table_name.grade = 3)
+ OR
+     (table_name.prog = 1 and table_name.title =1 and table_name.debt = 3)
+        '''
+    q1 = '''
+SELECT *
+FROM
+    table_name 
+ WHERE
+     1 = case
+           when table_name.title = 1 and table_name.grade = 2 then 1
+           when table_name.title = 2 and table_name.debt = 2 and table_name.grade = 3 then 1
+           when table_name.prog = 1 and table_name.title = 1 and table_name.debt = 3 then 1
+        else 0
+     end
+        '''
+    
+    rule_keys = ['spreadsheet_id_6']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_spreadsheet_id_7():
+    q0 = '''
+select * from 
+a
+left join b on a.id = b.cid 
+where 
+b.cl1 = 's1' 
+or 
+b.cl1 ='s2'
+or
+b.cl1 ='s3' 
+        '''
+    q1 = '''
+select * from 
+a 
+left join b on a.id = b.cid 
+where 
+b.cl1 in ('s1','s2','s3')
+        '''
+    
+    rule_keys = ['spreadsheet_id_7']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_spreadsheet_id_9():
+    q0 = '''
+SELECT DISTINCT my_table.foo
+FROM my_table
+WHERE my_table.num = 1;
+        '''
+    q1 = '''
+SELECT my_table.foo
+FROM my_table
+WHERE my_table.num = 1
+GROUP BY my_table.foo;
+        '''
+    
+    rule_keys = ['spreadsheet_id_9']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_spreadsheet_id_10():
+    q0 = '''
+SELECT table1.wpis_id
+FROM table1
+WHERE table1.etykieta_id IN (
+  SELECT table2.tag_id
+  FROM table2
+  WHERE table2.postac_id = 376476
+  );
+        '''
+    q1 = '''
+SELECT table1.wpis_id 
+FROM table1
+INNER JOIN table2 on table2.tag_id = table1.etykieta_id
+WHERE table2.postac_id = 376476
+        '''
+    
+    rule_keys = ['spreadsheet_id_10']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_spreadsheet_id_11():
+    q0 = '''
+SELECT historicoestatusrequisicion_id, requisicion_id, estatusrequisicion_id, 
+            comentario, fecha_estatus, usuario_id
+            FROM historicoestatusrequisicion hist1
+            WHERE requisicion_id IN
+            (
+            SELECT requisicion_id FROM historicoestatusrequisicion hist2
+            WHERE usuario_id = 27 AND estatusrequisicion_id = 1
+            )
+            ORDER BY requisicion_id, estatusrequisicion_id
+        '''
+    q1 = '''
+SELECT hist1.historicoestatusrequisicion_id, hist1.requisicion_id, hist1.estatusrequisicion_id, hist1.comentario, hist1.fecha_estatus, hist1.usuario_id
+            FROM historicoestatusrequisicion hist1
+            JOIN historicoestatusrequisicion hist2 ON hist2.requisicion_id = hist1.requisicion_id
+            WHERE hist2.usuario_id = 27 AND hist2.estatusrequisicion_id = 1
+            ORDER BY hist1.requisicion_id, hist1.estatusrequisicion_id
+        '''
+    
+    rule_keys = ['spreadsheet_id_11']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_spreadsheet_id_12():
+    q0 = '''
+SELECT po.id, 
+       SUM(grouped_items.total_quantity) AS order_total_quantity
+FROM purchase_orders po
+LEFT JOIN (
+  SELECT items.purchase_order_id, 
+  SUM(items.quantity) AS item_total
+  FROM items
+  GROUP BY items.purchase_order_id
+) grouped_items ON po.id = grouped_items.purchase_order_id
+WHERE po.shop_id = 195
+GROUP BY po.id
+        '''
+    q1 = '''
+SELECT po.id,
+       (
+           SELECT SUM(items.quantity)
+           FROM items
+           WHERE items.purchase_order_id = po.id
+           GROUP BY items.purchase_order_id
+       ) AS order_total_quantity
+FROM purchase_orders po
+WHERE shop_id = 195
+GROUP BY po.id
+        '''
+    
+    rule_keys = ['spreadsheet_id_12']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_spreadsheet_id_15():
+    q0 = '''
+SELECT *
+FROM users u
+WHERE u.id IN
+    (SELECT s1.user_id
+     FROM sessions s1
+     WHERE s1.user_id <> 1234
+       AND (s1.ip IN
+              (SELECT s2.ip
+               FROM sessions s2
+               WHERE s2.user_id = 1234
+               GROUP BY s2.ip)
+            OR s1.cookie_identifier IN
+              (SELECT s3.cookie_identifier
+               FROM sessions s3
+               WHERE s3.user_id = 1234
+               GROUP BY s3.cookie_identifier))
+     GROUP BY s1.user_id)
+        '''
+    q1 = '''
+SELECT *
+FROM users u
+WHERE EXISTS (
+    SELECT
+        NULL
+    FROM sessions s1
+    WHERE s1.user_id <> 1234
+    AND u.id = s1.user_id
+    AND EXISTS (
+        SELECT
+            NULL
+        FROM sessions s2
+        WHERE s2.user_id = 1234
+        AND (s1.ip = s2.ip
+          OR s1.cookie_identifier = s2.cookie_identifier
+            )
+        )
+    )
+        '''
+    
+    rule_keys = ['spreadsheet_id_15']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+# Query Rewriting for ID 17 is already tested in test_rewrite_aggregation_to_subquery
+
+def test_rewrite_spreadsheet_id_18():
+    q0 = '''
+SELECT DISTINCT ON (t.playerId) t.gzpId, t.pubCode, t.playerId,
+       COALESCE (p.preferenceValue,'en'),
+       s.segmentId 
+FROM userPlayerIdMap t LEFT JOIN
+     userPreferences p
+     ON t.gzpId  = p.gzpId LEFT JOIN
+     segment s
+     ON t.gzpId = s.gzpId 
+WHERE t.pubCode IN ('hyrmas','ayqioa','rj49as99') and
+      t.provider IN ('FCM','ONE_SIGNAL') and
+      s.segmentId IN (0,1,2,3,4,5,6) and
+      p.preferenceValue IN ('en','hi') 
+ORDER BY t.playerId desc;
+        '''
+    q1 = '''
+SELECT t.gzpId, t.pubCode, t.playerId,
+       COALESCE((SELECT p.preferenceValue
+                 FROM userPreferences p
+                 WHERE t.gzpId = p.gzpId AND
+                       p.preferenceValue IN ('en', 'hi')
+                 LIMIT 1
+                ), 'en'
+               ),
+       (SELECT s.segmentId 
+        FROM segment s
+        WHERE t.gzpId = s.gzpId AND
+              s.segmentId IN (0, 1, 2, 3, 4, 5, 6)
+        LIMIT 1
+       )
+FROM userPlayerIdMap t
+WHERE t.pubCode IN ('hyrmas', 'ayqioa', 'rj49as99') and
+      t.provider IN ('FCM', 'ONE_SIGNAL');
+        '''
+    
+    rule_keys = ['spreadsheet_id_18']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_spreadsheet_id_20():
+    q0 = '''
+SELECT * FROM (SELECT * FROM (SELECT NULL FROM EMP) WHERE N IS NULL) WHERE N IS NULL
+        '''
+    q1 = '''
+SELECT NULL FROM EMP
+        '''
+    
+    rule_keys = ['spreadsheet_id_20']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
 
 # TODO - TBI
 # 
