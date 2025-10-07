@@ -1,10 +1,5 @@
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from core.ast.node_type import NodeType
 from core.ast.node import (
-    Node, TableNode, SubqueryNode, ColumnNode, LiteralNode, VarNode, VarSetNode,
+    TableNode, ColumnNode, LiteralNode, VarNode, VarSetNode,
     OperatorNode, FunctionNode, SelectNode, FromNode, WhereNode, GroupByNode,
     HavingNode, OrderByNode, LimitNode, OffsetNode, QueryNode
 )
