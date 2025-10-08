@@ -333,6 +333,138 @@ SELECT <x3>.<x6>
     }, 
 
     {
+        'id': 102,
+        'key': 'spreadsheet_id_2',
+        'name': 'Spreadsheet ID 2',
+        'pattern': '''SELECT <<x11>> FROM <x1> WHERE <x2> OR EXISTS (SELECT <x3> FROM <x4> WHERE <x5> IN (<x6>, <x7>, <x8>, <x9>) AND <<x10>>) LIMIT <x12>''',
+        'constraints': '',
+        'rewrite': '''SELECT <<x11>> FROM ((SELECT <<x11>> FROM <x1> WHERE <x2> LIMIT <x12>) UNION (SELECT <<x11>> FROM <x1> WHERE EXISTS (SELECT <x6> FROM <x4> WHERE <x5> IN (<x6>, <x7>, <x8>, <x9>) AND <<x10>>) LIMIT <x12>)) LIMIT <x12>''',
+        'actions': '',
+        'database': 'postgresql'
+    },
+
+    {
+        'id': 103,
+        'key': 'spreadsheet_id_3',
+        'name': 'Spreadsheet ID 3',
+        'pattern': '''<x2> > <x3> AND <x2> <= <x3>''',
+        'constraints': '',
+        'rewrite': '''FALSE''',
+        'actions': '',
+        'database': 'postgresql'
+    },
+
+    {
+        'id': 104,
+        'key': 'spreadsheet_id_4',
+        'name': 'Spreadsheet ID 4',
+        'pattern': '''SELECT <<y11>> FROM <x1> WHERE <x1>.<x4> IN (SELECT <<y10>> FROM <x2> WHERE <<y6>>) OR <x1>.<x4> IN (SELECT <<y9>> FROM <x3> WHERE <<y4>>)''',
+        'constraints': '',
+        'rewrite': '''SELECT <<y11>> FROM <x1> WHERE <x1>.<x4> IN (SELECT <<y10>> FROM <x2> WHERE <<y6>>) UNION SELECT <<y11>> FROM <x1> WHERE <x1>.<x4> IN (SELECT <<y9>> FROM <x3> WHERE <<y4>>)''',
+        'actions': '',
+        'database': 'postgresql'
+    },
+
+    {
+        'id': 106,
+        'key': 'spreadsheet_id_6',
+        'name': 'Spreadsheet ID 6',
+        'pattern': '''<x21> OR <x20> OR <x19>''',
+        'constraints': '',
+        'rewrite': '''1 = CASE WHEN <x21> THEN 1 WHEN <x20> THEN 1 WHEN <x19> THEN 1 ELSE 0 END''',
+        'actions': '',
+        'database': 'postgresql'
+    },   
+
+    {
+        'id': 107,
+        'key': 'spreadsheet_id_7',
+        'name': 'Spreadsheet ID 7',
+        'pattern': '''<x2>.<x3> = '<x9>' OR <x2>.<x3> = '<x8>' OR <x2>.<x3> = '<x7>\'''',
+        'constraints': '',
+        'rewrite': '''<x2>.<x3> IN ('<x9>', '<x8>', '<x7>')''',
+        'actions': '',
+        'database': 'postgresql'
+    },
+
+    {
+        'id': 109,
+        'key': 'spreadsheet_id_9',
+        'name': 'Spreadsheet ID 9',
+        'pattern': '''SELECT DISTINCT <x6> FROM <x1> WHERE <<y1>>''',
+        'constraints': '',
+        'rewrite': '''SELECT <x6> FROM <x1> WHERE <<y1>> GROUP BY <x6>''',
+        'actions': '',
+        'database': 'postgresql'
+    },
+  
+    {
+        'id': 110,
+        'key': 'spreadsheet_id_10',
+        'name': 'Spreadsheet ID 10',
+        'pattern': '''FROM <x1> WHERE <x1>.<x5> IN (SELECT <x2>.<x6> FROM <x2> WHERE <<y1>>)''',
+        'constraints': '',
+        'rewrite': '''FROM <x1> INNER JOIN <x2> ON <x2>.<x6> = <x1>.<x5> WHERE <<y1>>''',
+        'actions': '',
+        'database': 'postgresql'
+    },
+  
+    {
+        'id': 111,
+        'key': 'spreadsheet_id_11',
+        'name': 'Spreadsheet ID 11',
+        'pattern': '''SELECT <x7>, <x6>, <x8>, <x4>, <x5>, <x3> FROM <x1> WHERE <x6> IN (SELECT <x6> FROM <x2> WHERE <x3> = <x10> AND <x8> = <x9>) ORDER BY <x6>, <x8>''',
+        'constraints': '',
+        'rewrite': '''SELECT <x1>.<x7>, <x1>.<x6>, <x1>.<x8>, <x1>.<x4>, <x1>.<x5>, <x1>.<x3> FROM <x1> JOIN <x2> ON <x2>.<x6> = <x1>.<x6> WHERE <x2>.<x3> = <x10> AND <x2>.<x8> = <x9> ORDER BY <x1>.<x6>, <x1>.<x8>''',
+        'actions': '',
+        'database': 'postgresql'
+    },
+  
+    {
+        'id': 112,
+        'key': 'spreadsheet_id_12',
+        'name': 'Spreadsheet ID 12',
+        'pattern': '''SELECT <<y2>>, SUM(<x7>.<x3>) AS <x13> FROM <x1> LEFT JOIN (SELECT <x11>, <x12> AS <x14> FROM <x2> GROUP BY <x11>) AS <x7> ON <x1>.<x8> = <x7>.<x6> WHERE <x1>.<x5> = <x9>''',
+        'constraints': '',
+        'rewrite': '''SELECT <<y2>>, (SELECT <x12> FROM <x2> WHERE <x2>.<x6> = <x1>.<x8> GROUP BY <x11>) AS <x13> FROM <x1> WHERE <x5> = <x9>''',
+        'actions': '',
+        'database': 'postgresql'
+    },
+  
+    {
+        'id': 115,
+        'key': 'spreadsheet_id_15',
+        'name': 'Spreadsheet ID 15',
+        'pattern': '''<x1>.<x9> IN (SELECT <x2>.<x7> FROM <x2> WHERE <<y1>> AND (<x2>.<x5> IN (SELECT <x3>.<x5> FROM <x3> WHERE <<y2>> GROUP BY <x3>.<x5>) OR <x2>.<x6> IN (SELECT <x4>.<x6> FROM <x4> WHERE <x4>.<x7> = <x10> GROUP BY <x4>.<x6>)) GROUP BY <x2>.<x7>)''',
+        'constraints': '',
+        'rewrite': '''EXISTS (SELECT NULL FROM <x2> WHERE <<y1>> AND <x1>.<x9> = <x2>.<x7> AND EXISTS (SELECT NULL FROM <x3> WHERE <<y2>> AND (<x2>.<x5> = <x3>.<x5> OR <x2>.<x6> = <x3>.<x6>)))''',
+        'actions': '',
+        'database': 'postgresql'
+    },
+  
+    {
+        'id': 118,
+        'key': 'spreadsheet_id_18',
+        'name': 'Spreadsheet ID 18',
+        'pattern': '''SELECT DISTINCT ON (<x1>) <x2>, <x3>, <x1>, COALESCE(<x4>.<x5>, <x6>), <<x7>> FROM <x8> LEFT JOIN <x4> ON <<x9>> LEFT JOIN <x10> ON <<x11>> WHERE <x23> AND <x24> AND <x10>.<x13> IN (<x14>, <x15>, <x16>, <x17>, <x18>, <x19>, <x20>) AND <<x21>> ORDER BY <x8>.<x22> DESC''',
+        'constraints': '',
+        'rewrite': '''SELECT <x2>, <x3>, <x1>, COALESCE((SELECT <x4>.<x5> FROM <x4> WHERE <<x9>> AND <<x21>> LIMIT 1), <x6>), (SELECT <<x7>> FROM <x10> WHERE <<x11>> AND <x10>.<x13> IN (<x14>, <x15>, <x16>, <x17>, <x18>, <x19>, <x20>) LIMIT <x15>) FROM <x8> WHERE <x23> AND <x24>''',
+        'actions': '',
+        'database': 'postgresql'
+    },
+  
+    {
+        'id': 120,
+        'key': 'spreadsheet_id_20',
+        'name': 'Spreadsheet ID 20',
+        'pattern': '''SELECT <<y2>> FROM (SELECT NULL FROM <x1>) WHERE <<y1>>''',
+        'constraints': '',
+        'rewrite': '''SELECT NULL FROM <x1>''',
+        'actions': '',
+        'database': 'postgresql'
+    },
+
+    {
         'id': 8090,
         'key': 'test_rule_wetune_90',
         'name': 'Test Rule Wetune 90',

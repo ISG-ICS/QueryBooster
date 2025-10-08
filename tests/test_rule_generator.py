@@ -1644,7 +1644,7 @@ def test_generate_rule_graph_0():
 
 def unify_variable_names(q0, q1):
     # Variable pattern
-    pattern = r'<<[^>]*>>|<[^>]*>'
+    pattern = r'<<[^>]+>>|<[a-zA-Z][^>]*>'
 
     # Find all variables in q0 and q1, and unify their names into xi in ascending order
     substrings = re.findall(pattern, q0 + q1)
@@ -1920,7 +1920,6 @@ def test_generate_general_rule_7():
         FROM   <x2>
     '''))
 
-
 def test_generate_general_rule_8():
 
     q0 = '''
@@ -1933,17 +1932,9 @@ def test_generate_general_rule_8():
     rule = RuleGenerator.generate_general_rule(q0, q1)
     assert type(rule) is dict
 
-    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
-        CAST(<x1> AS DATE)
-    ''')) or StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
-        CAST(<<y>> AS DATE)
-    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['pattern'])) == StringUtil.strim(RuleGenerator._fingerPrint("CAST(<x1> AS DATE)")) 
 
-    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
-        <x1>
-    ''')) or StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint('''
-        <<y>>
-    '''))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(rule['rewrite'])) == StringUtil.strim(RuleGenerator._fingerPrint("<x1>"))
 
 
 def test_generate_general_rule_9():
@@ -2285,6 +2276,313 @@ GROUP BY t1.CPF, t1.data"""
     q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
     assert q0_rule == "SELECT <<x1>>, DATE(<x2>.<x3>), CASE WHEN SUM(CASE WHEN <x2>.<x4> = <x5> THEN <x5> ELSE <x6> END) >= <x5> THEN <x5> ELSE <x6> END FROM <x2> GROUP BY <<x7>>, DATE(<x2>.<x3>)"
     assert q1_rule == "SELECT <<x1>>, <x2>.<x3> FROM (SELECT <x8>, DATE(<x3>) FROM <x2> WHERE <x4> = <x5>) AS t1 GROUP BY <<x7>>, <x2>.<x3>"
+
+# TODO: fix issue with test random
+# def test_generate_spreadsheet_id_2():
+#     q0 = """SELECT * 
+# FROM place 
+# WHERE "select" = TRUE
+#    OR exists (SELECT id 
+#               FROM bookmark 
+#               WHERE user IN (1,2,3,4) 
+#                 AND bookmark.place = place.id) 
+#  LIMIT 10;"""
+    
+#     q1 = """SELECT * 
+# FROM (
+#     (SELECT * 
+#     FROM place 
+#     WHERE "select" = True 
+#     LIMIT 10) 
+# UNION 
+#     (SELECT * 
+#     FROM place 
+#     WHERE EXISTS 
+#         (SELECT 1 
+#         FROM bookmark 
+#         WHERE user IN (1, 2, 3, 4) 
+#         AND bookmark.place = place.id) 
+#     LIMIT 10))
+# LIMIT 10;"""
+
+#     rule = RuleGenerator.generate_general_rule(q0, q1)
+#     assert type(rule) is dict
+
+#     q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+#     assert q0_rule == "FROM <x1> WHERE <x2> OR EXISTS (SELECT <x3> FROM <x4> WHERE <x5> IN (<x6>, <x7>, <x8>, <x9>) AND <<x10>>)"
+#     assert q1_rule == "FROM ((SELECT <<x11>> FROM <x1> WHERE <x2> LIMIT <x12>) UNION (SELECT <<x11>> FROM <x1> WHERE EXISTS (SELECT <x6> FROM <x4> WHERE <x5> IN (<x6>, <x7>, <x8>, <x9>) AND <<x10>>) LIMIT <x12>))"
+
+def test_generate_spreadsheet_id_3():
+    q0 = """SELECT EMPNO FROM EMP WHERE EMPNO > 10 AND EMPNO <= 10"""
+    
+    q1 = """SELECT EMPNO FROM EMP WHERE FALSE"""
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    assert q0_rule == "<x1> > <x2> AND <x1> <= <x2>"
+    assert q1_rule == "False"
+
+
+def test_generate_spreadsheet_id_4():
+    q0 = """SELECT entities.data FROM entities WHERE 
+  entities._id IN (SELECT index_users_email._id FROM index_users_email WHERE index_users_email.key = 'test')
+ OR 
+  entities._id in (SELECT index_users_profile_name._id FROM index_users_profile_name WHERE index_users_profile_name.key = 'test')"""
+    
+    q1 = """SELECT entities.data FROM entities 
+WHERE entities._id IN 
+ ( SELECT index_users_email._id 
+   FROM index_users_email 
+   WHERE index_users_email.key = 'test'
+ )
+UNION
+SELECT entities.data FROM entities
+WHERE entities._id in 
+ ( SELECT index_users_profile_name._id 
+   FROM index_users_profile_name 
+   WHERE index_users_profile_name.key = 'test'
+ )"""
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    assert StringUtil.strim(q0_rule)  == StringUtil.strim("SELECT <<x1>> FROM <x2> WHERE <x2>.<x3> IN (SELECT <<x4>> FROM <x5> WHERE <<x6>>) OR <x2>.<x3> IN (SELECT <<x7>> FROM <x8> WHERE <<x9>>)")
+    assert StringUtil.strim(q1_rule)  == StringUtil.strim("SELECT <<x1>> FROM <x2> WHERE <x2>.<x3> IN (SELECT <<x4>> FROM <x5> WHERE <<x6>>) UNION SELECT <<x1>> FROM <x2> WHERE <x2>.<x3> IN (SELECT <<x7>> FROM <x8> WHERE <<x9>>)")
+
+
+# Rule generation for ID 5 is already tested in test_generate_general_rule_20 
+
+def test_generate_spreadsheet_id_6():
+    q0 = """SELECT * 
+FROM
+    table_name 
+ WHERE
+    (table_name.title = 1 and table_name.grade = 2)
+ OR
+    (table_name.title = 2 and table_name.debt = 2 and table_name.grade = 3)
+ OR
+     (table_name.prog = 1 and table_name.title =1 and table_name.debt = 3)"""
+    
+    q1 = """SELECT *
+FROM
+    table_name 
+ WHERE
+     1 = case
+           when table_name.title = 1 and table_name.grade = 2 then 1
+           when table_name.title = 2 and table_name.debt = 2 and table_name.grade = 3 then 1
+           when table_name.prog = 1 and table_name.title = 1 and table_name.debt = 3 then 1
+        else 0
+     end"""
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    assert q0_rule == "<x1> OR <x2> OR <x3>"
+    assert q1_rule == "<x4> = CASE WHEN <x1> THEN <x4> WHEN <x2> THEN <x4> WHEN <x3> THEN <x4> ELSE 0 END"
+
+def test_generate_spreadsheet_id_7():
+    q0 = """select * from 
+a
+left join b on a.id = b.cid 
+where 
+b.cl1 = 's1' 
+or 
+b.cl1 ='s2'
+or
+b.cl1 ='s3' """
+    
+    q1 = """select * from 
+a 
+left join b on a.id = b.cid 
+where 
+b.cl1 in ('s1','s2','s3')"""
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    assert q0_rule == "<x1>.<x2> = '<x3>' OR <x1>.<x2> = '<x4>' OR <x1>.<x2> = '<x5>'"
+    assert q1_rule == "<x1>.<x2> IN ('<x3>', '<x4>', '<x5>')"
+
+def test_generate_spreadsheet_id_9():
+    q0 = """SELECT DISTINCT my_table.foo
+FROM my_table
+WHERE my_table.num = 1;"""
+    
+    q1 = """SELECT my_table.foo
+FROM my_table
+WHERE my_table.num = 1
+GROUP BY my_table.foo;"""
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    assert q0_rule == "SELECT DISTINCT <x1> FROM <x2> WHERE <<x3>>"
+    assert q1_rule == "SELECT <x1> FROM <x2> WHERE <<x3>> GROUP BY <x1>"
+
+def test_generate_spreadsheet_id_10():
+    q0 = """SELECT table1.wpis_id
+FROM table1
+WHERE table1.etykieta_id IN (
+  SELECT table2.tag_id
+  FROM table2
+  WHERE table2.postac_id = 376476
+  );"""
+
+    q1 = """SELECT table1.wpis_id 
+FROM table1
+INNER JOIN table2 on table2.tag_id = table1.etykieta_id
+WHERE table2.postac_id = 376476"""
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    assert q0_rule == "FROM <x1> WHERE <x1>.<x2> IN (SELECT <x3>.<x4> FROM <x3> WHERE <<x5>>)"
+    assert q1_rule == "FROM <x1> INNER JOIN <x3> ON <x3>.<x4> = <x1>.<x2> WHERE <<x5>>"
+
+def test_generate_spreadsheet_id_11():
+    q0 = """SELECT historicoestatusrequisicion_id, requisicion_id, estatusrequisicion_id, 
+            comentario, fecha_estatus, usuario_id
+            FROM historicoestatusrequisicion hist1
+            WHERE requisicion_id IN
+            (
+            SELECT requisicion_id FROM historicoestatusrequisicion hist2
+            WHERE usuario_id = 27 AND estatusrequisicion_id = 1
+            )
+            ORDER BY requisicion_id, estatusrequisicion_id"""
+    
+    q1 = """SELECT hist1.historicoestatusrequisicion_id, hist1.requisicion_id, hist1.estatusrequisicion_id, hist1.comentario, hist1.fecha_estatus, hist1.usuario_id
+            FROM historicoestatusrequisicion hist1
+            JOIN historicoestatusrequisicion hist2 ON hist2.requisicion_id = hist1.requisicion_id
+            WHERE hist2.usuario_id = 27 AND hist2.estatusrequisicion_id = 1
+            ORDER BY hist1.requisicion_id, hist1.estatusrequisicion_id"""
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    assert q0_rule == "SELECT <x1>, <x2>, <x3>, <x4>, <x5>, <x6> FROM <x7> WHERE <x2> IN (SELECT <x2> FROM <x8> WHERE <x6> = <x9> AND <x3> = <x10>) ORDER BY <x2>, <x3>"
+    assert q1_rule == "SELECT <x7>.<x1>, <x7>.<x2>, <x7>.<x3>, <x7>.<x4>, <x7>.<x5>, <x7>.<x6> FROM <x7> JOIN <x8> ON <x8>.<x2> = <x7>.<x2> WHERE <x8>.<x6> = <x9> AND <x8>.<x3> = <x10> ORDER BY <x7>.<x2>, <x7>.<x3>"
+
+# Rule generation for ID 12 does not work with current aliasing rules
+
+def test_generate_spreadsheet_id_15():
+    q0 = """SELECT *
+FROM users u
+WHERE u.id IN
+    (SELECT s1.user_id
+     FROM sessions s1
+     WHERE s1.user_id <> 1234
+       AND (s1.ip IN
+              (SELECT s2.ip
+               FROM sessions s2
+               WHERE s2.user_id = 1234
+               GROUP BY s2.ip)
+            OR s1.cookie_identifier IN
+              (SELECT s3.cookie_identifier
+               FROM sessions s3
+               WHERE s3.user_id = 1234
+               GROUP BY s3.cookie_identifier))
+     GROUP BY s1.user_id)"""
+    
+    q1 = """SELECT *
+FROM users u
+WHERE EXISTS (
+    SELECT
+        NULL
+    FROM sessions s1
+    WHERE s1.user_id <> 1234
+    AND u.id = s1.user_id
+    AND EXISTS (
+        SELECT
+            NULL
+        FROM sessions s2
+        WHERE s2.user_id = 1234
+        AND (s1.ip = s2.ip
+          OR s1.cookie_identifier = s2.cookie_identifier
+            )
+        )
+    )"""
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    assert q0_rule == "<x1>.<x2> IN (SELECT <x3>.<x4> FROM <x3> WHERE <<x5>> AND (<x3>.<x6> IN (SELECT <x7>.<x6> FROM <x7> WHERE <<x8>> GROUP BY <x7>.<x6>) OR <x3>.<x9> IN (SELECT <x10>.<x9> FROM <x10> WHERE <x10>.<x4> = <x11> GROUP BY <x10>.<x9>)) GROUP BY <x3>.<x4>)"
+    assert q1_rule == "EXISTS (SELECT NULL FROM <x3> WHERE <<x5>> AND <x1>.<x2> = <x3>.<x4> AND EXISTS (SELECT NULL FROM <x7> WHERE <<x8>> AND (<x3>.<x6> = <x7>.<x6> OR <x3>.<x9> = <x7>.<x9>)))"
+
+# Rule generation for ID 17 is already tested in test_generate_general_rule_22
+
+def test_generate_spreadsheet_id_18():
+    q0 = """SELECT DISTINCT ON (t.playerId) t.gzpId, t.pubCode, t.playerId,
+       COALESCE (p.preferenceValue,'en'),
+       s.segmentId 
+FROM userPlayerIdMap t LEFT JOIN
+     userPreferences p
+     ON t.gzpId  = p.gzpId LEFT JOIN
+     segment s
+     ON t.gzpId = s.gzpId 
+WHERE t.pubCode IN ('hyrmas','ayqioa','rj49as99') and
+      t.provider IN ('FCM','ONE_SIGNAL') and
+      s.segmentId IN (0,1,2,3,4,5,6) and
+      p.preferenceValue IN ('en','hi') 
+ORDER BY t.playerId desc;"""
+    
+    q1 = """SELECT t.gzpId, t.pubCode, t.playerId,
+       COALESCE((SELECT p.preferenceValue
+                 FROM userPreferences p
+                 WHERE t.gzpId = p.gzpId AND
+                       p.preferenceValue IN ('en', 'hi')
+                 LIMIT 1
+                ), 'en'
+               ),
+       (SELECT s.segmentId 
+        FROM segment s
+        WHERE t.gzpId = s.gzpId AND
+              s.segmentId IN (0, 1, 2, 3, 4, 5, 6)
+        LIMIT 1
+       )
+FROM userPlayerIdMap t
+WHERE t.pubCode IN ('hyrmas', 'ayqioa', 'rj49as99') and
+      t.provider IN ('FCM', 'ONE_SIGNAL');"""
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    assert StringUtil.strim(RuleGenerator._fingerPrint(q0_rule)) == StringUtil.strim(RuleGenerator._fingerPrint("SELECT DISTINCT ON (<x1>) <x2>, <x3>, <x4>, COALESCE(<x5>.<x6>, <x7>), <<x8>> FROM <x9> LEFT JOIN <x5> ON <<x10>> LEFT JOIN <x11> ON <<x12>> WHERE <<x13>> AND <x11>.<x14> IN (<x15>, <x16>, <x17>, <x18>, <x19>, <x20>, <x21>) AND <<x22>> ORDER BY <x9>.<x23> DESC"))
+    assert StringUtil.strim(RuleGenerator._fingerPrint(q1_rule)) == StringUtil.strim(RuleGenerator._fingerPrint("SELECT <x2>, <x3>, <x1>, COALESCE((SELECT <x4>.<x5> FROM <x4> WHERE <<x9>> AND <<x21>> LIMIT <x15>), <x6>), (SELECT <<x7>> FROM <x10> WHERE <<x11>> AND <x10>.<x13> IN (<x14>, <x15>, <x16>, <x17>, <x18>, <x19>, <x20>) LIMIT <x15>) FROM <x8> WHERE <<x12>>"))
+
+def test_generate_spreadsheet_id_20():
+    q0 = """SELECT * FROM (SELECT * FROM (SELECT NULL FROM EMP) WHERE N IS NULL) WHERE N IS NULL"""
+
+    q1 = """SELECT * FROM (SELECT NULL FROM EMP) WHERE N IS NULL"""
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    assert q0_rule == "SELECT <<x1>> FROM (SELECT NULL FROM <x2>) WHERE <<x3>>"
+    assert q1_rule == "SELECT NULL FROM <x2>"
+
+def test_generate_spreadsheet_id_21():
+    q0 = """SELECT * FROM (SELECT * FROM EMP AS t WHERE t.N IS NULL) AS t0 WHERE t0.N IS NULL"""
+    
+    q1 = """SELECT * FROM EMP AS t WHERE t.N IS NULL"""
+
+    rule = RuleGenerator.generate_general_rule(q0, q1)
+    assert type(rule) is dict
+
+    q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
+    assert q0_rule == "FROM (SELECT <<x1>> FROM <x2> WHERE <<x3>>) AS t0 WHERE t0.<x4> IS NULL"
+    assert q1_rule == "FROM <x2> WHERE <<x3>>"
+
 
 
 # def test_suggest_rules_bf_1():
