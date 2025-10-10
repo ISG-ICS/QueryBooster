@@ -757,7 +757,7 @@ def get_rule(key: str) -> dict:
         'actions': rule['actions'],
         'actions_json': json.loads(rule['actions_json']),
         'mapping': json.loads(rule['mapping']),
-        'database': rule['database']
+        'database': rule['database'],
         'examples': rule['examples']
     }
 
