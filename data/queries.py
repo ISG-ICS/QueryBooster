@@ -1,4 +1,3 @@
-
 queries = [
     {
         'id': 1,
@@ -89,7 +88,6 @@ queries = [
         '''
     },
 
-
     {
         'id': 4,
         'name': 'Replace Strpos Lower Match',
@@ -151,7 +149,6 @@ queries = [
          GROUP  BY 2;
         '''
     },
-
 
     {
         'id': 6,
@@ -216,29 +213,6 @@ queries = [
 
     {
         'id': 9,
-        'name': 'Remove Self Join Advance Match',
-        'pattern': '''
-        SELECT  e1.name, 
-                e1.age, 
-                e2.salary 
-        FROM employee e1, employee e2
-        WHERE e1.id = e2.id
-        AND e1.age > 17
-        AND e2.salary > 35000;
-        ''',
-        'rewrite': '''
-        SELECT  e1.name, 
-                e1.age, 
-                e1.salary 
-        FROM employee e1
-        WHERE 1=1
-        AND e1.age > 17
-        AND e1.salary > 35000;
-        '''
-    },
-
-    {
-        'id': 10,
         'name': 'Subquery to Join Match 1',
         'pattern': '''
         select empno, firstnme, lastname, phoneno
@@ -259,7 +233,7 @@ queries = [
     },
 
     {
-        'id': 11,
+        'id': 10,
         'name': 'Subquery to Join Match 2',
         'pattern': '''
         select empno, firstnme, lastname, phoneno
@@ -280,7 +254,7 @@ queries = [
     },
 
     {
-        'id': 12,
+        'id': 11,
         'name': 'Subquery to Join Match 3',
         'pattern': '''
         select e.empno, e.firstnme, e.lastname, e.phoneno
@@ -301,7 +275,7 @@ queries = [
     },
 
     {
-        'id': 13,
+        'id': 12,
         'name': 'Join to Filter Match 1',
         'pattern': '''
         SELECT *
@@ -326,7 +300,7 @@ queries = [
     },
 
     {
-        'id': 14,
+        'id': 13,
         'name': 'Join to Filter Match 2',
         'pattern': '''
         SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
@@ -351,7 +325,7 @@ queries = [
     },
 
     {
-        'id': 15,
+        'id': 14,
         'name': 'Test Rule Wetune 90 Match',
         'pattern': '''
         SELECT adminpermi0_.admin_permission_id AS admin_pe1_4_,
@@ -383,7 +357,7 @@ queries = [
     },
 
     {
-        'id': 16,
+        'id': 15,
         'name': 'Test Rule Calcite PushMinThroughUnion',
         'pattern': '''
         SELECT t.ENAME,
@@ -408,7 +382,7 @@ queries = [
     },
 
     {
-        'id': 17,
+        'id': 16,
         'name': 'Remove Max Distinct',
         'pattern': '''
         SELECT A, MAX(DISTINCT (SELECT B FROM R WHERE C = 0)), D
@@ -421,7 +395,7 @@ queries = [
     },
 
     {
-        'id': 18,
+        'id': 17,
         'name': 'Remove 1 Useless InnerJoin',
         'pattern': '''
         SELECT o_auth_applications.id
@@ -438,7 +412,7 @@ queries = [
     },
 
     {
-        'id': 19,
+        'id': 18,
         'name': 'Stackoverflow 1',
         'pattern': '''
         SELECT DISTINCT my_table.foo, your_table.boo
@@ -462,7 +436,7 @@ queries = [
     },
 
     {
-        'id': 20,
+        'id': 19,
         'name': 'Partial Matching Base Case 1',
         'pattern': '''
         SELECT *
@@ -481,7 +455,7 @@ queries = [
     },
 
     {
-        'id': 21,
+        'id': 20,
         'name': 'Partial Matching Base Case 2',
         'pattern': '''
         SELECT *
@@ -498,7 +472,7 @@ queries = [
     },
 
     {
-        'id': 22,
+        'id': 21,
         'name': 'Partial Matching 0',
         'pattern': '''
         SELECT *
@@ -517,26 +491,7 @@ queries = [
     },
 
     {
-        'id': 23,
-        'name': 'Partial Matching 1',
-        'pattern': '''
-        SELECT *
-        FROM A a
-        LEFT JOIN B b ON a.id = b.cid
-        WHERE
-        b.cl1 = 's1' OR b.cl1 = 's2' OR b.cl1 = 's3'
-        ''',
-        'rewrite': '''
-        SELECT *
-        FROM A a
-        LEFT JOIN B b ON a.id = b.cid
-        WHERE
-        b.cl1 IN ('s3', 's1', 's2')
-        '''
-    },
-
-    {
-        'id': 24,
+        'id': 22,
         'name': 'Partial Matching 4',
         'pattern': '''
         select empno, firstname, lastname, phoneno
@@ -557,7 +512,7 @@ queries = [
     },
 
     {
-        'id': 25,
+        'id': 23,
         'name': 'Partial Keeps Remaining OR',
         'pattern': '''
         SELECT entities.data
@@ -581,7 +536,7 @@ queries = [
     },
 
     {
-        'id': 26,
+        'id': 24,
         'name': 'Partial Keeps Remaining AND',
         'pattern': '''
         SELECT Empno
@@ -599,7 +554,7 @@ queries = [
     },
 
     {
-        'id': 27,
+        'id': 25,
         'name': 'And On True',
         'pattern': '''
         SELECT people.name
@@ -613,7 +568,7 @@ queries = [
     },
 
     {
-        'id': 28,
+        'id': 26,
         'name': 'Multiple And On True',
         'pattern': '''
         SELECT name
@@ -627,7 +582,7 @@ queries = [
     },
 
     {
-        'id': 29,
+        'id': 27,
         'name': 'Remove Where True',
         'pattern': '''
         SELECT *
@@ -640,9 +595,8 @@ queries = [
         '''
     },
 
-    # Rewrite Skips Failed Partial
     {
-        'id': 30,
+        'id': 28,
         'name': 'Rewrite Skips Failed Partial',
         'pattern': '''
         SELECT * 
@@ -667,53 +621,7 @@ queries = [
     },
 
     {
-        'id': 31,
-        'name': 'Matching Order',
-        'pattern': '''
-    SELECT entities.data FROM entities WHERE 
-    entities._id IN (SELECT index_users_email._id FROM index_users_email WHERE index_users_email.key = 'test')
-    OR 
-    entities._id in (SELECT index_users_profile_name._id FROM index_users_profile_name WHERE index_users_profile_name.key = 'test')
-    ''',
-        'rewrite': '''
-    SELECT entities.data FROM entities INNER JOIN index_users_email ON index_users_email._id = entities._id
-    WHERE index_users_email.key = 'test'
-    UNION
-    SELECT entities.data FROM entities INNER JOIN index_users_profile_name ON index_users_profile_name._id = entities._id
-    WHERE index_users_profile_name.key = 'test'
-    '''
-    },
-
-    {
-        'id': 32,
-        'name': 'No Over Matching',
-        'pattern': '''
-    SELECT entities.data FROM entities WHERE 
-    entities._id IN (SELECT index_users_email._id FROM index_users_email WHERE index_users_email.key = 'test')
-    OR 
-    entities._id in (SELECT index_users_profile_name._id FROM index_users_profile_name WHERE index_users_profile_name.key = 'test')
-    ''',
-        'rewrite': '''
-    SELECT
-        entities.data
-    FROM
-        entities
-    INNER JOIN index_users_email ON index_users_email._id = entities._id
-    WHERE
-        index_users_email.key = 'test'
-        OR entities._id IN (
-            SELECT
-                index_users_profile_name._id
-            FROM
-                index_users_profile_name
-            WHERE
-                index_users_profile_name.key = 'test'
-        )
-    '''
-    },
-
-    {
-        'id': 33,
+        'id': 29,
         'name': 'Full Matching',
         'pattern': '''
         SELECT entities.data FROM entities WHERE entities._id IN (SELECT index_users_email._id FROM index_users_email WHERE index_users_email.key = 'test')
@@ -728,7 +636,7 @@ queries = [
     },
 
     {
-        'id': 34,
+        'id': 30,
         'name': 'Over Partial Matching',
         'pattern': '''
         SELECT * FROM table_name WHERE (table_name.title = 1 and table_name.grade = 2) OR (table_name.title = 2 and table_name.debt = 2 and table_name.grade = 3) OR (table_name.prog = 1 and table_name.title =1 and table_name.debt = 3)
@@ -739,7 +647,7 @@ queries = [
     },
 
     {
-        'id': 35,
+        'id': 31,
         'name': 'Aggregation to Subquery',
         'pattern': '''
 SELECT 
@@ -771,7 +679,7 @@ GROUP BY t1.CPF, t1.data
     },
 
     {
-        'id': 36,
+        'id': 32,
         'name': 'Spreadsheet ID 2',
         'pattern': '''
 SELECT * 
@@ -804,7 +712,7 @@ LIMIT 10
     },
 
     {
-        'id': 37,
+        'id': 33,
         'name': 'Spreadsheet ID 3',
         'pattern': '''
 SELECT EMPNO FROM EMP WHERE EMPNO > 10 AND EMPNO <= 10
@@ -815,58 +723,7 @@ SELECT EMPNO FROM EMP WHERE FALSE
     },
 
     {
-        'id': 38,
-        'name': 'Spreadsheet ID 4',
-        'pattern': '''SELECT entities.data FROM entities WHERE 
-  entities._id IN (SELECT index_users_email._id FROM index_users_email WHERE index_users_email.key = 'test')
- OR 
-  entities._id in (SELECT index_users_profile_name._id FROM index_users_profile_name WHERE index_users_profile_name.key = 'test')
-        ''',
-        'rewrite': '''SELECT entities.data FROM entities 
-WHERE entities._id IN 
- ( SELECT index_users_email._id 
-   FROM index_users_email 
-   WHERE index_users_email.key = 'test'
- )
-UNION
-SELECT entities.data FROM entities
-WHERE entities._id in 
- ( SELECT index_users_profile_name._id 
-   FROM index_users_profile_name 
-   WHERE index_users_profile_name.key = 'test'
- )'''
-    },
-
-    {
-        'id': 39,
-        'name': 'Spreadsheet ID 6',
-        'pattern': '''
-SELECT * 
-FROM
-    table_name 
- WHERE
-    (table_name.title = 1 and table_name.grade = 2)
- OR
-    (table_name.title = 2 and table_name.debt = 2 and table_name.grade = 3)
- OR
-     (table_name.prog = 1 and table_name.title =1 and table_name.debt = 3)
-        ''',
-        'rewrite': '''
-SELECT *
-FROM
-    table_name 
- WHERE
-     1 = case
-           when table_name.title = 1 and table_name.grade = 2 then 1
-           when table_name.title = 2 and table_name.debt = 2 and table_name.grade = 3 then 1
-           when table_name.prog = 1 and table_name.title = 1 and table_name.debt = 3 then 1
-        else 0
-     end
-        '''
-    },
-
-    {
-        'id': 40,
+        'id': 34,
         'name': 'Spreadsheet ID 7',
         'pattern': '''
 select * from 
@@ -889,7 +746,7 @@ b.cl1 in ('s1','s2','s3')
     },
 
     {
-        'id': 41,
+        'id': 35,
         'name': 'Spreadsheet ID 9',
         'pattern': '''
 SELECT DISTINCT my_table.foo
@@ -905,7 +762,7 @@ GROUP BY my_table.foo;
     },
 
     {
-        'id': 42,
+        'id': 36,
         'name': 'Spreadsheet ID 10',
         'pattern': '''
 SELECT table1.wpis_id
@@ -925,7 +782,7 @@ WHERE table2.postac_id = 376476
     },
 
     {
-        'id': 43,
+        'id': 37,
         'name': 'Spreadsheet ID 11',
         'pattern': '''
 SELECT historicoestatusrequisicion_id, requisicion_id, estatusrequisicion_id, 
@@ -948,7 +805,7 @@ SELECT hist1.historicoestatusrequisicion_id, hist1.requisicion_id, hist1.estatus
     },
 
     {
-        'id': 44,
+        'id': 38,
         'name': 'Spreadsheet ID 12',
         'pattern': '''
 SELECT po.id, 
@@ -978,7 +835,7 @@ GROUP BY po.id
     },
 
     {
-        'id': 45,
+        'id': 39,
         'name': 'Spreadsheet ID 15',
         'pattern': '''
 SELECT *
@@ -1022,7 +879,7 @@ WHERE EXISTS (
     },
 
     {
-        'id': 46,
+        'id': 40,
         'name': 'Spreadsheet ID 18',
         'pattern': '''
 SELECT DISTINCT ON (t.playerId) t.gzpId, t.pubCode, t.playerId,
@@ -1061,7 +918,7 @@ WHERE t.pubCode IN ('hyrmas', 'ayqioa', 'rj49as99') and
     },
 
     {
-        'id': 47,
+        'id': 41,
         'name': 'Spreadsheet ID 20',
         'pattern': '''
 SELECT * FROM (SELECT * FROM (SELECT NULL FROM EMP) WHERE N IS NULL) WHERE N IS NULL
@@ -1072,7 +929,7 @@ SELECT NULL FROM EMP
     },
 
     {
-        'id': 48,
+        'id': 42,
         'name': 'PostgreSQL Test',
         'pattern': '''
         SELECT "tweets"."latitude" AS "latitude",
@@ -1080,9 +937,9 @@ SELECT NULL FROM EMP
           FROM "public"."tweets" "tweets"
          WHERE (("tweets"."latitude" >= -90) AND ("tweets"."latitude" <= 80) 
            AND ((("tweets"."longitude" >= -173.80000000000001) AND ("tweets"."longitude" <= 180)) OR ("tweets"."longitude" IS NULL)) 
-           AND (CAST((DATE_TRUNC( \'day\', CAST("tweets"."created_at" AS DATE) ) + (-EXTRACT(DOW FROM "tweets"."created_at") * INTERVAL \'1 DAY\')) AS DATE) 
-                = (TIMESTAMP \'2018-04-22 00:00:00.000\')) 
-           AND (STRPOS(CAST(LOWER(CAST(CAST("tweets"."text" AS TEXT) AS TEXT)) AS TEXT),CAST(\'microsoft\' AS TEXT)) > 0))
+           AND (CAST((DATE_TRUNC( 'day', CAST("tweets"."created_at" AS DATE) ) + (-EXTRACT(DOW FROM "tweets"."created_at") * INTERVAL '1 DAY')) AS DATE) 
+                = (TIMESTAMP '2018-04-22 00:00:00.000')) 
+           AND (STRPOS(CAST(LOWER(CAST(CAST("tweets"."text" AS TEXT) AS TEXT)) AS TEXT),CAST('microsoft' AS TEXT)) > 0))
            GROUP BY 1, 2
     ''',
         'rewrite': '''
@@ -1091,23 +948,25 @@ SELECT NULL FROM EMP
           FROM "public"."tweets" "tweets"
          WHERE (("tweets"."latitude" >= -90) AND ("tweets"."latitude" <= 80) 
            AND ((("tweets"."longitude" >= -173.80000000000001) AND ("tweets"."longitude" <= 180)) OR ("tweets"."longitude" IS NULL)) 
-           AND ((DATE_TRUNC( \'day\', "tweets"."created_at" ) + (-EXTRACT(DOW FROM "tweets"."created_at") * INTERVAL \'1 DAY\')) 
-                = (TIMESTAMP \'2018-04-22 00:00:00.000\')) 
-           AND "tweets"."text" ILIKE \'%microsoft%\')
+           AND ((DATE_TRUNC( 'day', "tweets"."created_at" ) + (-EXTRACT(DOW FROM "tweets"."created_at") * INTERVAL '1 DAY')) 
+                = (TIMESTAMP '2018-04-22 00:00:00.000')) 
+           AND "tweets"."text" ILIKE '%microsoft%')
            GROUP BY 1, 2
     '''
     },
 
     {
-        'id': 49,
+        'id': 43,
         'name': 'MySQL Test',
-        'pattern': '''SELECT `tweets`.`latitude` AS `latitude`,
+        'pattern': '''
+SELECT `tweets`.`latitude` AS `latitude`,
                     `tweets`.`longitude` AS `longitude`
                FROM `tweets`
               WHERE ((ADDDATE(DATE_FORMAT(`tweets`.`created_at`, '%Y-%m-01 00:00:00'), INTERVAL 0 SECOND) = TIMESTAMP('2017-03-01 00:00:00'))
                 AND (LOCATE('iphone', LOWER(`tweets`.`text`)) > 0))
               GROUP BY 1, 2''',
-        'rewrite': '''SELECT `tweets`.`latitude` AS `latitude`,
+        'rewrite': '''
+SELECT `tweets`.`latitude` AS `latitude`,
                     `tweets`.`longitude` AS `longitude`
                FROM `tweets`
               WHERE ((DATE_FORMAT(`tweets`.`created_at`, '%Y-%m-01 00:00:00') = TIMESTAMP('2017-03-01 00:00:00'))
@@ -1118,4 +977,4 @@ SELECT NULL FROM EMP
 
 
 def get_query(query_id: int) -> dict:
-    return next(filter(lambda x: x['id'] == query_id, queries), None)
+    return next(filter(lambda x: x["id"] == query_id, queries), None)

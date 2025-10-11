@@ -1,3 +1,4 @@
+from core.ast.node import QueryNode
 
 class QueryParser:
 

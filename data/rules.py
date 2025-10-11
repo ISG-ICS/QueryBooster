@@ -19,7 +19,7 @@ rules = [
         # 'actions_json': '[]',
         # 'mapping': '{"x": "V1"}',
         'database': 'postgresql',
-        'examples': [17]
+        'examples': [16]
     },
 
     {
@@ -36,7 +36,7 @@ rules = [
         # 'actions_json': "[]",
         # 'mapping': "{\"x\": \"V1\"}",
         'database': 'postgresql',
-        'examples': [1, 2, 48]
+        'examples': [1, 2, 42]
     },
 
     {
@@ -48,7 +48,7 @@ rules = [
         'rewrite': '<x>',
         'actions': '',
         'database': 'postgresql',
-        'examples': [48]
+        'examples': [42]
     },
 
     {
@@ -65,7 +65,7 @@ rules = [
         # 'actions_json': "[]",
         # 'mapping': "{\"x\": \"V1\", \"y\": \"V2\"}",
         'database': 'postgresql',
-        'examples': [4, 48]
+        'examples': [4, 42]
     },
 
     {
@@ -139,7 +139,7 @@ select distinct <<s1>>
         ''',
         'actions': '',
         'database': 'postgresql',
-        'examples': [10, 11, 12, 24]
+        'examples': [9, 10, 11, 22]
     },
 
     {
@@ -164,7 +164,7 @@ select <<s1>>
         ''',
         'actions': '',
         'database': 'postgresql',
-        'examples': [13, 14]
+        'examples': [12, 13]
     },
 
     {
@@ -277,7 +277,7 @@ SELECT <x3>.<x6>
         ''',
         'actions': '',
         'database': 'postgresql',
-        'examples': [18]
+        'examples': [17]
     },
 
     {
@@ -289,7 +289,7 @@ SELECT <x3>.<x6>
         'rewrite': 'FROM <x1>',
         'actions': '',
         'database': 'postgresql',
-        'examples': [29]
+        'examples': [27]
     },
 
     {
@@ -301,7 +301,7 @@ SELECT <x3>.<x6>
         'rewrite': 'SELECT <x1>.<x3> FROM <x1> INNER JOIN <x2> ON <x2>.<x5> = <x1>.<x4> WHERE <x2>.<x6> = <x7>',
         'actions': '',
         'database': 'postgresql',
-        'examples': [25, 30, 31, 32, 33]
+        'examples': [23, 28, 31, 32, 29]
     },
 
     {
@@ -313,7 +313,7 @@ SELECT <x3>.<x6>
         'rewrite': 'SELECT <<x2>> FROM <<x1>> WHERE False',
         'actions': '',
         'database': 'postgresql',
-        'examples': [26]
+        'examples': [24]
     },
 
     {
@@ -335,7 +335,7 @@ SELECT <x3>.<x6>
                       AND <<x8>>''',
         'actions': '',
         'database': 'postgresql',
-        'examples': [30]
+        'examples': [28]
     }, 
 
     {
@@ -347,7 +347,7 @@ SELECT <x3>.<x6>
         'rewrite': '''SELECT <x2>.<x9>, <x2>.<x3> FROM (SELECT <x9>, DATE(<x3>) FROM <x8> WHERE <x4> = <x5>) AS <x2> GROUP BY <<x7>>, <x2>.<x3>''',
         'actions': '',
         'database': 'postgresql',
-        'examples': [35]
+        'examples': [31]
     }, 
 
     {
@@ -359,7 +359,7 @@ SELECT <x3>.<x6>
         'rewrite': '''SELECT <<x11>> FROM ((SELECT <<x11>> FROM <x1> WHERE <x2> LIMIT <x12>) UNION (SELECT <<x11>> FROM <x1> WHERE EXISTS (SELECT <x6> FROM <x4> WHERE <x5> IN (<x6>, <x7>, <x8>, <x9>) AND <<x10>>) LIMIT <x12>)) LIMIT <x12>''',
         'actions': '',
         'database': 'postgresql',
-        'examples': [36]
+        'examples': [32]
     },
 
     {
@@ -371,7 +371,7 @@ SELECT <x3>.<x6>
         'rewrite': '''FALSE''',
         'actions': '',
         'database': 'postgresql',
-        'examples': [37]
+        'examples': [33]
     },
 
     {
@@ -407,7 +407,7 @@ SELECT <x3>.<x6>
         'rewrite': '''<x2>.<x3> IN ('<x9>', '<x8>', '<x7>')''',
         'actions': '',
         'database': 'postgresql',
-        'examples': [40]
+        'examples': [34]
     },
 
     {
@@ -419,7 +419,7 @@ SELECT <x3>.<x6>
         'rewrite': '''SELECT <x6> FROM <x1> WHERE <<y1>> GROUP BY <x6>''',
         'actions': '',
         'database': 'postgresql',
-        'examples': [41]
+        'examples': [35]
     },
   
     {
@@ -431,7 +431,7 @@ SELECT <x3>.<x6>
         'rewrite': '''FROM <x1> INNER JOIN <x2> ON <x2>.<x6> = <x1>.<x5> WHERE <<y1>>''',
         'actions': '',
         'database': 'postgresql',
-        'examples': [42]
+        'examples': [36]
     },
   
     {
@@ -443,7 +443,7 @@ SELECT <x3>.<x6>
         'rewrite': '''SELECT <x1>.<x7>, <x1>.<x6>, <x1>.<x8>, <x1>.<x4>, <x1>.<x5>, <x1>.<x3> FROM <x1> JOIN <x2> ON <x2>.<x6> = <x1>.<x6> WHERE <x2>.<x3> = <x10> AND <x2>.<x8> = <x9> ORDER BY <x1>.<x6>, <x1>.<x8>''',
         'actions': '',
         'database': 'postgresql',
-        'examples': [43]
+        'examples': [37]
     },
   
     {
@@ -455,7 +455,7 @@ SELECT <x3>.<x6>
         'rewrite': '''SELECT <<y2>>, (SELECT <x12> FROM <x2> WHERE <x2>.<x6> = <x1>.<x8> GROUP BY <x11>) AS <x13> FROM <x1> WHERE <x5> = <x9>''',
         'actions': '',
         'database': 'postgresql',
-        'examples': [44]
+        'examples': [38]
     },
   
     {
@@ -467,7 +467,7 @@ SELECT <x3>.<x6>
         'rewrite': '''EXISTS (SELECT NULL FROM <x2> WHERE <<y1>> AND <x1>.<x9> = <x2>.<x7> AND EXISTS (SELECT NULL FROM <x3> WHERE <<y2>> AND (<x2>.<x5> = <x3>.<x5> OR <x2>.<x6> = <x3>.<x6>)))''',
         'actions': '',
         'database': 'postgresql',
-        'examples': [45]
+        'examples': [39]
     },
   
     {
@@ -479,7 +479,7 @@ SELECT <x3>.<x6>
         'rewrite': '''SELECT <x2>, <x3>, <x1>, COALESCE((SELECT <x4>.<x5> FROM <x4> WHERE <<x9>> AND <<x21>> LIMIT 1), <x6>), (SELECT <<x7>> FROM <x10> WHERE <<x11>> AND <x10>.<x13> IN (<x14>, <x15>, <x16>, <x17>, <x18>, <x19>, <x20>) LIMIT <x15>) FROM <x8> WHERE <x23> AND <x24>''',
         'actions': '',
         'database': 'postgresql',
-        'examples': [46]
+        'examples': [40]
     },
   
     {
@@ -491,7 +491,7 @@ SELECT <x3>.<x6>
         'rewrite': '''SELECT NULL FROM <x1>''',
         'actions': '',
         'database': 'postgresql',
-        'examples': [47]
+        'examples': [41]
     },
 
     {
@@ -520,7 +520,7 @@ SELECT <x1>.<x6> AS admin_pe1_4_, <x1>.<x5> AS descript2_4_, <x1>.<x4> AS is_fri
         ''',
         'actions': '',
         'database': 'postgresql',
-        'examples': [15]
+        'examples': [14]
     },
 
     {
@@ -557,7 +557,7 @@ SELECT adminpermi0_.admin_permission_id AS admin_pe1_4_,
         ''',
         'actions': '',
         'database': 'postgresql',
-        'examples': [15]
+        'examples': [14]
     },
 
     {
@@ -586,7 +586,7 @@ SELECT t6.<x3>, MIN(MIN(<x1>.<x4>))
         ''',
         'actions': '',
         'database': 'postgresql',
-        'examples': [16]
+        'examples': [15]
     },
 
     # MySQL Rules
@@ -605,7 +605,7 @@ SELECT t6.<x3>, MIN(MIN(<x1>.<x4>))
         # 'actions_json': "[]",
         # 'mapping': "{\"x\": \"V1\"}",
         'database': 'mysql',
-        'examples': [49]
+        'examples': [43]
     },
 
     {
@@ -622,7 +622,7 @@ SELECT t6.<x3>, MIN(MIN(<x1>.<x4>))
         # 'actions_json': "[]",
         # 'mapping': "{\"x\": \"V1\", \"y\": \"V2\"}",
         'database': 'mysql',
-        'examples': [49]
+        'examples': [43]
     },
 
     {
@@ -634,7 +634,7 @@ SELECT t6.<x3>, MIN(MIN(<x1>.<x4>))
         'rewrite': 'SELECT <<x2>> FROM <<x1>> WHERE <<y1>> GROUP BY <<x2>>',
         'actions': '',
         'database': 'postgresql',
-        'examples': [19]
+        'examples': [18]
     },
     {
         'id': 2258,
@@ -645,7 +645,7 @@ SELECT t6.<x3>, MIN(MIN(<x1>.<x4>))
         'rewrite': '<x> IN (<y>, <z>)',
         'actions': '',
         'database': 'mysql',
-        'examples': [20, 22, 23, 40]
+        'examples': [19, 21, 23, 34]
     },
     {
         'id': 2280,
@@ -656,7 +656,7 @@ SELECT t6.<x3>, MIN(MIN(<x1>.<x4>))
         'rewrite': '<x> IN (<y>, <z>, <w>)',
         'actions': '',
         'database': 'mysql',
-        'examples': [34]
+        'examples': [30]
     },
     {
         'id': 2259,
@@ -667,7 +667,7 @@ SELECT t6.<x3>, MIN(MIN(<x1>.<x4>))
         'rewrite': '<x> IN (<<y>>, <z>)',
         'actions': '',
         'database': 'mysql',
-        'examples': [21]
+        'examples': [20]
     },
     {
         'id': 2260,
@@ -700,7 +700,7 @@ SELECT t6.<x3>, MIN(MIN(<x1>.<x4>))
       "rewrite": "SELECT DISTINCT <x17>, <x16>, <x15>, <x14> FROM <x1>, <x2> WHERE <x1>.<x8> = <x2>.<x4> AND <<y2>>",
       'actions': '',
       'database': 'mysql',
-      'examples': [24]
+      'examples': [22]
     },
     {
       "id": 2263,
@@ -711,7 +711,7 @@ SELECT t6.<x3>, MIN(MIN(<x1>.<x4>))
       "rewrite": "FROM <x1>",
       'actions': '',
       'database': 'mysql',
-      'examples': [27]
+      'examples': [25]
     },
     {
       "id": 2264,
@@ -722,7 +722,7 @@ SELECT t6.<x3>, MIN(MIN(<x1>.<x4>))
       "rewrite": "FROM <x1>",
       'actions': '',
       'database': 'mysql',
-      'examples': [28]
+      'examples': [26]
     },
     {
       "id": 2265,
