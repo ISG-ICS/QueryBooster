@@ -1472,13 +1472,13 @@ class RuleGenerator:
                 # if the subtree is the same as the given subtree
                 #
                 if RuleGenerator.sameSubtree(astJson, subtree):
-                    # special case for 'select' list
+                    # special case for 'select' or 'distinct_on' list
                     #  e.g., for {'select': [{'value': 'V001.V002'}, {'value': 'V001.age'}, ...]}
                     #        astJson = {'value': 'V001.V002'}
                     #        subtree = {'value': 'V001.V002'}
                     #        var = 'V005'
                     #        we should return {'value': 'V005'}
-                    if len(path) > 0 and path[-1] == 'select' and 'value'in astJson.keys():
+                    if len(path) > 0 and path[-1] in ['select', 'distinct_on'] and 'value'in astJson.keys():
                         return {'value': var}
                     # otherwise
                     return var
