@@ -120,7 +120,7 @@ class HavingNode(Node):
 
 
 class OrderByItemNode(Node):
-    """Single ORDER BY item with sort direction"""
+    """Single ORDER BY item"""
     def __init__(self, _column: Node, _sort: str = 'asc', **kwargs):
         super().__init__(NodeType.ORDER_BY_ITEM, children=[_column], **kwargs)
         self.sort = _sort
