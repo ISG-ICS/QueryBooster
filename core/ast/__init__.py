@@ -43,6 +43,7 @@ __all__ = [
     'GroupByNode',
     'HavingNode',
     'OrderByNode',
+    'OrderByItemNode',
     'LimitNode',
     'OffsetNode',
     'QueryNode'

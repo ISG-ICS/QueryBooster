@@ -76,11 +76,12 @@ class OperatorNode(Node):
 
 class FunctionNode(Node):
     """Function call node"""
-    def __init__(self, _name: str, _args: Optional[List[Node]] = None, **kwargs):
+    def __init__(self, _name: str, _args: Optional[List[Node]] = None, _alias: Optional[str] = None, **kwargs):
         if _args is None:
             _args = []
         super().__init__(NodeType.FUNCTION, children=_args, **kwargs)
         self.name = _name
+        self.alias = _alias
 
 
 # ============================================================================
@@ -89,20 +90,20 @@ class FunctionNode(Node):
 
 class SelectNode(Node):
     """SELECT clause node"""
-    def __init__(self, _items: Set['Node'], **kwargs):
+    def __init__(self, _items: List['Node'], **kwargs):
         super().__init__(NodeType.SELECT, children=_items, **kwargs)
 
 
 # TODO - confine the valid NodeTypes as children of FromNode
 class FromNode(Node):
     """FROM clause node"""
-    def __init__(self, _sources: Set['Node'], **kwargs):
+    def __init__(self, _sources: List['Node'], **kwargs):
         super().__init__(NodeType.FROM, children=_sources, **kwargs)
 
 
 class WhereNode(Node):
     """WHERE clause node"""
-    def __init__(self, _predicates: Set['Node'], **kwargs):
+    def __init__(self, _predicates: List['Node'], **kwargs):
         super().__init__(NodeType.WHERE, children=_predicates, **kwargs)
 
 
@@ -114,14 +115,21 @@ class GroupByNode(Node):
 
 class HavingNode(Node):
     """HAVING clause node"""
-    def __init__(self, _predicates: Set['Node'], **kwargs):
+    def __init__(self, _predicates: List['Node'], **kwargs):
         super().__init__(NodeType.HAVING, children=_predicates, **kwargs)
 
 
+class OrderByItemNode(Node):
+    """Single ORDER BY item with sort direction"""
+    def __init__(self, _column: Node, _sort: str = 'asc', **kwargs):
+        super().__init__(NodeType.ORDER_BY_ITEM, children=[_column], **kwargs)
+        self.sort = _sort
+
 class OrderByNode(Node):
     """ORDER BY clause node"""
-    def __init__(self, _items: List['Node'], **kwargs):
+    def __init__(self, _items: List['Node'], _sort: Optional[str] = None, **kwargs):
         super().__init__(NodeType.ORDER_BY, children=_items, **kwargs)
+        self.sort = _sort 
 
 
 class LimitNode(Node):

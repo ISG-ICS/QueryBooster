@@ -27,6 +27,7 @@ class NodeType(Enum):
     GROUP_BY = "group_by"
     HAVING = "having"
     ORDER_BY = "order_by"
+    ORDER_BY_ITEM = "order_by_item"
     LIMIT = "limit"
     OFFSET = "offset"
     QUERY = "query"
