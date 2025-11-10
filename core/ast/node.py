@@ -13,6 +13,31 @@ class Node(ABC):
     def __init__(self, type: NodeType, children: Optional[Set['Node']|List['Node']] = None):
         self.type = type
         self.children = children if children is not None else set()
+    
+    def __eq__(self, other):
+        if not isinstance(other, Node):
+            return False
+        if self.type != other.type:
+            return False
+        if len(self.children) != len(other.children):
+            return False
+        # Compare children
+        if isinstance(self.children, set) and isinstance(other.children, set):
+            return self.children == other.children
+        elif isinstance(self.children, list) and isinstance(other.children, list):
+            return self.children == other.children
+        else:
+            return False
+    
+    def __hash__(self):
+        # Make nodes hashable by using their type and a hash of their children
+        if isinstance(self.children, set):
+            # For sets, create a deterministic hash by sorting children by their string representation
+            children_hash = hash(tuple(sorted(self.children, key=lambda x: str(x))))
+        else:
+            # For lists, just hash the tuple directly
+            children_hash = hash(tuple(self.children))
+        return hash((self.type, children_hash))
 
 
 # ============================================================================
@@ -25,6 +50,16 @@ class TableNode(Node):
         super().__init__(NodeType.TABLE, **kwargs)
         self.name = _name
         self.alias = _alias
+    
+    def __eq__(self, other):
+        if not isinstance(other, TableNode):
+            return False
+        return (super().__eq__(other) and 
+                self.name == other.name and 
+                self.alias == other.alias)
+    
+    def __hash__(self):
+        return hash((super().__hash__(), self.name, self.alias))
 
 
 # TODO - including query structure arguments (similar to QueryNode) in constructor.
@@ -43,6 +78,17 @@ class ColumnNode(Node):
         self.alias = _alias
         self.parent_alias = _parent_alias
         self.parent = _parent
+    
+    def __eq__(self, other):
+        if not isinstance(other, ColumnNode):
+            return False
+        return (super().__eq__(other) and 
+                self.name == other.name and 
+                self.alias == other.alias and 
+                self.parent_alias == other.parent_alias)
+    
+    def __hash__(self):
+        return hash((super().__hash__(), self.name, self.alias, self.parent_alias))
 
 
 class LiteralNode(Node):
@@ -50,6 +96,15 @@ class LiteralNode(Node):
     def __init__(self, _value: str|int|float|bool|datetime|None, **kwargs):
         super().__init__(NodeType.LITERAL, **kwargs)
         self.value = _value
+
+    def __eq__(self, other):
+        if not isinstance(other, LiteralNode):
+            return False
+        return (super().__eq__(other) and 
+                self.value == other.value)
+    
+    def __hash__(self):
+        return hash((super().__hash__(), self.value))
 
 
 class VarNode(Node):
@@ -72,6 +127,15 @@ class OperatorNode(Node):
         children = [_left, _right] if _right else [_left]
         super().__init__(NodeType.OPERATOR, children=children, **kwargs)
         self.name = _name
+    
+    def __eq__(self, other):
+        if not isinstance(other, OperatorNode):
+            return False
+        return (super().__eq__(other) and 
+                self.name == other.name)
+    
+    def __hash__(self):
+        return hash((super().__hash__(), self.name))
 
 
 class FunctionNode(Node):
@@ -82,7 +146,38 @@ class FunctionNode(Node):
         super().__init__(NodeType.FUNCTION, children=_args, **kwargs)
         self.name = _name
         self.alias = _alias
+    
+    def __eq__(self, other):
+        if not isinstance(other, FunctionNode):
+            return False
+        return (super().__eq__(other) and 
+                self.name == other.name and 
+                self.alias == other.alias)
+    
+    def __hash__(self):
+        return hash((super().__hash__(), self.name, self.alias))
 
+
+class JoinNode(Node):
+    """JOIN clause node"""
+    def __init__(self, _left_table: 'TableNode', _right_table: 'TableNode', _join_type: str = "INNER", _on_condition: Optional['Node'] = None, **kwargs):
+        children = [_left_table, _right_table]
+        if _on_condition:
+            children.append(_on_condition)
+        super().__init__(NodeType.JOIN, children=children, **kwargs)
+        self.left_table = _left_table
+        self.right_table = _right_table
+        self.join_type = _join_type
+        self.on_condition = _on_condition
+    
+    def __eq__(self, other):
+        if not isinstance(other, JoinNode):
+            return False
+        return (super().__eq__(other) and 
+                self.join_type == other.join_type)
+    
+    def __hash__(self):
+        return hash((super().__hash__(), self.join_type))
 
 # ============================================================================
 # Query Structure Nodes
@@ -137,6 +232,15 @@ class LimitNode(Node):
     def __init__(self, _limit: int, **kwargs):
         super().__init__(NodeType.LIMIT, **kwargs)
         self.limit = _limit
+    
+    def __eq__(self, other):
+        if not isinstance(other, LimitNode):
+            return False
+        return (super().__eq__(other) and 
+                self.limit == other.limit)
+    
+    def __hash__(self):
+        return hash((super().__hash__(), self.limit))
 
 
 class OffsetNode(Node):
@@ -144,6 +248,15 @@ class OffsetNode(Node):
     def __init__(self, _offset: int, **kwargs):
         super().__init__(NodeType.OFFSET, **kwargs)
         self.offset = _offset
+    
+    def __eq__(self, other):
+        if not isinstance(other, OffsetNode):
+            return False
+        return (super().__eq__(other) and 
+                self.offset == other.offset)
+    
+    def __hash__(self):
+        return hash((super().__hash__(), self.offset))
 
 
 class QueryNode(Node):
