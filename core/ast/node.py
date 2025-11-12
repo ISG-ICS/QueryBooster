@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List, Set, Optional
 from abc import ABC
 
-from .node_type import NodeType
+from .node_type import NodeType, JoinType
 from .sort_order import SortOrder
 
 # ============================================================================
@@ -161,7 +161,7 @@ class FunctionNode(Node):
 
 class JoinNode(Node):
     """JOIN clause node"""
-    def __init__(self, _left_table: 'TableNode', _right_table: 'TableNode', _join_type: str = "INNER", _on_condition: Optional['Node'] = None, **kwargs):
+    def __init__(self, _left_table: 'TableNode', _right_table: 'TableNode', _join_type: JoinType = JoinType.INNER, _on_condition: Optional['Node'] = None, **kwargs):
         children = [_left_table, _right_table]
         if _on_condition:
             children.append(_on_condition)

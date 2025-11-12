@@ -32,3 +32,19 @@ class NodeType(Enum):
     LIMIT = "limit"
     OFFSET = "offset"
     QUERY = "query"
+
+# ============================================================================
+# Join Type Enumeration
+# ============================================================================
+
+class JoinType(Enum):
+    """Join type enumeration"""
+    INNER = "inner"
+    OUTER = "outer"
+    LEFT = "left"
+    RIGHT = "right"
+    FULL = "full"
+    CROSS = "cross"
+    NATURAL = "natural"
+    SEMI = "semi"
+    ANTI = "anti"
