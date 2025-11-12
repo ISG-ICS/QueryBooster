@@ -3,6 +3,7 @@ from typing import List, Set, Optional
 from abc import ABC
 
 from .node_type import NodeType
+from .sort_order import SortOrder
 
 # ============================================================================
 # Base Node Structure
@@ -216,13 +217,13 @@ class HavingNode(Node):
 
 class OrderByItemNode(Node):
     """Single ORDER BY item"""
-    def __init__(self, _column: Node, _sort: str = 'asc', **kwargs):
+    def __init__(self, _column: Node, _sort: SortOrder = SortOrder.ASC, **kwargs):
         super().__init__(NodeType.ORDER_BY_ITEM, children=[_column], **kwargs)
         self.sort = _sort
 
 class OrderByNode(Node):
     """ORDER BY clause node"""
-    def __init__(self, _items: List['Node'], _sort: Optional[str] = None, **kwargs):
+    def __init__(self, _items: List['Node'], _sort: Optional[SortOrder] = None, **kwargs):
         super().__init__(NodeType.ORDER_BY, children=_items, **kwargs)
         self.sort = _sort 
 
