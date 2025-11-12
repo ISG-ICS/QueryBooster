@@ -24,6 +24,7 @@ class NodeType(Enum):
     SELECT = "select"
     FROM = "from"
     WHERE = "where"
+    JOIN = "join"
     GROUP_BY = "group_by"
     HAVING = "having"
     ORDER_BY = "order_by"
