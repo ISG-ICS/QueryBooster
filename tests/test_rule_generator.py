@@ -2556,8 +2556,8 @@ WHERE t.pubCode IN ('hyrmas', 'ayqioa', 'rj49as99') and
     assert type(rule) is dict
 
     q0_rule, q1_rule = unify_variable_names(rule['pattern'], rule['rewrite'])
-    assert StringUtil.strim(RuleGenerator._fingerPrint(q0_rule)) == StringUtil.strim(RuleGenerator._fingerPrint("SELECT DISTINCT ON (<x1>) <x2>, <x3>, <x4>, COALESCE(<x5>.<x6>, <x7>), <<x8>> FROM <x9> LEFT JOIN <x5> ON <<x10>> LEFT JOIN <x11> ON <<x12>> WHERE <<x13>> AND <x11>.<x14> IN (<x15>, <x16>, <x17>, <x18>, <x19>, <x20>, <x21>) AND <<x22>> ORDER BY <x9>.<x23> DESC"))
-    assert StringUtil.strim(RuleGenerator._fingerPrint(q1_rule)) == StringUtil.strim(RuleGenerator._fingerPrint("SELECT <x2>, <x3>, <x1>, COALESCE((SELECT <x4>.<x5> FROM <x4> WHERE <<x9>> AND <<x21>> LIMIT <x15>), <x6>), (SELECT <<x7>> FROM <x10> WHERE <<x11>> AND <x10>.<x13> IN (<x14>, <x15>, <x16>, <x17>, <x18>, <x19>, <x20>) LIMIT <x15>) FROM <x8> WHERE <<x12>>"))
+    assert q0_rule == "SELECT DISTINCT ON (<x1>) <x2>, <x3>, <x1>, COALESCE(<x4>.<x5>, <x6>), <<x7>> FROM <x8> LEFT JOIN <x4> ON <<x9>> LEFT JOIN <x10> ON <<x11>> WHERE <<x12>> AND <x10>.<x13> IN (<x14>, <x15>, <x16>, <x17>, <x18>, <x19>, <x20>) AND <<x21>> ORDER BY <x8>.<x22> DESC"
+    assert q1_rule == "SELECT <x2>, <x3>, <x1>, COALESCE((SELECT <x4>.<x5> FROM <x4> WHERE <<x9>> AND <<x21>> LIMIT <x15>), <x6>), (SELECT <<x7>> FROM <x10> WHERE <<x11>> AND <x10>.<x13> IN (<x14>, <x15>, <x16>, <x17>, <x18>, <x19>, <x20>) LIMIT <x15>) FROM <x8> WHERE <<x12>>"
 
 def test_generate_spreadsheet_id_20():
     q0 = """SELECT * FROM (SELECT * FROM (SELECT NULL FROM EMP) WHERE N IS NULL) WHERE N IS NULL"""
