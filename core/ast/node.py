@@ -231,18 +231,9 @@ class OrderByItemNode(Node):
 
 class OrderByNode(Node):
     """ORDER BY clause node"""
-    def __init__(self, _items: List['Node'], _sort: Optional[SortOrder] = None, **kwargs):
+    def __init__(self, _items: List[OrderByItemNode], **kwargs):
         super().__init__(NodeType.ORDER_BY, children=_items, **kwargs)
-        self.sort = _sort 
 
-    def __eq__(self, other):
-        if not isinstance(other, OrderByNode):
-            return False
-        return (super().__eq__(other) and 
-                self.sort == other.sort)
-    
-    def __hash__(self):
-        return hash((super().__hash__(), self.sort))
 
 class LimitNode(Node):
     """LIMIT clause node"""
