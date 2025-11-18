@@ -5,7 +5,7 @@ from core.ast.node import (
     LiteralNode, OperatorNode, FunctionNode, GroupByNode, HavingNode,
     OrderByNode, LimitNode, OffsetNode, SubqueryNode, VarNode, VarSetNode
 )
-from core.ast.node_type import NodeType
+from core.ast.enums import NodeType, JoinType, SortOrder
 from data.queries import get_query
 
 parser = QueryParser()
