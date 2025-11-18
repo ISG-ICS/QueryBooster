@@ -2,8 +2,7 @@ from datetime import datetime
 from typing import List, Set, Optional
 from abc import ABC
 
-from .node_type import NodeType, JoinType
-from .sort_order import SortOrder
+from .enums import NodeType, JoinType, SortOrder
 
 # ============================================================================
 # Base Node Structure
