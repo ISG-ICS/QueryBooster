@@ -31,7 +31,9 @@ def test_basic_format():
     emp_dept_id = ColumnNode("department_id", _parent_alias="e")
     dept_id = ColumnNode("id", _parent_alias="d")
     count_star = FunctionNode("COUNT", {ColumnNode("*")}, 'emp_count')
-    count_alias = ColumnNode("emp_count")  # This would be the alias for COUNT(*)
+    count_alias = ColumnNode("emp_count")
+    dept_alias = ColumnNode("dept_name")
+
     # SELECT clause
     select_clause = SelectNode([emp_name, dept_name, count_star])
     # FROM clause (with implicit JOIN logic)
@@ -48,8 +50,8 @@ def test_basic_format():
     having_clause = HavingNode([having_condition])
     # ORDER BY clause
     order_by_clause = OrderByNode([
-        OrderByItemNode(ColumnNode("dept_name"), _sort=SortOrder.DESC),
-        OrderByItemNode(ColumnNode("emp_count"), _sort=SortOrder.DESC)  
+        OrderByItemNode(dept_alias, SortOrder.DESC),
+        OrderByItemNode(count_alias, SortOrder.DESC)  
     ])  
     # LIMIT and OFFSET
     limit_clause = LimitNode(10)
