@@ -4,7 +4,7 @@ AST (Abstract Syntax Tree) module for QueryBooster.
 This module provides the node types and classes for representing SQL query structures.
 """
 
-from .node_type import NodeType
+from .enums import NodeType
 from .node import (
     Node,
     TableNode,
@@ -18,6 +18,7 @@ from .node import (
     SelectNode,
     FromNode,
     WhereNode,
+    JoinNode,
     GroupByNode,
     HavingNode,
     OrderByNode,
@@ -40,9 +41,11 @@ __all__ = [
     'SelectNode',
     'FromNode',
     'WhereNode',
+    'JoinNode',
     'GroupByNode',
     'HavingNode',
     'OrderByNode',
+    'OrderByItemNode',
     'LimitNode',
     'OffsetNode',
     'QueryNode'
