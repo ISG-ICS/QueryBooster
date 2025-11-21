@@ -1,11 +1,10 @@
-import mo_sql_parsing as mosql
 from core.query_parser import QueryParser
 from core.ast.node import (
     QueryNode, SelectNode, FromNode, WhereNode, TableNode, ColumnNode, 
     LiteralNode, OperatorNode, FunctionNode, GroupByNode, HavingNode,
-    OrderByNode, LimitNode, OffsetNode, JoinNode
+    OrderByNode, OrderByItemNode, LimitNode, OffsetNode, JoinNode
 )
-from core.ast.enums import NodeType, JoinType, SortOrder
+from core.ast.enums import JoinType, SortOrder
 from data.queries import get_query
 
 parser = QueryParser()
@@ -43,7 +42,7 @@ def test_basic_parse():
     select_clause = SelectNode({emp_name, dept_name, count_star})
     # FROM clause with JOIN
     join_condition = OperatorNode(emp_dept_id, "=", dept_id)
-    join_node = JoinNode(emp_table, dept_table, "INNER", join_condition)
+    join_node = JoinNode(emp_table, dept_table, JoinType.INNER, join_condition)
     from_clause = FromNode({join_node})
     # WHERE clause
     salary_condition = OperatorNode(emp_salary, ">", LiteralNode(40000))
@@ -55,8 +54,10 @@ def test_basic_parse():
     # HAVING clause
     having_condition = OperatorNode(count_star, ">", LiteralNode(2))
     having_clause = HavingNode({having_condition})
-    # ORDER BY clause  -> desc and asc are not supported yet!!
-    order_by_clause = OrderByNode([dept_name, count_star])
+    # ORDER BY clause
+    order_by_item1 = OrderByItemNode(dept_name, SortOrder.ASC)
+    order_by_item2 = OrderByItemNode(count_star, SortOrder.DESC)
+    order_by_clause = OrderByNode([order_by_item1, order_by_item2])
     # LIMIT and OFFSET
     limit_clause = LimitNode(10)
     offset_clause = OffsetNode(5)
