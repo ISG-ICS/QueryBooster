@@ -3,7 +3,8 @@ from core.ast.node import QueryNode
 from core.ast.node import (
     QueryNode, SelectNode, FromNode, WhereNode, TableNode, ColumnNode, 
     LiteralNode, OperatorNode, FunctionNode, GroupByNode, HavingNode,
-    OrderByNode, LimitNode, OffsetNode, SubqueryNode, VarNode, VarSetNode
+    OrderByNode, LimitNode, OffsetNode, SubqueryNode, VarNode, VarSetNode,
+    JoinNode
 )
 from core.ast.enums import NodeType, JoinType, SortOrder
 from core.ast.node import Node
@@ -67,24 +68,71 @@ def format_select(select_node: SelectNode) -> list:
 
 
 def format_from(from_node: FromNode) -> list:
-    """Format FROM clause"""
+    """Format FROM clause with explicit JOIN support"""
     sources = []
-    tables = list(from_node.children)
+    children = list(from_node.children)
     
-    if tables:
-        main_table = tables[0]
-        sources.append(format_table(main_table))
-        
-        # additional tables become JOINs
-        # TODO: add other join type support beyond implicit
-        for table in tables[1:]:
-            join_item = {
-                'join': format_table(table),
-                'on': infer_join_condition(tables[0], table)
-            }
-            sources.append(join_item)
+    if not children:
+        return sources
+    
+    # Process JoinNode structure
+    for child in children:
+        if child.type == NodeType.JOIN:
+            join_sources = format_join(child)
+            # format_join returns a list, extend sources with it
+            if isinstance(join_sources, list):
+                sources.extend(join_sources)
+            else:
+                sources.append(join_sources)
+        elif child.type == NodeType.TABLE:
+            sources.append(format_table(child))
     
     return sources
+
+
+def format_join(join_node: JoinNode) -> list:
+    """Format a JOIN node"""
+    children = list(join_node.children)
+    
+    if len(children) < 2:
+        raise ValueError("JoinNode must have at least 2 children (left and right tables)")
+    
+    left_node = children[0]
+    right_node = children[1]
+    join_condition = children[2] if len(children) > 2 else None
+    
+    result = []
+    
+    # Format left side (could be a table or nested join)
+    if left_node.type == NodeType.JOIN:
+        # Nested join - recursively format
+        result.extend(format_join(left_node))
+    elif left_node.type == NodeType.TABLE:
+        # Simple table - this becomes the FROM table
+        result.append(format_table(left_node))
+    
+    # Format the join itself
+    join_dict = {}
+    
+    # Map join types to mosql format
+    join_type_map = {
+        JoinType.INNER: 'join',
+        JoinType.LEFT: 'left join',
+        JoinType.RIGHT: 'right join',
+        JoinType.FULL: 'full join',
+        JoinType.CROSS: 'cross join',
+    }
+    
+    join_key = join_type_map.get(join_node.join_type, 'join')
+    join_dict[join_key] = format_table(right_node)
+    
+    # Add join condition if it exists
+    if join_condition:
+        join_dict['on'] = format_expression(join_condition)
+    
+    result.append(join_dict)
+    
+    return result
 
 
 def format_table(table_node: TableNode) -> dict:
@@ -93,15 +141,6 @@ def format_table(table_node: TableNode) -> dict:
     if table_node.alias:
         result['name'] = table_node.alias
     return result
-
-
-def infer_join_condition(table1: TableNode, table2: TableNode) -> dict:
-    """Infer JOIN condition between tables"""
-    # assume foreign key pattern like table1.table2_id = table2.id
-    alias1 = table1.alias or table1.name
-    alias2 = table2.alias or table2.name
-    
-    return {'eq': [f'{alias1}.{table2.name[:-1]}_id', f'{alias2}.id']}
 
 
 def format_where(where_node: WhereNode) -> dict:
@@ -137,11 +176,22 @@ def format_order_by(order_by_node: OrderByNode) -> list:
     for child in order_by_node.children:
         if child.type == NodeType.ORDER_BY_ITEM:
             column = list(child.children)[0]
-            item = {'value': format_expression(column)}
+            
+            # Check if the column has an alias
+            if hasattr(column, 'alias') and column.alias:
+                item = {'value': column.alias}
+            else:
+                item = {'value': format_expression(column)}
+            
             sort_order = child.sort
             sort_orders.append(sort_order)
         else:
-            item = {'value': format_expression(child)}
+            # Direct column reference (no OrderByItemNode wrapper)
+            if hasattr(child, 'alias') and child.alias:
+                item = {'value': child.alias}
+            else:
+                item = {'value': format_expression(child)}
+            
             sort_order = SortOrder.ASC
             sort_orders.append(sort_order)
         

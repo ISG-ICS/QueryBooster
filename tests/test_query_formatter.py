@@ -3,7 +3,7 @@ from core.query_formatter import QueryFormatter
 from core.ast.node import (
     OrderByItemNode, QueryNode, SelectNode, FromNode, WhereNode, TableNode, ColumnNode, 
     LiteralNode, OperatorNode, FunctionNode, GroupByNode, HavingNode,
-    OrderByNode, LimitNode, OffsetNode, SubqueryNode, VarNode, VarSetNode
+    OrderByNode, LimitNode, OffsetNode, SubqueryNode, VarNode, VarSetNode, JoinNode
 )
 from core.ast.enums import NodeType, JoinType, SortOrder
 from data.queries import get_query
@@ -19,25 +19,27 @@ def normalize_sql(s):
     return s
 
 def test_basic_format():
-    # Construct input AST
+    # Construct expected AST
     # Tables
     emp_table = TableNode("employees", "e")
     dept_table = TableNode("departments", "d")
     # Columns
     emp_name = ColumnNode("name", _parent_alias="e")
-    dept_name = ColumnNode("name", "dept_name", "d")
     emp_salary = ColumnNode("salary", _parent_alias="e")
     emp_age = ColumnNode("age", _parent_alias="e")
     emp_dept_id = ColumnNode("department_id", _parent_alias="e")
+
+    dept_name = ColumnNode("name", _alias="dept_name", _parent_alias="d")
     dept_id = ColumnNode("id", _parent_alias="d")
-    count_star = FunctionNode("COUNT", {ColumnNode("*")}, 'emp_count')
-    count_alias = ColumnNode("emp_count")
-    dept_alias = ColumnNode("dept_name")
+
+    count_star = FunctionNode("COUNT", _alias="emp_count", _args=[ColumnNode("*")])
 
     # SELECT clause
     select_clause = SelectNode([emp_name, dept_name, count_star])
-    # FROM clause (with implicit JOIN logic)
-    from_clause = FromNode([emp_table, dept_table])
+    # FROM clause with JOIN
+    join_condition = OperatorNode(emp_dept_id, "=", dept_id)
+    join_node = JoinNode(emp_table, dept_table, JoinType.INNER, join_condition)
+    from_clause = FromNode([join_node])
     # WHERE clause
     salary_condition = OperatorNode(emp_salary, ">", LiteralNode(40000))
     age_condition = OperatorNode(emp_age, "<", LiteralNode(60))
@@ -49,10 +51,9 @@ def test_basic_format():
     having_condition = OperatorNode(count_star, ">", LiteralNode(2))
     having_clause = HavingNode([having_condition])
     # ORDER BY clause
-    order_by_clause = OrderByNode([
-        OrderByItemNode(dept_alias, SortOrder.DESC),
-        OrderByItemNode(count_alias, SortOrder.DESC)  
-    ])  
+    order_by_item1 = OrderByItemNode(dept_name, SortOrder.ASC)
+    order_by_item2 = OrderByItemNode(count_star, SortOrder.DESC)
+    order_by_clause = OrderByNode([order_by_item1, order_by_item2])
     # LIMIT and OFFSET
     limit_clause = LimitNode(10)
     offset_clause = OffsetNode(5)
