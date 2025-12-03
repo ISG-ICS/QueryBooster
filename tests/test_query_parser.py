@@ -39,7 +39,7 @@ def test_basic_parse():
     count_star = FunctionNode("COUNT", _alias="emp_count", _args=[ColumnNode("*")])
 
     # SELECT clause
-    select_clause = SelectNode({emp_name, dept_name, count_star})
+    select_clause = SelectNode([emp_name, dept_name, count_star])
     # FROM clause with JOIN
     join_condition = OperatorNode(emp_dept_id, "=", dept_id)
     join_node = JoinNode(emp_table, dept_table, JoinType.INNER, join_condition)

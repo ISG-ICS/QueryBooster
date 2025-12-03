@@ -74,7 +74,7 @@ class QueryParser:
         )
    
     def parse_select(self, select_list: list) -> SelectNode:
-        items = set()
+        items = []
         for item in select_list:
             if isinstance(item, dict) and 'value' in item:
                 expression = self.parse_expression(item['value'])
@@ -85,11 +85,11 @@ class QueryParser:
                         expression.alias = alias
                     self.aliases[alias] = expression
                 
-                items.add(expression)
+                items.append(expression)
             else:
                 # Handle direct expression (string, int, etc.)
                 expression = self.parse_expression(item)
-                items.add(expression)
+                items.append(expression)
                 
         return SelectNode(items)
     
