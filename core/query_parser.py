@@ -25,7 +25,10 @@ class QueryParser:
         elif isinstance(value, (dict, str)):
             return [value]
         else:
-            return [value]
+            raise TypeError(
+                f"normalize_to_list: Unexpected type {type(value).__name__} for value {value!r}. "
+                "Expected None, list, dict, or str."
+            )
 
     def parse(self, query: str) -> QueryNode:
         # [1] Call mo_sql_parser
@@ -106,7 +109,7 @@ class QueryParser:
                 if join_key:
                     # This is a JOIN
                     if left_source is None:
-                        raise ValueError("JOIN found without a left table")
+                        raise ValueError(f"JOIN found without a left table. join_key={join_key}, item={item}")
                     
                     join_info = item[join_key]
                     # Handle both string and dict join_info

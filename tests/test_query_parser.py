@@ -11,6 +11,9 @@ parser = QueryParser()
 
 
 def test_basic_parse():
+    """
+    Test parsing of a complex SQL query with JOINs, WHERE, GROUP BY, HAVING, ORDER BY, LIMIT, and OFFSET clauses.
+    """
 
     # Construct input query text
     sql = """
@@ -43,17 +46,17 @@ def test_basic_parse():
     # FROM clause with JOIN
     join_condition = OperatorNode(emp_dept_id, "=", dept_id)
     join_node = JoinNode(emp_table, dept_table, JoinType.INNER, join_condition)
-    from_clause = FromNode({join_node})
+    from_clause = FromNode([join_node])
     # WHERE clause
     salary_condition = OperatorNode(emp_salary, ">", LiteralNode(40000))
     age_condition = OperatorNode(emp_age, "<", LiteralNode(60))
     where_condition = OperatorNode(salary_condition, "AND", age_condition)
-    where_clause = WhereNode({where_condition})
+    where_clause = WhereNode([where_condition])
     # GROUP BY clause
     group_by_clause = GroupByNode([dept_id, dept_name])
     # HAVING clause
     having_condition = OperatorNode(count_star, ">", LiteralNode(2))
-    having_clause = HavingNode({having_condition})
+    having_clause = HavingNode([having_condition])
     # ORDER BY clause
     order_by_item1 = OrderByItemNode(dept_name, SortOrder.ASC)
     order_by_item2 = OrderByItemNode(count_star, SortOrder.DESC)
