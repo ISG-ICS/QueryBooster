@@ -3,8 +3,10 @@ from core.ast.node import (
     LiteralNode, OperatorNode, FunctionNode, GroupByNode, HavingNode,
     OrderByNode, OrderByItemNode, LimitNode, OffsetNode, SubqueryNode, VarNode, VarSetNode, JoinNode
 )
+# TODO: implement SubqueryNode, VarNode, VarSetNode
 from core.ast.enums import JoinType, SortOrder
 import mo_sql_parsing as mosql
+import json
 
 class QueryParser:
     @staticmethod
@@ -164,8 +166,8 @@ class QueryParser:
         return FromNode(sources)
     
     def parse_where(self, where_dict: dict) -> WhereNode:
-        predicates = set()
-        predicates.add(self.parse_expression(where_dict))
+        predicates = []
+        predicates.append(self.parse_expression(where_dict))
         return WhereNode(predicates)
     
     def parse_group_by(self, group_by_list: list) -> GroupByNode:
@@ -314,14 +316,13 @@ class QueryParser:
                 # Pattern 3: Function call
                 # Special case: COUNT(*), SUM(*), etc.
                 if value == '*':
-                    return FunctionNode(op_name, [ColumnNode('*')])
+                    return FunctionNode(op_name, _args=[ColumnNode('*')])
                 
                 # Regular function
                 args = [self.parse_expression(value)]
-                return FunctionNode(op_name, args)
+                return FunctionNode(op_name, _args=args)
             
             # No valid key found
-            import json
             return LiteralNode(json.dumps(expr, sort_keys=True))
         
         # Other types
