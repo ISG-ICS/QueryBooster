@@ -185,12 +185,12 @@ class QueryParser:
         return GroupByNode(items)
     
     def parse_having(self, having_dict: dict) -> HavingNode:
-        predicates = set()
+        predicates = []
         expr = self.parse_expression(having_dict)
         # Check if this expression references an aliased function from SELECT
         expr = self.resolve_aliases(expr)
         
-        predicates.add(expr)
+        predicates.append(expr)
 
         return HavingNode(predicates)
     
@@ -269,9 +269,9 @@ class QueryParser:
             return LiteralNode(expr)
         
         if isinstance(expr, list):
-            # List literals (for IN clauses) - convert to tuple for hashability
-            parsed = tuple(self.parse_expression(item) for item in expr)
-            return LiteralNode(parsed)
+            # List literals (for IN clauses)
+            parsed = [self.parse_expression(item) for item in expr]
+            return parsed
         
         if isinstance(expr, dict):
             # Special cases first
