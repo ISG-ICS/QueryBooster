@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Set, Optional
+from typing import List, Set, Optional, Union
 from abc import ABC
 
 from .enums import NodeType, JoinType, SortOrder
@@ -160,7 +160,7 @@ class FunctionNode(Node):
 
 class JoinNode(Node):
     """JOIN clause node"""
-    def __init__(self, _left_table: 'TableNode', _right_table: 'TableNode', _join_type: JoinType = JoinType.INNER, _on_condition: Optional['Node'] = None, **kwargs):
+    def __init__(self, _left_table: Union['TableNode', 'JoinNode'], _right_table: 'TableNode', _join_type: JoinType = JoinType.INNER, _on_condition: Optional['Node'] = None, **kwargs):
         children = [_left_table, _right_table]
         if _on_condition:
             children.append(_on_condition)

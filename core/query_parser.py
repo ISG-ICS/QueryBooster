@@ -99,7 +99,7 @@ class QueryParser:
         return SelectNode(items)
     
     def parse_from(self, from_list: list) -> FromNode:
-        sources = set()
+        sources = []
         left_source = None  # Can be a table or the result of a previous join
         
         for item in from_list:
@@ -150,18 +150,18 @@ class QueryParser:
                         left_source = table_node
                     else:
                         # Multiple tables without explicit JOIN (cross join)
-                        sources.add(table_node)
+                        sources.append(table_node)
             elif isinstance(item, str):
                 # Simple string table name
                 table_node = TableNode(item)
                 if left_source is None:
                     left_source = table_node
                 else:
-                    sources.add(table_node)
+                    sources.append(table_node)
         
         # Add the final left source (which might be a single table or chain of joins)
         if left_source is not None:
-            sources.add(left_source)
+            sources.append(left_source)
             
         return FromNode(sources)
     
@@ -231,6 +231,13 @@ class QueryParser:
             # Recursively resolve aliases in operator operands
             left = self.resolve_aliases(expr.children[0])
             right = self.resolve_aliases(expr.children[1])
+            # TODO - When the OperatorNode is created with unary operators (e.g., 'NOT'), 
+            # only one operand is passed (line 309). 
+            # The resolve_aliases method assumes binary operators and always accesses 
+            # children[0] and children[1] (lines 227-228). 
+            # This will cause an IndexError when resolving aliases for unary operators. 
+            # Add a check for the number of children before accessing indices.
+            #  (and test it once we have such test cases)
             return OperatorNode(left, expr.name, right)
         elif isinstance(expr, FunctionNode):
             # Check if this function matches an aliased function from SELECT
