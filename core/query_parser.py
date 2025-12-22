@@ -39,7 +39,8 @@ class QueryParser:
 
         # [2] Our new code
         # Any (JSON) -> AST (QueryNode)
-        self.aliases = {}
+        # Aliases dictionary
+        aliases = {}
 
         select_clause = None
         from_clause = None
@@ -51,17 +52,17 @@ class QueryParser:
         offset_clause = None
         
         if 'select' in mosql_ast:
-            select_clause = self.parse_select(self.normalize_to_list(mosql_ast['select']))
+            select_clause = self.parse_select(self.normalize_to_list(mosql_ast['select']), aliases)
         if 'from' in mosql_ast:
-            from_clause = self.parse_from(self.normalize_to_list(mosql_ast['from']))
+            from_clause = self.parse_from(self.normalize_to_list(mosql_ast['from']), aliases)
         if 'where' in mosql_ast:
-            where_clause = self.parse_where(mosql_ast['where'])
+            where_clause = self.parse_where(mosql_ast['where'], aliases)
         if 'groupby' in mosql_ast:
-            group_by_clause = self.parse_group_by(self.normalize_to_list(mosql_ast['groupby']))
+            group_by_clause = self.parse_group_by(self.normalize_to_list(mosql_ast['groupby']), aliases)
         if 'having' in mosql_ast:
-            having_clause = self.parse_having(mosql_ast['having'])
+            having_clause = self.parse_having(mosql_ast['having'], aliases)
         if 'orderby' in mosql_ast:
-            order_by_clause = self.parse_order_by(self.normalize_to_list(mosql_ast['orderby']))
+            order_by_clause = self.parse_order_by(self.normalize_to_list(mosql_ast['orderby']), aliases)
         if 'limit' in mosql_ast:
             limit_clause = LimitNode(mosql_ast['limit'])
         if 'offset' in mosql_ast:
@@ -78,7 +79,7 @@ class QueryParser:
             _offset=offset_clause
         )
    
-    def parse_select(self, select_list: list) -> SelectNode:
+    def parse_select(self, select_list: list, aliases: dict) -> SelectNode:
         items = []
         for item in select_list:
             if isinstance(item, dict) and 'value' in item:
@@ -88,7 +89,7 @@ class QueryParser:
                     alias = item['name']
                     if hasattr(expression, 'alias'):
                         expression.alias = alias
-                    self.aliases[alias] = expression
+                    aliases[alias] = expression
                 
                 items.append(expression)
             else:
@@ -98,7 +99,7 @@ class QueryParser:
                 
         return SelectNode(items)
     
-    def parse_from(self, from_list: list) -> FromNode:
+    def parse_from(self, from_list: list, aliases: dict) -> FromNode:
         sources = []
         left_source = None  # Can be a table or the result of a previous join
         
@@ -125,7 +126,7 @@ class QueryParser:
                     right_table = TableNode(table_name, alias)
                     # Track table alias
                     if alias:
-                        self.aliases[alias] = right_table
+                        aliases[alias] = right_table
                     
                     on_condition = None
                     if 'on' in item:
@@ -143,7 +144,7 @@ class QueryParser:
                     table_node = TableNode(table_name, alias)
                     # Track table alias
                     if alias:
-                        self.aliases[alias] = table_node
+                        aliases[alias] = table_node
                     
                     if left_source is None:
                         # First table becomes the left source
@@ -165,45 +166,45 @@ class QueryParser:
             
         return FromNode(sources)
     
-    def parse_where(self, where_dict: dict) -> WhereNode:
+    def parse_where(self, where_dict: dict, aliases: dict) -> WhereNode:
         predicates = []
         predicates.append(self.parse_expression(where_dict))
         return WhereNode(predicates)
     
-    def parse_group_by(self, group_by_list: list) -> GroupByNode:
+    def parse_group_by(self, group_by_list: list, aliases: dict) -> GroupByNode:
         items = []
         for item in group_by_list:
             if isinstance(item, dict) and 'value' in item:
                 expr = self.parse_expression(item['value'])
                 # Resolve aliases
-                expr = self.resolve_aliases(expr)
+                expr = self.resolve_aliases(expr, aliases)
                 items.append(expr)
             else:
                 # Handle direct expression (string, int, etc.)
                 expr = self.parse_expression(item)
-                expr = self.resolve_aliases(expr)
+                expr = self.resolve_aliases(expr, aliases)
                 items.append(expr)
 
         return GroupByNode(items)
     
-    def parse_having(self, having_dict: dict) -> HavingNode:
+    def parse_having(self, having_dict: dict, aliases: dict) -> HavingNode:
         predicates = []
         expr = self.parse_expression(having_dict)
         # Check if this expression references an aliased function from SELECT
-        expr = self.resolve_aliases(expr)
+        expr = self.resolve_aliases(expr, aliases)
         
         predicates.append(expr)
 
         return HavingNode(predicates)
     
-    def parse_order_by(self, order_by_list: list) -> OrderByNode:
+    def parse_order_by(self, order_by_list: list, aliases: dict) -> OrderByNode:
         items = []
         for item in order_by_list:
             if isinstance(item, dict) and 'value' in item:
                 value = item['value']
                 # Check if this is an alias reference
-                if isinstance(value, str) and value in self.aliases:
-                    column = self.aliases[value]
+                if isinstance(value, str) and value in aliases:
+                    column = aliases[value]
                 else:
                     # Parse normally for other cases
                     column = self.parse_expression(value)
@@ -226,23 +227,23 @@ class QueryParser:
 
         return OrderByNode(items)
     
-    def resolve_aliases(self, expr: Node) -> Node:
+    def resolve_aliases(self, expr: Node, aliases: dict) -> Node:
         if isinstance(expr, OperatorNode):
             # Recursively resolve aliases in operator operands
-            left = self.resolve_aliases(expr.children[0])
-            right = self.resolve_aliases(expr.children[1])
-            # TODO - When the OperatorNode is created with unary operators (e.g., 'NOT'), 
-            # only one operand is passed (line 309). 
-            # The resolve_aliases method assumes binary operators and always accesses 
-            # children[0] and children[1] (lines 227-228). 
-            # This will cause an IndexError when resolving aliases for unary operators. 
-            # Add a check for the number of children before accessing indices.
-            #  (and test it once we have such test cases)
-            return OperatorNode(left, expr.name, right)
+            if len(expr.children) >= 2:
+                left = self.resolve_aliases(expr.children[0], aliases)
+                right = self.resolve_aliases(expr.children[1], aliases)
+                return OperatorNode(left, expr.name, right)
+            elif len(expr.children) == 1:
+                # Unary operator (e.g., NOT)
+                operand = self.resolve_aliases(expr.children[0], aliases)
+                return OperatorNode(operand, expr.name)
+            else:
+                raise ValueError(f"OperatorNode has {len(expr.children)} children, expected 2 for binary operators or 1 for unary operators")
         elif isinstance(expr, FunctionNode):
             # Check if this function matches an aliased function from SELECT
             if expr.alias is None:
-                for alias, aliased_expr in self.aliases.items():
+                for alias, aliased_expr in aliases.items():
                     if isinstance(aliased_expr, FunctionNode):
                         if (expr.name == aliased_expr.name and 
                             len(expr.children) == len(aliased_expr.children) and
@@ -255,7 +256,7 @@ class QueryParser:
         elif isinstance(expr, ColumnNode):
             # Check if this column matches an aliased column from SELECT
             if expr.alias is None:
-                for alias, aliased_expr in self.aliases.items():
+                for alias, aliased_expr in aliases.items():
                     if isinstance(aliased_expr, ColumnNode):
                         if (expr.name == aliased_expr.name and 
                             expr.parent_alias == aliased_expr.parent_alias):
