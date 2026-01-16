@@ -1,4 +1,3 @@
-import mo_sql_parsing as mosql
 from core.query_formatter import QueryFormatter
 from core.ast.node import (
     OrderByItemNode, QueryNode, SelectNode, FromNode, WhereNode, TableNode, ColumnNode, 
