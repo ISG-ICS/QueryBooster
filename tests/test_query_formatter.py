@@ -5,8 +5,7 @@ from core.ast.node import (
     LiteralNode, OperatorNode, FunctionNode, GroupByNode, HavingNode,
     OrderByNode, LimitNode, OffsetNode, SubqueryNode, VarNode, VarSetNode, JoinNode
 )
-from core.ast.enums import NodeType, JoinType, SortOrder
-from data.queries import get_query
+from core.ast.enums import JoinType, SortOrder
 from re import sub
 
 formatter = QueryFormatter()
@@ -80,8 +79,6 @@ def test_basic_format():
         LIMIT 10 OFFSET 5
     """
     expected_sql = expected_sql.strip()
-    print(mosql.parse(expected_sql))
-    print(ast)
 
     sql = formatter.format(ast)
     sql = sql.strip()
