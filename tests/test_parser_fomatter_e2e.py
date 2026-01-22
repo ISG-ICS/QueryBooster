@@ -1,13 +1,11 @@
 from core.query_formatter import QueryFormatter
 from core.query_parser import QueryParser
-from re import sub
-from mo_sql_parsing import parse, format
+from mo_sql_parsing import parse
 
 formatter = QueryFormatter()
 parser = QueryParser()
 
-
-def test_basic_format():
+def test_basic_e2e():
     original_sql = """
         SELECT e.name, d.name as dept_name, COUNT(*) as emp_count
         FROM employees e JOIN departments d ON e.department_id = d.id
@@ -17,8 +15,8 @@ def test_basic_format():
         ORDER BY dept_name, emp_count DESC
         LIMIT 10 OFFSET 5
     """
-
     parsed_ast = parser.parse(original_sql)
     formatted_sql = formatter.format(parsed_ast)
 
+    # test our output is semantically equivalent to input using mo_sql_parsing
     assert parse(formatted_sql) == parse(original_sql)
