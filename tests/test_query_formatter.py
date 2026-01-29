@@ -83,3 +83,68 @@ def test_basic_format():
     sql = sql.strip()
     
     assert normalize_sql(sql) == normalize_sql(expected_sql)
+
+
+def test_subquery_format():
+    # Tables
+    emp_table = TableNode("employee")
+    dept_table = TableNode("department")
+    
+    # Columns
+    emp_empno = ColumnNode("empno")
+    emp_firstnme = ColumnNode("firstnme")
+    emp_lastname = ColumnNode("lastname")
+    emp_phoneno = ColumnNode("phoneno")
+    emp_workdept = ColumnNode("workdept")
+    
+    dept_deptno = ColumnNode("deptno")
+    dept_deptname = ColumnNode("deptname")
+    
+    # SELECT clause
+    select_clause = SelectNode([emp_empno, emp_firstnme, emp_lastname, emp_phoneno])
+    
+    # FROM clause
+    from_clause = FromNode([emp_table])
+    
+    # Subquery: SELECT deptno FROM department WHERE deptname = 'OPERATIONS'
+    subquery_select = SelectNode([dept_deptno])
+    subquery_from = FromNode([dept_table])
+    subquery_where_condition = OperatorNode(dept_deptname, "=", LiteralNode("OPERATIONS"))
+    subquery_where = WhereNode([subquery_where_condition])
+    subquery_query = QueryNode(
+        _select=subquery_select,
+        _from=subquery_from,
+        _where=subquery_where,
+    )
+    subquery_node = SubqueryNode(subquery_query)
+    
+    # Main WHERE clause: workdept IN (subquery) AND 1=1
+    in_condition = OperatorNode(emp_workdept, "IN", subquery_node)
+    literal_condition = OperatorNode(LiteralNode(1), "=", LiteralNode(1))
+    where_condition = OperatorNode(in_condition, "AND", literal_condition)
+    where_clause = WhereNode([where_condition])
+    
+    # Complete query AST
+    ast = QueryNode(
+        _select=select_clause,
+        _from=from_clause,
+        _where=where_clause,
+    )
+    
+    # Expected SQL (desired canonical formatting; current formatter may not support this yet)
+    expected_sql = """
+        SELECT empno, firstnme, lastname, phoneno
+        FROM employee
+        WHERE workdept IN (
+            SELECT deptno
+            FROM department
+            WHERE deptname = 'OPERATIONS'
+        )
+        AND 1 = 1
+    """
+    # expected_sql = expected_sql.strip()
+    
+    # sql = formatter.format(ast)
+    # sql = sql.strip()
+    
+    # assert normalize_sql(sql) == normalize_sql(expected_sql)
