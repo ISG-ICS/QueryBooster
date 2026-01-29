@@ -20,3 +20,18 @@ def test_basic_e2e():
 
     # test our output is semantically equivalent to input using mo_sql_parsing
     assert parse(formatted_sql) == parse(original_sql)
+
+
+def test_subquery_e2e():
+    original_sql = """
+        SELECT empno, firstnme, lastname, phoneno
+        FROM employee
+        WHERE workdept IN
+            (SELECT deptno
+                FROM department
+                WHERE deptname = 'OPERATIONS')
+        AND 1=1
+    """
+    # parsed_ast = parser.parse(original_sql)
+    # formatted_sql = formatter.format(parsed_ast)
+    # assert parse(formatted_sql) == parse(original_sql)
