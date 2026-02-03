@@ -81,7 +81,7 @@ def test_basic_parse():
     assert ast == expected_ast
 
 
-def test_subqyery_parse():
+def test_subquery_parse():
     """
     Test parsing of a SQL query with subquery in WHERE clause (IN operator).
     """
