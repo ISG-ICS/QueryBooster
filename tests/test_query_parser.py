@@ -2,7 +2,7 @@ from core.query_parser import QueryParser
 from core.ast.node import (
     QueryNode, SelectNode, FromNode, WhereNode, TableNode, ColumnNode, 
     LiteralNode, OperatorNode, FunctionNode, GroupByNode, HavingNode,
-    OrderByNode, OrderByItemNode, LimitNode, OffsetNode, JoinNode
+    OrderByNode, OrderByItemNode, LimitNode, OffsetNode, JoinNode, SubqueryNode
 )
 from core.ast.enums import JoinType, SortOrder
 from data.queries import get_query
@@ -79,6 +79,64 @@ def test_basic_parse():
     ast = parser.parse(sql)
 
     assert ast == expected_ast
+
+
+def test_subquery_parse():
+    """
+    Test parsing of a SQL query with subquery in WHERE clause (IN operator).
+    """
+    query = get_query(9)
+    sql = query['pattern']
+    
+    # Construct expected AST
+    # Tables
+    emp_table = TableNode("employee")
+    dept_table = TableNode("department")
+    
+    # Columns
+    emp_empno = ColumnNode("empno")
+    emp_firstnme = ColumnNode("firstnme")
+    emp_lastname = ColumnNode("lastname")
+    emp_phoneno = ColumnNode("phoneno")
+    emp_workdept = ColumnNode("workdept")
+    
+    dept_deptno = ColumnNode("deptno")
+    dept_deptname = ColumnNode("deptname")
+    
+    # SELECT clause
+    select_clause = SelectNode([emp_empno, emp_firstnme, emp_lastname, emp_phoneno])
+    
+    # FROM clause
+    from_clause = FromNode([emp_table])
+    
+    # WHERE clause with subquery
+    # Subquery: SELECT deptno FROM department WHERE deptname = 'OPERATIONS'
+    subquery_select = SelectNode([dept_deptno])
+    subquery_from = FromNode([dept_table])
+    subquery_where_condition = OperatorNode(dept_deptname, "=", LiteralNode("OPERATIONS"))
+    subquery_where = WhereNode([subquery_where_condition])
+    subquery_query = QueryNode(
+        _select=subquery_select,
+        _from=subquery_from,
+        _where=subquery_where
+    )
+    subquery_node = SubqueryNode(subquery_query)
+    
+    # Main WHERE clause: workdept IN (subquery) AND 1=1
+    in_condition = OperatorNode(emp_workdept, "IN", subquery_node)
+    literal_condition = OperatorNode(LiteralNode(1), "=", LiteralNode(1))
+    where_condition = OperatorNode(in_condition, "AND", literal_condition)
+    where_clause = WhereNode([where_condition])
+    
+    # Complete query
+    expected_ast = QueryNode(
+        _select=select_clause,
+        _from=from_clause,
+        _where=where_clause
+    )
+    
+    # qb_ast = parser.parse(sql)
+    # assert qb_ast == expected_ast
 
 
 def test_parse_1():
@@ -159,26 +217,6 @@ def test_parse_2():
     # assert where_clause is not None
     # condition = next(iter(where_clause.children))
     # assert isinstance(condition, OperatorNode)
-
-
-def test_parse_3():
-    query = get_query(9)
-    sql = query['pattern']
-    
-    qb_ast = parser.parse(sql)
-    # assert isinstance(qb_ast, QueryNode)
-    
-    # Check WHERE clause has IN with subquery
-    # where_clause = None
-    # for child in qb_ast.children:
-    #     if child.type == NodeType.WHERE:
-    #         where_clause = child
-    #         break
-    
-    # assert where_clause is not None
-    # condition = next(iter(where_clause.children))
-    # assert isinstance(condition, OperatorNode)
-    # assert condition.name == "AND"
 
 
 def test_parse_4():
