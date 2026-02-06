@@ -6,6 +6,7 @@ from core.ast.node import (
 )
 from core.ast.enums import JoinType, SortOrder
 from re import sub
+from mo_sql_parsing import parse
 
 formatter = QueryFormatter()
 
@@ -86,7 +87,7 @@ def test_basic_format():
     sql = formatter.format(ast)
     sql = sql.strip()
     
-    assert normalize_sql(sql) == normalize_sql(expected_sql)
+    assert parse(sql) == parse(expected_sql)
 
 
 def test_subquery_format():
@@ -151,4 +152,4 @@ def test_subquery_format():
     sql = formatter.format(ast)
     sql = sql.strip()
     
-    assert normalize_sql(sql) == normalize_sql(expected_sql)
+    assert parse(sql) == parse(expected_sql)
