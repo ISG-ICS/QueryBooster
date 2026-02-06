@@ -3680,7 +3680,7 @@ class RuleGenerator:
             patternASTJson = mosql.parse(pattern)
         except Exception as e:
             #if mosql error, find index of the offending part
-            var = re.search("[Ee]xpecting(.*)found \"(.*)\" \(at char (\d+)", RuleGenerator.dereplaceVars(e.message, mapping))
+            var = re.search(r"[Ee]xpecting(.*)found \"(.*)\" \(at char (\d+)", RuleGenerator.dereplaceVars(e.message, mapping))
             if var:
                 errorindex2 = int(var.group(3)) - ScopeInfoLength[patternScope]
                 return False, "Error in first query, current Scope is " + ScopeInfo[patternScope] +  " if that is not intended check spelling at index 0. Expecting "  + var.group(1).strip() + " found " + var.group(2).strip(), errorindex2
@@ -3694,14 +3694,14 @@ class RuleGenerator:
         except Exception as e:
             #checks case that there are variables in the rewrite that are not in the original query
             partialSQL = RuleGenerator.extractPartialSQL(rewrite, rewriteScope)
-            regexPattern = VarTypesInfo[VarType.Var]['markerStart'] + '(\w+)' + VarTypesInfo[VarType.Var]['markerEnd']
+            regexPattern = VarTypesInfo[VarType.Var]['markerStart'] + r'(\w+)' + VarTypesInfo[VarType.Var]['markerEnd']
             var = re.search(regexPattern, partialSQL)
             if var:
                 #returns the index of variable that is not in first query
                 return False, str(var.group()) + "not in first rule", var.start()
             
             # if all variables present, then mosql error, find index of the offending part
-            var = re.search("[Ee]xpecting(.*)found \"(.*)\" \(at char (\d+)", RuleGenerator.dereplaceVars(e.message, mapping))
+            var = re.search(r"[Ee]xpecting(.*)found \"(.*)\" \(at char (\d+)", RuleGenerator.dereplaceVars(e.message, mapping))
             if var:
                 errorindex2 = int(var.group(3)) - ScopeInfoLength[patternScope]
                 return False, "Error in second query, current Scope is " + ScopeInfo[patternScope] +  " if that is not intended check spelling at index 0. Expecting "  + var.group(1).strip() + " found " + var.group(2).strip(), errorindex2
@@ -3763,7 +3763,7 @@ class RuleGenerator:
             return True, "success", 0
         except Exception as e:
             #if mosql error, find index of the offending part
-            var = re.search("[Ee]xpecting(.*)found \"(.*)\" \(at char (\d+)", RuleGenerator.dereplaceVars(e.message, mapping))
+            var = re.search(r"[Ee]xpecting(.*)found \"(.*)\" \(at char (\d+)", RuleGenerator.dereplaceVars(e.message, mapping))
             if var:
                 errorindex2 = int(var.group(3)) - ScopeInfoLength[patternScope]
                 return False, "Error in first query, current Scope is " + ScopeInfo[patternScope] +  " if that is not intended check spelling at index 0. Expecting "  + var.group(1).strip() + " found " + var.group(2).strip(), errorindex2
