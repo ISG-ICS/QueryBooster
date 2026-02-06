@@ -122,7 +122,7 @@ class RuleParser:
         # common function to replace one VarType
         # 
         def replaceVars(pattern: str, rewrite: str, varType: VarType, mapping: dict) -> Tuple[str, str]:
-            regexPattern = VarTypesInfo[varType]['markerStart'] + '(\w+)' + VarTypesInfo[varType]['markerEnd']
+            regexPattern = VarTypesInfo[varType]['markerStart'] + r'(\w+)' + VarTypesInfo[varType]['markerEnd']
             vars = re.findall(regexPattern, pattern)
             varInternalBase = VarTypesInfo[varType]['internalBase']
             varInternalCount = 1
@@ -235,13 +235,13 @@ class RuleParser:
     @staticmethod     
     def find_malformed_brackets(pattern: str) -> int:
         CommonMistakeVarTypesInfo = {
-            'markerStart': ['\(', '\{', '\['],
-            'markerEnd': ['\)', '\}', '\]'],
+            'markerStart': [r'\(', r'\{', r'\['],
+            'markerEnd': [r'\)', r'\}', r'\]'],
         }
 
         for i in range(len(CommonMistakeVarTypesInfo['markerStart'])):
-            regexPatternVarStart = CommonMistakeVarTypesInfo['markerStart'][i] + '(\w+)' + VarTypesInfo[VarType.Var]['markerEnd']
-            regexPatternVarEnd = VarTypesInfo[VarType.Var]['markerStart'] + '(\w+)' + CommonMistakeVarTypesInfo['markerEnd'][i]
+            regexPatternVarStart = CommonMistakeVarTypesInfo['markerStart'][i] + r'(\w+)' + VarTypesInfo[VarType.Var]['markerEnd']
+            regexPatternVarEnd = VarTypesInfo[VarType.Var]['markerStart'] + r'(\w+)' + CommonMistakeVarTypesInfo['markerEnd'][i]
         
             varStart = re.search(regexPatternVarStart, pattern)
             varEnd = re.search(regexPatternVarEnd, pattern)
