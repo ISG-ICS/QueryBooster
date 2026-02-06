@@ -135,5 +135,5 @@ def test_subquery_parse():
         _where=where_clause
     )
 
-    # qb_ast = parser.parse(sql)
-    # assert qb_ast == expected_ast
+    qb_ast = parser.parse(sql)
+    assert qb_ast == expected_ast

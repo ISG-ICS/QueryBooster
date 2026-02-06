@@ -3,7 +3,7 @@ from core.ast.node import (
     LiteralNode, OperatorNode, FunctionNode, GroupByNode, HavingNode,
     OrderByNode, OrderByItemNode, LimitNode, OffsetNode, SubqueryNode, VarNode, VarSetNode, JoinNode
 )
-# TODO: implement SubqueryNode, VarNode, VarSetNode
+# TODO: implement VarNode, VarSetNode
 from core.ast.enums import JoinType, SortOrder
 import mo_sql_parsing as mosql
 import json
@@ -33,7 +33,7 @@ class QueryParser:
             )
 
     def parse(self, query: str) -> QueryNode:
-        # str -> Any (mo_sql_parsing AST dict) -> QueryNode
+        # str -> mo_sql_parsing -> QueryNode
         mosql_ast = mosql.parse(query)
         return self.parse_query_dict(mosql_ast, aliases={})
    
@@ -411,4 +411,4 @@ class QueryParser:
         elif 'cross' in key_lower:
             return JoinType.CROSS
         
-        return JoinType.INNER  # By default
+        return JoinType.INNER
