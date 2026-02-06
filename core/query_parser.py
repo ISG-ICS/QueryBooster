@@ -9,6 +9,14 @@ import mo_sql_parsing as mosql
 import json
 
 class QueryParser:
+    # mo_sql_parsing operator keys -> SQL display name
+    _OPERATOR_KEY_TO_NAME = {
+        'eq': '=', 'neq': '!=', 'ne': '!=',
+        'gt': '>', 'gte': '>=', 'lt': '<', 'lte': '<=',
+        'and': 'AND', 'or': 'OR', 'in': 'IN',
+    }
+    _LIST_OPERATOR_KEYS = frozenset(_OPERATOR_KEY_TO_NAME.keys())
+
     @staticmethod
     def normalize_to_list(value):
         """Normalize mo_sql_parsing output to a list format.
@@ -87,15 +95,25 @@ class QueryParser:
                         table_name = join_info
                         alias = None
                         right_source = TableNode(table_name, alias)
-                    elif isinstance(join_info, dict) and 'select' in join_info:
-                        # Subquery in JOIN
-                        # Subquery has its own alias scope (no leaking to/from outer query)
-                        subquery_query = self.parse_query_dict(join_info, aliases={})
-                        alias = join_info.get('name')
-                        right_source = SubqueryNode(subquery_query, alias)
+                    elif isinstance(join_info, dict):
+                        # Derived table: {'value': {<subquery>}, 'name': <alias>}
+                        value = join_info.get('value')
+                        if isinstance(value, dict) and 'select' in value:
+                            subquery_query = self.parse_query_dict(value, aliases={})
+                            alias = join_info.get('name')
+                            right_source = SubqueryNode(subquery_query, alias)
+                        elif 'select' in join_info:
+                            # Subquery at top level (alias in 'name' if present)
+                            subquery_query = self.parse_query_dict(join_info, aliases={})
+                            alias = join_info.get('name')
+                            right_source = SubqueryNode(subquery_query, alias)
+                        else:
+                            table_name = join_info.get('value', join_info)
+                            alias = join_info.get('name')
+                            right_source = TableNode(table_name, alias)
                     else:
-                        table_name = join_info['value'] if isinstance(join_info, dict) else join_info
-                        alias = join_info.get('name') if isinstance(join_info, dict) else None
+                        table_name = join_info
+                        alias = None
                         right_source = TableNode(table_name, alias)
                     
                     # Track alias
@@ -151,10 +169,10 @@ class QueryParser:
                 else:
                     sources.append(table_node)
         
-        # Add the final left source (which might be a single table or chain of joins)
+        # Prepend the first/left source so order is preserved
         if left_source is not None:
-            sources.append(left_source)
-            
+            sources.insert(0, left_source)
+
         return FromNode(sources)
     
     def parse_where(self, where_dict: dict, aliases: dict) -> WhereNode:
@@ -301,22 +319,25 @@ class QueryParser:
                     
                 value = expr[key]
                 op_name = self.normalize_operator_name(key)
-                
-                # Pattern 1: Binary/N-ary operator with list of operands
+                key_lower = key.lower()
+
+                # Pattern 1: List value (either n-ary operator or multi-arg function)
                 if isinstance(value, list):
                     if len(value) == 0:
                         return LiteralNode(None)
                     if len(value) == 1:
                         return self.parse_expression(value[0], aliases)
-                    
-                    # Parse all operands (may include subqueries)
+
                     operands = [self.parse_expression(v, aliases) for v in value]
-                    
-                    # Chain multiple operands with the same operator
-                    result = operands[0]
-                    for operand in operands[1:]:
-                        result = OperatorNode(result, op_name, operand)
-                    return result
+
+                    # SQL operators that mo_sql_parsing represents as key: [args]
+                    if key_lower in QueryParser._LIST_OPERATOR_KEYS:
+                        result = operands[0]
+                        for operand in operands[1:]:
+                            result = OperatorNode(result, op_name, operand)
+                        return result
+                    # Otherwise treat as multi-arg function (e.g. COALESCE, GREATEST)
+                    return FunctionNode(op_name, _args=operands)
                 
                 # Pattern 2: Unary operator
                 if key == 'not':
@@ -387,13 +408,7 @@ class QueryParser:
     @staticmethod
     def normalize_operator_name(key: str) -> str:
         """Convert mo_sql_parsing operator keys to SQL operator names."""
-        mapping = {
-            'eq': '=', 'neq': '!=', 'ne': '!=',
-            'gt': '>', 'gte': '>=', 
-            'lt': '<', 'lte': '<=',
-            'and': 'AND', 'or': 'OR',
-        }
-        return mapping.get(key.lower(), key.upper())
+        return QueryParser._OPERATOR_KEY_TO_NAME.get(key.lower(), key.upper())
     
     @staticmethod
     def parse_join_type(join_key: str) -> JoinType:
