@@ -234,8 +234,6 @@ def test_complete_query():
     # Analyze query structure
     clause_types = [child.type for child in query.children]
     print(f"  Clause types: {[ct.value for ct in clause_types]}")
-    
-    return query
 
 
 def test_varsql_pattern_matching():
@@ -274,9 +272,6 @@ def test_varsql_pattern_matching():
     multi_select = SelectNode({var_columns})
     print(f"\nVarSet pattern for multiple columns:")
     print(f"  VarSet {var_columns.name} can match multiple SELECT items")
-    
-    return pattern_query
-
 
 def test_node_relationships():
     """Test node relationships and tree structure"""
