@@ -10,17 +10,6 @@ from mo_sql_parsing import parse
 
 formatter = QueryFormatter()
 
-def normalize_sql(s):
-    """Remove extra whitespace and normalize SQL string to be used in comparisons"""
-    # Remove leading/trailing whitespace and collapse multiple spaces into one
-    s = s.strip()
-    s = sub(r'\s+', ' ', s)
-    # Remove spaces after opening parentheses and before closing parentheses
-    s = sub(r'\(\s+', '(', s)
-    s = sub(r'\s+\)', ')', s)
-    
-    return s
-
 def test_basic_format():
     # Construct expected AST
     # Tables
