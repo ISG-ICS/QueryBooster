@@ -11,8 +11,12 @@ formatter = QueryFormatter()
 
 def normalize_sql(s):
     """Remove extra whitespace and normalize SQL string to be used in comparisons"""
+    # Remove leading/trailing whitespace and collapse multiple spaces into one
     s = s.strip()
     s = sub(r'\s+', ' ', s)
+    # Remove spaces after opening parentheses and before closing parentheses
+    s = sub(r'\(\s+', '(', s)
+    s = sub(r'\s+\)', ')', s)
     
     return s
 
@@ -142,9 +146,9 @@ def test_subquery_format():
         )
         AND 1 = 1
     """
-    # expected_sql = expected_sql.strip()
+    expected_sql = expected_sql.strip()
     
-    # sql = formatter.format(ast)
-    # sql = sql.strip()
+    sql = formatter.format(ast)
+    sql = sql.strip()
     
-    # assert normalize_sql(sql) == normalize_sql(expected_sql)
+    assert normalize_sql(sql) == normalize_sql(expected_sql)
