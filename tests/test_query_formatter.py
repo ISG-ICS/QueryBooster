@@ -5,7 +5,6 @@ from core.ast.node import (
     OrderByNode, LimitNode, OffsetNode, SubqueryNode, VarNode, VarSetNode, JoinNode
 )
 from core.ast.enums import JoinType, SortOrder
-from re import sub
 from mo_sql_parsing import parse
 
 formatter = QueryFormatter()
