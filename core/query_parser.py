@@ -3,12 +3,20 @@ from core.ast.node import (
     LiteralNode, OperatorNode, FunctionNode, GroupByNode, HavingNode,
     OrderByNode, OrderByItemNode, LimitNode, OffsetNode, SubqueryNode, VarNode, VarSetNode, JoinNode
 )
-# TODO: implement SubqueryNode, VarNode, VarSetNode
+# TODO: implement VarNode, VarSetNode
 from core.ast.enums import JoinType, SortOrder
 import mo_sql_parsing as mosql
 import json
 
 class QueryParser:
+    # mo_sql_parsing operator keys -> SQL display name
+    _OPERATOR_KEY_TO_NAME = {
+        'eq': '=', 'neq': '!=', 'ne': '!=',
+        'gt': '>', 'gte': '>=', 'lt': '<', 'lte': '<=',
+        'and': 'AND', 'or': 'OR', 'in': 'IN',
+    }
+    _LIST_OPERATOR_KEYS = frozenset(_OPERATOR_KEY_TO_NAME.keys())
+
     @staticmethod
     def normalize_to_list(value):
         """Normalize mo_sql_parsing output to a list format.
@@ -33,57 +41,24 @@ class QueryParser:
             )
 
     def parse(self, query: str) -> QueryNode:
-        # [1] Call mo_sql_parser
-        # str ->  Any (JSON)
+        # str -> mo_sql_parsing -> QueryNode
         mosql_ast = mosql.parse(query)
-
-        # [2] Our new code
-        # Any (JSON) -> AST (QueryNode)
-        # Aliases dictionary
-        aliases = {}
-
-        select_clause = None
-        from_clause = None
-        where_clause = None
-        group_by_clause = None
-        having_clause = None
-        order_by_clause = None
-        limit_clause = None
-        offset_clause = None
-        
-        if 'select' in mosql_ast:
-            select_clause = self.parse_select(self.normalize_to_list(mosql_ast['select']), aliases)
-        if 'from' in mosql_ast:
-            from_clause = self.parse_from(self.normalize_to_list(mosql_ast['from']), aliases)
-        if 'where' in mosql_ast:
-            where_clause = self.parse_where(mosql_ast['where'], aliases)
-        if 'groupby' in mosql_ast:
-            group_by_clause = self.parse_group_by(self.normalize_to_list(mosql_ast['groupby']), aliases)
-        if 'having' in mosql_ast:
-            having_clause = self.parse_having(mosql_ast['having'], aliases)
-        if 'orderby' in mosql_ast:
-            order_by_clause = self.parse_order_by(self.normalize_to_list(mosql_ast['orderby']), aliases)
-        if 'limit' in mosql_ast:
-            limit_clause = LimitNode(mosql_ast['limit'])
-        if 'offset' in mosql_ast:
-            offset_clause = OffsetNode(mosql_ast['offset'])
-            
-        return QueryNode(
-            _select=select_clause,
-            _from=from_clause,
-            _where=where_clause,
-            _group_by=group_by_clause,
-            _having=having_clause,
-            _order_by=order_by_clause,
-            _limit=limit_clause,
-            _offset=offset_clause
-        )
+        return self.parse_query_dict(mosql_ast, aliases={})
    
     def parse_select(self, select_list: list, aliases: dict) -> SelectNode:
         items = []
         for item in select_list:
             if isinstance(item, dict) and 'value' in item:
-                expression = self.parse_expression(item['value'])
+                value = item['value']
+                # Check if value is a subquery
+                if isinstance(value, dict) and 'select' in value:
+                    # This is a subquery in SELECT clause
+                    # Subquery has its own alias scope (no leaking to/from outer query)
+                    subquery_query = self.parse_query_dict(value, aliases={})
+                    expression = SubqueryNode(subquery_query)
+                else:
+                    expression = self.parse_expression(value, aliases)
+                
                 # Handle alias - set for any node that has alias attribute
                 if 'name' in item:
                     alias = item['name']
@@ -94,7 +69,7 @@ class QueryParser:
                 items.append(expression)
             else:
                 # Handle direct expression (string, int, etc.)
-                expression = self.parse_expression(item)
+                expression = self.parse_expression(item, aliases)
                 items.append(expression)
                 
         return SelectNode(items)
@@ -119,39 +94,73 @@ class QueryParser:
                     if isinstance(join_info, str):
                         table_name = join_info
                         alias = None
+                        right_source = TableNode(table_name, alias)
+                    elif isinstance(join_info, dict):
+                        # Derived table: {'value': {<subquery>}, 'name': <alias>}
+                        value = join_info.get('value')
+                        if isinstance(value, dict) and 'select' in value:
+                            subquery_query = self.parse_query_dict(value, aliases={})
+                            alias = join_info.get('name')
+                            right_source = SubqueryNode(subquery_query, alias)
+                        elif 'select' in join_info:
+                            # Subquery at top level (alias in 'name' if present)
+                            subquery_query = self.parse_query_dict(join_info, aliases={})
+                            alias = join_info.get('name')
+                            right_source = SubqueryNode(subquery_query, alias)
+                        else:
+                            table_name = join_info.get('value', join_info)
+                            alias = join_info.get('name')
+                            right_source = TableNode(table_name, alias)
                     else:
-                        table_name = join_info['value'] if isinstance(join_info, dict) else join_info
-                        alias = join_info.get('name') if isinstance(join_info, dict) else None
+                        table_name = join_info
+                        alias = None
+                        right_source = TableNode(table_name, alias)
                     
-                    right_table = TableNode(table_name, alias)
-                    # Track table alias
+                    # Track alias
                     if alias:
-                        aliases[alias] = right_table
+                        aliases[alias] = right_source
                     
                     on_condition = None
                     if 'on' in item:
-                        on_condition = self.parse_expression(item['on'])
+                        on_condition = self.parse_expression(item['on'], aliases)
                     
                     # Create join node - left_source might be a table or a previous join
                     join_type = self.parse_join_type(join_key)
-                    join_node = JoinNode(left_source, right_table, join_type, on_condition)
+                    join_node = JoinNode(left_source, right_source, join_type, on_condition)
                     # The result of this JOIN becomes the new left source for potential next JOIN
                     left_source = join_node
                 elif 'value' in item:
-                    # This is a table reference
-                    table_name = item['value']
+                    # Check if value is a subquery
+                    value = item['value']
                     alias = item.get('name')
-                    table_node = TableNode(table_name, alias)
-                    # Track table alias
-                    if alias:
-                        aliases[alias] = table_node
                     
-                    if left_source is None:
-                        # First table becomes the left source
-                        left_source = table_node
+                    if isinstance(value, dict) and 'select' in value:
+                        # This is a subquery in FROM clause
+                        # Subquery has its own alias scope (no leaking to/from outer query)
+                        subquery_query = self.parse_query_dict(value, aliases={})
+                        subquery_node = SubqueryNode(subquery_query, alias)
+                        # Track subquery alias
+                        if alias:
+                            aliases[alias] = subquery_node
+                        
+                        if left_source is None:
+                            left_source = subquery_node
+                        else:
+                            sources.append(subquery_node)
                     else:
-                        # Multiple tables without explicit JOIN (cross join)
-                        sources.append(table_node)
+                        # This is a table reference
+                        table_name = value
+                        table_node = TableNode(table_name, alias)
+                        # Track table alias
+                        if alias:
+                            aliases[alias] = table_node
+                        
+                        if left_source is None:
+                            # First table becomes the left source
+                            left_source = table_node
+                        else:
+                            # Multiple tables without explicit JOIN (cross join)
+                            sources.append(table_node)
             elif isinstance(item, str):
                 # Simple string table name
                 table_node = TableNode(item)
@@ -160,28 +169,28 @@ class QueryParser:
                 else:
                     sources.append(table_node)
         
-        # Add the final left source (which might be a single table or chain of joins)
+        # Prepend the first/left source so order is preserved
         if left_source is not None:
-            sources.append(left_source)
-            
+            sources.insert(0, left_source)
+
         return FromNode(sources)
     
     def parse_where(self, where_dict: dict, aliases: dict) -> WhereNode:
         predicates = []
-        predicates.append(self.parse_expression(where_dict))
+        predicates.append(self.parse_expression(where_dict, aliases))
         return WhereNode(predicates)
     
     def parse_group_by(self, group_by_list: list, aliases: dict) -> GroupByNode:
         items = []
         for item in group_by_list:
             if isinstance(item, dict) and 'value' in item:
-                expr = self.parse_expression(item['value'])
+                expr = self.parse_expression(item['value'], aliases)
                 # Resolve aliases
                 expr = self.resolve_aliases(expr, aliases)
                 items.append(expr)
             else:
                 # Handle direct expression (string, int, etc.)
-                expr = self.parse_expression(item)
+                expr = self.parse_expression(item, aliases)
                 expr = self.resolve_aliases(expr, aliases)
                 items.append(expr)
 
@@ -189,7 +198,7 @@ class QueryParser:
     
     def parse_having(self, having_dict: dict, aliases: dict) -> HavingNode:
         predicates = []
-        expr = self.parse_expression(having_dict)
+        expr = self.parse_expression(having_dict, aliases)
         # Check if this expression references an aliased function from SELECT
         expr = self.resolve_aliases(expr, aliases)
         
@@ -207,7 +216,7 @@ class QueryParser:
                     column = aliases[value]
                 else:
                     # Parse normally for other cases
-                    column = self.parse_expression(value)
+                    column = self.parse_expression(value, aliases)
                 
                 # Get sort order (default is ASC)
                 sort_order = SortOrder.ASC
@@ -221,7 +230,7 @@ class QueryParser:
                 items.append(order_by_item)
             else:
                 # Handle direct expression (string, int, etc.)
-                column = self.parse_expression(item)
+                column = self.parse_expression(item, aliases)
                 order_by_item = OrderByItemNode(column, SortOrder.ASC)
                 items.append(order_by_item)
 
@@ -267,7 +276,10 @@ class QueryParser:
         else:
             return expr
     
-    def parse_expression(self, expr) -> Node:
+    def parse_expression(self, expr, aliases: dict = None) -> Node:
+        if aliases is None:
+            aliases = {}
+            
         if isinstance(expr, str):
             # Column reference
             if '.' in expr:
@@ -280,10 +292,17 @@ class QueryParser:
         
         if isinstance(expr, list):
             # List literals (for IN clauses)
-            parsed = [self.parse_expression(item) for item in expr]
+            parsed = [self.parse_expression(item, aliases) for item in expr]
             return parsed
         
         if isinstance(expr, dict):
+            # Check if this is a subquery (has 'select' key)
+            if 'select' in expr:
+                # This is a subquery - parse it recursively
+                # Subquery has its own alias scope (no leaking to/from outer query)
+                subquery_query = self.parse_query_dict(expr, aliases={})
+                return SubqueryNode(subquery_query)
+            
             # Special cases first
             if 'all_columns' in expr:
                 return ColumnNode('*')
@@ -300,34 +319,44 @@ class QueryParser:
                     
                 value = expr[key]
                 op_name = self.normalize_operator_name(key)
-                
-                # Pattern 1: Binary/N-ary operator with list of operands
+                key_lower = key.lower()
+
+                # Pattern 1: List value (either n-ary operator or multi-arg function)
                 if isinstance(value, list):
                     if len(value) == 0:
                         return LiteralNode(None)
                     if len(value) == 1:
-                        return self.parse_expression(value[0])
-                    
-                    # Parse all operands
-                    operands = [self.parse_expression(v) for v in value]
-                    
-                    # Chain multiple operands with the same operator
-                    result = operands[0]
-                    for operand in operands[1:]:
-                        result = OperatorNode(result, op_name, operand)
-                    return result
+                        return self.parse_expression(value[0], aliases)
+
+                    operands = [self.parse_expression(v, aliases) for v in value]
+
+                    # SQL operators that mo_sql_parsing represents as key: [args]
+                    if key_lower in QueryParser._LIST_OPERATOR_KEYS:
+                        result = operands[0]
+                        for operand in operands[1:]:
+                            result = OperatorNode(result, op_name, operand)
+                        return result
+                    # Otherwise treat as multi-arg function (e.g. COALESCE, GREATEST)
+                    return FunctionNode(op_name, _args=operands)
                 
                 # Pattern 2: Unary operator
                 if key == 'not':
-                    return OperatorNode(self.parse_expression(value), 'NOT')
+                    return OperatorNode(self.parse_expression(value, aliases), 'NOT')
                 
-                # Pattern 3: Function call
+                # Pattern 3: EXISTS operator with subquery
+                if key == 'exists' and isinstance(value, dict) and 'select' in value:
+                    # Subquery has its own alias scope (no leaking to/from outer query)
+                    subquery_query = self.parse_query_dict(value, aliases={})
+                    subquery_node = SubqueryNode(subquery_query)
+                    return OperatorNode(subquery_node, 'EXISTS')
+                
+                # Pattern 4: Function call
                 # Special case: COUNT(*), SUM(*), etc.
                 if value == '*':
                     return FunctionNode(op_name, _args=[ColumnNode('*')])
                 
                 # Regular function
-                args = [self.parse_expression(value)]
+                args = [self.parse_expression(value, aliases)]
                 return FunctionNode(op_name, _args=args)
             
             # No valid key found
@@ -336,16 +365,50 @@ class QueryParser:
         # Other types
         return LiteralNode(expr)
     
+    def parse_query_dict(self, query_dict: dict, aliases: dict) -> QueryNode:
+        """Parse a mo_sql_parsing query-dict into a QueryNode.
+        """
+        select_clause = None
+        from_clause = None
+        where_clause = None
+        group_by_clause = None
+        having_clause = None
+        order_by_clause = None
+        limit_clause = None
+        offset_clause = None
+        
+        if 'select' in query_dict:
+            select_clause = self.parse_select(self.normalize_to_list(query_dict['select']), aliases)
+        if 'from' in query_dict:
+            from_clause = self.parse_from(self.normalize_to_list(query_dict['from']), aliases)
+        if 'where' in query_dict:
+            where_clause = self.parse_where(query_dict['where'], aliases)
+        if 'groupby' in query_dict:
+            group_by_clause = self.parse_group_by(self.normalize_to_list(query_dict['groupby']), aliases)
+        if 'having' in query_dict:
+            having_clause = self.parse_having(query_dict['having'], aliases)
+        if 'orderby' in query_dict:
+            order_by_clause = self.parse_order_by(self.normalize_to_list(query_dict['orderby']), aliases)
+        if 'limit' in query_dict:
+            limit_clause = LimitNode(query_dict['limit'])
+        if 'offset' in query_dict:
+            offset_clause = OffsetNode(query_dict['offset'])
+            
+        return QueryNode(
+            _select=select_clause,
+            _from=from_clause,
+            _where=where_clause,
+            _group_by=group_by_clause,
+            _having=having_clause,
+            _order_by=order_by_clause,
+            _limit=limit_clause,
+            _offset=offset_clause
+        )
+    
     @staticmethod
     def normalize_operator_name(key: str) -> str:
         """Convert mo_sql_parsing operator keys to SQL operator names."""
-        mapping = {
-            'eq': '=', 'neq': '!=', 'ne': '!=',
-            'gt': '>', 'gte': '>=', 
-            'lt': '<', 'lte': '<=',
-            'and': 'AND', 'or': 'OR',
-        }
-        return mapping.get(key.lower(), key.upper())
+        return QueryParser._OPERATOR_KEY_TO_NAME.get(key.lower(), key.upper())
     
     @staticmethod
     def parse_join_type(join_key: str) -> JoinType:
@@ -363,4 +426,4 @@ class QueryParser:
         elif 'cross' in key_lower:
             return JoinType.CROSS
         
-        return JoinType.INNER  # By default
+        return JoinType.INNER

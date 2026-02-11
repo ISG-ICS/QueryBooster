@@ -62,12 +62,20 @@ class TableNode(Node):
         return hash((super().__hash__(), self.name, self.alias))
 
 
-# TODO - including query structure arguments (similar to QueryNode) in constructor.
 class SubqueryNode(Node):
     """Subquery node"""
     def __init__(self, query: 'Node', _alias: Optional[str] = None, **kwargs):
         super().__init__(NodeType.SUBQUERY, children={query}, **kwargs)
         self.alias = _alias
+    
+    def __eq__(self, other):
+        if not isinstance(other, SubqueryNode):
+            return False
+        return (super().__eq__(other) and 
+                self.alias == other.alias)
+    
+    def __hash__(self):
+        return hash((super().__hash__(), self.alias))
 
 
 class ColumnNode(Node):
@@ -160,7 +168,7 @@ class FunctionNode(Node):
 
 class JoinNode(Node):
     """JOIN clause node"""
-    def __init__(self, _left_table: Union['TableNode', 'JoinNode'], _right_table: 'TableNode', _join_type: JoinType = JoinType.INNER, _on_condition: Optional['Node'] = None, **kwargs):
+    def __init__(self, _left_table: Union['TableNode', 'JoinNode', 'SubqueryNode'], _right_table: Union['TableNode', 'SubqueryNode'], _join_type: JoinType = JoinType.INNER, _on_condition: Optional['Node'] = None, **kwargs):
         children = [_left_table, _right_table]
         if _on_condition:
             children.append(_on_condition)
