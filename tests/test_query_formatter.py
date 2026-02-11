@@ -5,16 +5,9 @@ from core.ast.node import (
     OrderByNode, LimitNode, OffsetNode, SubqueryNode, VarNode, VarSetNode, JoinNode
 )
 from core.ast.enums import JoinType, SortOrder
-from re import sub
+from mo_sql_parsing import parse
 
 formatter = QueryFormatter()
-
-def normalize_sql(s):
-    """Remove extra whitespace and normalize SQL string to be used in comparisons"""
-    s = s.strip()
-    s = sub(r'\s+', ' ', s)
-    
-    return s
 
 def test_basic_format():
     # Construct expected AST
@@ -82,7 +75,7 @@ def test_basic_format():
     sql = formatter.format(ast)
     sql = sql.strip()
     
-    assert normalize_sql(sql) == normalize_sql(expected_sql)
+    assert parse(sql) == parse(expected_sql)
 
 
 def test_subquery_format():
@@ -142,9 +135,9 @@ def test_subquery_format():
         )
         AND 1 = 1
     """
-    # expected_sql = expected_sql.strip()
+    expected_sql = expected_sql.strip()
     
-    # sql = formatter.format(ast)
-    # sql = sql.strip()
+    sql = formatter.format(ast)
+    sql = sql.strip()
     
-    # assert normalize_sql(sql) == normalize_sql(expected_sql)
+    assert parse(sql) == parse(expected_sql)

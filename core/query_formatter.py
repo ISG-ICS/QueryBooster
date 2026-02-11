@@ -222,6 +222,9 @@ def format_expression(node: Node):
         return node.name
     
     elif node.type == NodeType.LITERAL:
+        if isinstance(node.value, str):
+            return {'literal': node.value}
+
         return node.value
     
     elif node.type == NodeType.FUNCTION:
@@ -229,6 +232,10 @@ def format_expression(node: Node):
         func_name = node.name.lower()
         args = [format_expression(arg) for arg in node.children]
         return {func_name: args[0] if len(args) == 1 else args}
+    
+    elif node.type == NodeType.SUBQUERY:
+        subquery_node = list(node.children)[0]
+        return ast_to_json(subquery_node)
     
     elif node.type == NodeType.OPERATOR:
         # format: {'operator': [left, right]}
