@@ -32,6 +32,6 @@ def test_subquery_e2e():
                 WHERE deptname = 'OPERATIONS')
         AND 1=1
     """
-    # parsed_ast = parser.parse(original_sql)
-    # formatted_sql = formatter.format(parsed_ast)
-    # assert parse(formatted_sql) == parse(original_sql)
+    parsed_ast = parser.parse(original_sql)
+    formatted_sql = formatter.format(parsed_ast)
+    assert parse(formatted_sql) == parse(original_sql)
