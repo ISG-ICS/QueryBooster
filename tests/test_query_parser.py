@@ -588,7 +588,7 @@ def test_query_14():
     assert parser.parse(sql) == expected_ast
 
 
-#TODO: Query 15 uses UNION, which is not supported by parser yet
+# TODO: Query 15 uses UNION, which is not supported by parser yet
 
 
 def test_query_16():
@@ -702,7 +702,7 @@ def test_query_20():
     # Construct expected AST
     table_b = TableNode("b")
     b_cl1 = ColumnNode("cl1", _parent_alias="b")
-    in_s1_s2 = OperatorNode(b_cl1, "IN", LiteralNode(["s1", "s2"]))
+    in_s1_s2 = OperatorNode(b_cl1, "IN", [LiteralNode("s1"), LiteralNode("s2")])
     eq_s3 = OperatorNode(b_cl1, "=", LiteralNode("s3"))
     select_clause = SelectNode([ColumnNode("*")])
     from_clause = FromNode([table_b])
@@ -892,7 +892,7 @@ def test_query_27():
     # Construct expected AST
     emp_table = TableNode("Emp")
     age_col = ColumnNode("age")
-    #TODO: parser does not support arithmetic expressions yet
+    # TODO: parser does not support arithmetic expressions yet
     age_minus_two = OperatorNode(age_col, "-", LiteralNode(2))
     select_clause = SelectNode([ColumnNode("*")])
     from_clause = FromNode([emp_table])
@@ -961,7 +961,7 @@ def test_query_28():
     assert parser.parse(sql) == expected_ast
 
 
-#TODO: Query 29: Full Matching: UNION not supported by parser 
+# TODO: Query 29: Full Matching: UNION not supported by parser 
 
 def test_query_30():
     """Query 30: Over Partial Matching."""
@@ -1040,7 +1040,7 @@ def test_query_31():
         _args=[t1_data],
         _alias="data",
     )
-    #TODO: make CASE as a specific node instead of FunctionNode?
+    # TODO: make CASE as a specific node instead of FunctionNode?
     inner_case = FunctionNode(
         "CASE",
         _args=[
@@ -1071,7 +1071,7 @@ def test_query_31():
     #assert parser.parse(sql) == expected_ast
 
 
-#TODO: Query 32: UNION not supported by parser
+# TODO: Query 32: UNION not supported by parser
 
 def test_query_33():
     """Query 33: Spreadsheet ID 3."""
@@ -1410,12 +1410,12 @@ def test_query_40():
     pubcode_in = OperatorNode(
         t_pubCode,
         "IN",
-        LiteralNode(["hyrmas", "ayqioa", "rj49as99"]),
+        [LiteralNode("hyrmas"), LiteralNode("ayqioa"), LiteralNode("rj49as99")],
     )
     provider_in = OperatorNode(
         t_provider,
         "IN",
-        LiteralNode(["FCM", "ONE_SIGNAL"]),
+        [LiteralNode("FCM"), LiteralNode("ONE_SIGNAL")],
     )
     segmentid_in = OperatorNode(
         s_segmentId,
@@ -1433,7 +1433,7 @@ def test_query_40():
     prefvalue_in = OperatorNode(
         p_preferenceValue,
         "IN",
-        LiteralNode(["en", "hi"]),
+        [LiteralNode("en"), LiteralNode("hi")],
     )
     where_condition = OperatorNode(
         OperatorNode(
@@ -1495,7 +1495,7 @@ def test_query_41():
         _from=from_clause,
         _where=where_clause,
     )
-    # assert parser.parse(sql) == expected_ast
+    #assert parser.parse(sql) == expected_ast
 
 
 def test_query_42():
