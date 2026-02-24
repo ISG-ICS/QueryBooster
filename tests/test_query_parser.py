@@ -1,8 +1,11 @@
+import logging
 from core.query_parser import QueryParser
 from data.queries import get_query
 from data.asts import get_ast
+from .ast_util import visualize_ast
 
 parser = QueryParser()
+logger = logging.getLogger(__name__)
 
 
 def test_basic_parse():
