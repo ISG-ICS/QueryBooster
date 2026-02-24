@@ -61,6 +61,7 @@ def _build_asts() -> dict:
     }
 
 # TODO: keywords like TEXT, INTEGER, DATE should not be function node
+# TODO: ts_list should be a new ListNode instead of a python list
 def _ast_query_1() -> QueryNode:
     """Query 1: Remove Cast Date Match Twice."""
     # Tables
@@ -113,6 +114,7 @@ def _ast_query_1() -> QueryNode:
     )
 
 # TODO: keywords like TEXT, INTEGER should not be function node
+# TODO: ts_list should be a new ListNode instead of a python list
 def _ast_query_2() -> QueryNode:
     """Query 2: Remove Cast Date Match Once."""
     # Tables
@@ -154,6 +156,7 @@ def _ast_query_2() -> QueryNode:
 # query 3 has the exact same query as query 2, so I skipped it
 
 # TODO: keywords like TEXT, INTEGER should not be function node
+# TODO: ts_list should be a new ListNode instead of a python list
 def _ast_query_4() -> QueryNode:
     """Query 4."""
     tweets_table = TableNode("tweets")
@@ -589,6 +592,7 @@ def _ast_query_19() -> QueryNode:
 
 
 # TODO: IN should be a list of literals, but parser currently does not support this
+# TODO: second argument for IN operator should be a new ListNode instead of a python list
 def _ast_query_20() -> QueryNode:
     """Query 20: Partial Matching Base Case 2."""
     table_b = TableNode("b")
@@ -689,7 +693,7 @@ def _ast_query_23() -> QueryNode:
         _where=where_clause,
     )
 
-
+# TODO: Only case sensitive for now (focusing on PostgreSQL), can add a flag in future to support case insensitive
 def _ast_query_24() -> QueryNode:
     """Query 24: Partial Keeps Remaining AND."""
     emp_table = TableNode("EMP")
@@ -867,10 +871,14 @@ def _ast_query_31() -> QueryNode:
     t1_data = ColumnNode("data", _parent_alias="t1")
     t1_login_ok = ColumnNode("login_ok", _parent_alias="t1")
     # SELECT: t1.CPF, DATE(t1.data) AS data, CASE WHEN ... END
-    date_data = FunctionNode(
+    date_data_with_alias = FunctionNode(
         "DATE",
         _args=[t1_data],
         _alias="data",
+    )
+    date_data_no_alias = FunctionNode(
+        "DATE",
+        _args=[t1_data]
     )
 
     inner_case = FunctionNode(
@@ -890,11 +898,11 @@ def _ast_query_31() -> QueryNode:
             FunctionNode("ELSE", _args=[LiteralNode(False)]),
         ],
     )
-    select_clause = SelectNode([t1_cpf, date_data, outer_case])
+    select_clause = SelectNode([t1_cpf, date_data_with_alias, outer_case])
     # FROM
     from_clause = FromNode([t1_table])
     # GROUP BY t1.CPF, DATE(t1.data)
-    group_by_clause = GroupByNode([t1_cpf, date_data])
+    group_by_clause = GroupByNode([t1_cpf, date_data_no_alias])
     return QueryNode(
         _select=select_clause,
         _from=from_clause,
@@ -1173,6 +1181,7 @@ def _ast_query_39() -> QueryNode:
 
 
 # TODO: DISTINCT ON is not supported by parser yet
+# TODO: third argument for OperatorNodes using IN should be a new ListNode instead of a python list
 def _ast_query_40() -> QueryNode:
     """Query 40."""
     # Tables
@@ -1290,7 +1299,6 @@ def _ast_query_41() -> QueryNode:
 # TODO: double check on how we should handle INTERVAL, it's not supported by parser yet
 def _ast_query_42() -> QueryNode:
     """Query 42: PostgreSQL Test."""
-    # TODO: Special query, please double check the AST
     # Construct expected AST
     # Query pattern: SELECT "tweets"."latitude" AS "latitude", "tweets"."longitude" AS "longitude"
     #   FROM "public"."tweets" "tweets"
@@ -1300,7 +1308,8 @@ def _ast_query_42() -> QueryNode:
     #     AND (STRPOS(CAST(LOWER(CAST(CAST("tweets"."text" AS TEXT) AS TEXT)) AS TEXT), CAST('microsoft' AS TEXT)) > 0)
     #   GROUP BY 1, 2
     # Tables
-    tweets_table = TableNode("tweets", _alias="tweets")
+    # We cannot infer the schema of the tweets table, so we will just use the table and column names as they appear in the query
+    tweets_table = TableNode("public.tweets", _alias="tweets")
     # Columns
     t_latitude = ColumnNode("latitude", _alias="latitude", _parent_alias="tweets")
     t_longitude = ColumnNode("longitude", _alias="longitude", _parent_alias="tweets")
@@ -1328,13 +1337,10 @@ def _ast_query_42() -> QueryNode:
     )
     date_trunc_day = FunctionNode("DATE_TRUNC", _args=[LiteralNode("day"), cast_created])
     extract_dow = FunctionNode("EXTRACT", _args=[LiteralNode("DOW"), created_at])
+    neg_extract = OperatorNode(LiteralNode(0), "-", extract_dow)
     interval_1day = FunctionNode("INTERVAL", _args=[LiteralNode("1 DAY")])
-    # -EXTRACT(DOW FROM created_at) * INTERVAL '1 DAY'  =>  0 - (extract_dow * interval_1day)
-    neg_expr = OperatorNode(
-        LiteralNode(0),
-        "-",
-        OperatorNode(extract_dow, "*", interval_1day),
-    )
+    # -EXTRACT(DOW FROM created_at) * INTERVAL '1 DAY'  =>  neg_extract * interval_1day
+    neg_expr = OperatorNode(neg_extract, "*", interval_1day)
     date_plus = OperatorNode(date_trunc_day, "+", neg_expr)
     cast_date = FunctionNode(
         "CAST",
@@ -1380,7 +1386,7 @@ def _ast_query_42() -> QueryNode:
     )
 
 
-# NOTE: SECOND should be LiteralNode("SECOND"), not ColumnNode — keyword not yet supported
+# TODO: ColumnNode("SECOND") should be a TypeNode
 # TODO: group by should be a list of columns, not literals, but how to do the translation?
 def _ast_query_43() -> QueryNode:
     """Query 43: MySQL Test."""
@@ -1402,7 +1408,7 @@ def _ast_query_43() -> QueryNode:
         "DATE_FORMAT",
         _args=[created_at, LiteralNode("%Y-%m-01 00:00:00")],
     )
-    interval_0_second = FunctionNode("INTERVAL", _args=[LiteralNode(0), ColumnNode("second")])
+    interval_0_second = FunctionNode("INTERVAL", _args=[LiteralNode(0), ColumnNode("SECOND")])
     adddate_expr = FunctionNode(
         "ADDDATE",
         _args=[date_format_expr, interval_0_second],
