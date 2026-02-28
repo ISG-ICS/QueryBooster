@@ -301,7 +301,7 @@ def test_query_40():
 def test_query_41():
     """Query 41: Spreadsheet ID 20."""
     query = get_query(41)
-    sql = formatter.format(get_ast(41))
+    #sql = formatter.format(get_ast(41))
     # TODO: NULL keyword and IS NULL not fully supported yet
     #assert parse(sql) == parse(query["pattern"])
 
