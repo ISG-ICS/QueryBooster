@@ -114,6 +114,42 @@ class LiteralNode(Node):
     def __hash__(self):
         return hash((super().__hash__(), self.value))
 
+class TypeNode(Node):
+    """SQL type keyword node (e.g. TEXT, DATE, INTEGER)"""
+    SQL_TYPE_KEYWORDS = {"TEXT", "DATE", "INTEGER", "TIMESTAMP", "VARCHAR", "BOOLEAN", "FLOAT", "SECOND", "MINUTE", "HOUR", "DAY", "WEEK", "MONTH", "YEAR", "NULL"}
+
+    def __init__(self, _name: str, **kwargs):
+        if _name not in TypeNode.SQL_TYPE_KEYWORDS:
+            raise ValueError(f"Invalid SQL type keyword: {_name}")
+        super().__init__(NodeType.TYPE, **kwargs)
+        self.name = _name
+    
+    def __eq__(self, other):
+        if not isinstance(other, TypeNode):
+            return False
+        return super().__eq__(other) and self.name == other.name
+    
+    def __hash__(self):
+        return hash((super().__hash__(), self.name))
+
+class ListNode(Node):
+    """A list of nodes, e.g. the right-hand side of an IN expression"""
+    def __init__(self, _items: List[Node], **kwargs):
+        super().__init__(NodeType.LIST, children=_items, **kwargs)
+    
+class IntervalNode(Node):
+    def __init__(self, _value, _unit: TypeNode, **kwargs):
+        super().__init__(NodeType.INTERVAL, children=[_unit], **kwargs)
+        self.value = _value
+        self.unit = _unit
+    
+    def __eq__(self, other):
+        if not isinstance(other, IntervalNode):
+            return False
+        return super().__eq__(other) and self.value == other.value and self.unit == other.unit
+    
+    def __hash__(self):
+        return hash((super().__hash__(), self.value, self.unit))
 
 class VarNode(Node):
     """VarSQL variable node"""
@@ -192,9 +228,19 @@ class JoinNode(Node):
 # ============================================================================
 
 class SelectNode(Node):
-    """SELECT clause node"""
-    def __init__(self, _items: List['Node'], **kwargs):
+    """SELECT clause node. _distinct_on is the list of expressions for DISTINCT ON (e.g. ListNode of columns)."""
+    def __init__(self, _items: List['Node'], _distinct: bool = False, _distinct_on: Optional['Node'] = None, **kwargs):
         super().__init__(NodeType.SELECT, children=_items, **kwargs)
+        self.distinct = _distinct
+        self.distinct_on = _distinct_on
+
+    def __eq__(self, other):
+        if not isinstance(other, SelectNode):
+            return False
+        return super().__eq__(other) and self.distinct == other.distinct and self.distinct_on == other.distinct_on  
+
+    def __hash__(self):
+        return hash((super().__hash__(), self.distinct, self.distinct_on))
 
 
 # TODO - confine the valid NodeTypes as children of FromNode
@@ -305,3 +351,22 @@ class QueryNode(Node):
         if _offset:
             children.append(_offset)
         super().__init__(NodeType.QUERY, children=children, **kwargs)
+    
+class CaseNode(Node):
+    """SQL CASE WHEN ... THEN ... ELSE ... END expression"""
+    def __init__(self, _whens: List[tuple], _else=None, **kwargs):
+        # flatten whens into children: [cond1, val1, cond2, val2, ..., else]
+        children = [node for pair in _whens for node in pair]
+        if _else is not None:
+            children.append(_else)
+        super().__init__(NodeType.CASE, children=children, **kwargs)
+        self.whens = _whens
+        self.else_val = _else
+
+    def __eq__(self, other):
+        if not isinstance(other, CaseNode):
+            return False
+        return super().__eq__(other) and self.whens == other.whens and self.else_val == other.else_val
+
+    def __hash__(self):
+        return hash((super().__hash__(), tuple(self.whens), self.else_val))
