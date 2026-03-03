@@ -115,12 +115,12 @@ class LiteralNode(Node):
         return hash((super().__hash__(), self.value))
 
 class TypeNode(Node):
-    """SQL type keyword node (e.g. TEXT, DATE, INTEGER)"""
+    """SQL keyword/unit node for types, interval units, and NULL (e.g. TEXT, DATE, INTEGER, SECOND, YEAR, NULL)"""
     SQL_TYPE_KEYWORDS = {"TEXT", "DATE", "INTEGER", "TIMESTAMP", "VARCHAR", "BOOLEAN", "FLOAT", "SECOND", "MINUTE", "HOUR", "DAY", "WEEK", "MONTH", "YEAR", "NULL"}
 
     def __init__(self, _name: str, **kwargs):
         if _name not in TypeNode.SQL_TYPE_KEYWORDS:
-            raise ValueError(f"Invalid SQL type keyword: {_name}")
+            raise ValueError(f"Invalid SQL type/keyword: {_name}")
         super().__init__(NodeType.TYPE, **kwargs)
         self.name = _name
     
