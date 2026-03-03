@@ -1179,7 +1179,7 @@ def _ast_query_40() -> QueryNode:
         "COALESCE",
         _args=[p_preferenceValue, LiteralNode("en")],
     )
-    select_clause = SelectNode([t_gzpId, t_pubCode, t_playerId, coalesce_expr, s_segmentId], _distinct_on = ListNode([t_playerId]))
+    select_clause = SelectNode([t_gzpId, t_pubCode, t_playerId, coalesce_expr, s_segmentId], _distinct_on=ListNode([t_playerId]))
     # FROM: t LEFT JOIN p ON t.gzpId = p.gzpId LEFT JOIN s ON t.gzpId = s.gzpId
     join_on_1 = OperatorNode(t_gzpId, "=", p_gzpId)
     join_1 = JoinNode(t_table, p_table, JoinType.LEFT, join_on_1)
