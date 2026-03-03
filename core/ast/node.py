@@ -139,7 +139,13 @@ class ListNode(Node):
     
 class IntervalNode(Node):
     def __init__(self, _value, _unit: TypeNode, **kwargs):
-        super().__init__(NodeType.INTERVAL, children=[_unit], **kwargs)
+        # Include the value in children when it is itself a Node, so that
+        # generic traversals/formatters that walk via `children` see it.
+        if isinstance(_value, Node):
+            children = [_value, _unit]
+        else:
+            children = [_unit]
+        super().__init__(NodeType.INTERVAL, children=children, **kwargs)
         self.value = _value
         self.unit = _unit
     
