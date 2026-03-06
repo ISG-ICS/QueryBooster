@@ -114,18 +114,37 @@ class LiteralNode(Node):
     def __hash__(self):
         return hash((super().__hash__(), self.value))
 
-class TypeNode(Node):
-    """SQL keyword/unit node for types, interval units, and NULL (e.g. TEXT, DATE, INTEGER, SECOND, YEAR, NULL)"""
-    SQL_TYPE_KEYWORDS = {"TEXT", "DATE", "INTEGER", "TIMESTAMP", "VARCHAR", "BOOLEAN", "FLOAT", "SECOND", "MINUTE", "HOUR", "DAY", "WEEK", "MONTH", "YEAR", "NULL"}
+class DataTypeNode(Node):
+    """SQL data type node used in CAST expressions (e.g. TEXT, DATE, INTEGER)"""
+    SQL_DATA_TYPES = {"TEXT", "DATE", "INTEGER", "TIMESTAMP", "VARCHAR", "BOOLEAN", "FLOAT"}
 
     def __init__(self, _name: str, **kwargs):
-        if _name not in TypeNode.SQL_TYPE_KEYWORDS:
-            raise ValueError(f"Invalid SQL type/keyword: {_name}")
-        super().__init__(NodeType.TYPE, **kwargs)
+        if _name not in DataTypeNode.SQL_DATA_TYPES:
+            raise ValueError(f"Invalid SQL data type: {_name}")
+        super().__init__(NodeType.DATA_TYPE, **kwargs)
         self.name = _name
     
     def __eq__(self, other):
-        if not isinstance(other, TypeNode):
+        if not isinstance(other, DataTypeNode):
+            return False
+        return super().__eq__(other) and self.name == other.name
+    
+    def __hash__(self):
+        return hash((super().__hash__(), self.name))
+
+
+class TimeUnitNode(Node):
+    """SQL time unit node used in INTERVAL and temporal functions (e.g. DAY, MONTH, SECOND)"""
+    TIME_UNITS = {"SECOND", "MINUTE", "HOUR", "DAY", "WEEK", "MONTH", "YEAR"}
+
+    def __init__(self, _name: str, **kwargs):
+        if _name not in TimeUnitNode.TIME_UNITS:
+            raise ValueError(f"Invalid SQL time unit: {_name}")
+        super().__init__(NodeType.TIME_UNIT, **kwargs)
+        self.name = _name
+    
+    def __eq__(self, other):
+        if not isinstance(other, TimeUnitNode):
             return False
         return super().__eq__(other) and self.name == other.name
     
@@ -138,7 +157,7 @@ class ListNode(Node):
         super().__init__(NodeType.LIST, children=_items, **kwargs)
     
 class IntervalNode(Node):
-    def __init__(self, _value, _unit: TypeNode, **kwargs):
+    def __init__(self, _value, _unit: TimeUnitNode, **kwargs):
         # Include the value in children when it is itself a Node, so that
         # generic traversals/formatters that walk via `children` see it.
         if isinstance(_value, Node):
@@ -358,11 +377,26 @@ class QueryNode(Node):
             children.append(_offset)
         super().__init__(NodeType.QUERY, children=children, **kwargs)
     
+class WhenThenNode(Node):
+    """Single WHEN ... THEN ... branch of a CASE expression"""
+    def __init__(self, _when: Node, _then: Node, **kwargs):
+        super().__init__(NodeType.WHEN_THEN, children=[_when, _then], **kwargs)
+        self.when = _when
+        self.then = _then
+
+    def __eq__(self, other):
+        if not isinstance(other, WhenThenNode):
+            return False
+        return super().__eq__(other) and self.when == other.when and self.then == other.then
+
+    def __hash__(self):
+        return hash((super().__hash__(), self.when, self.then))
+
+
 class CaseNode(Node):
     """SQL CASE WHEN ... THEN ... ELSE ... END expression"""
-    def __init__(self, _whens: List[tuple], _else=None, **kwargs):
-        # flatten whens into children: [cond1, val1, cond2, val2, ..., else]
-        children = [node for pair in _whens for node in pair]
+    def __init__(self, _whens: List[WhenThenNode], _else: Optional[Node] = None, **kwargs):
+        children: List[Node] = list(_whens)
         if _else is not None:
             children.append(_else)
         super().__init__(NodeType.CASE, children=children, **kwargs)

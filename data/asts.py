@@ -1,7 +1,7 @@
 from typing import Optional
 from core.ast.node import (
-    CaseNode, IntervalNode, ListNode, QueryNode, SelectNode, FromNode, WhereNode, TableNode, ColumnNode, 
-    LiteralNode, TypeNode, OperatorNode, FunctionNode, GroupByNode, HavingNode,
+    CaseNode, WhenThenNode, IntervalNode, ListNode, QueryNode, SelectNode, FromNode, WhereNode, TableNode, ColumnNode, 
+    LiteralNode, DataTypeNode, TimeUnitNode, OperatorNode, FunctionNode, GroupByNode, HavingNode,
     OrderByNode, OrderByItemNode, LimitNode, OffsetNode, JoinNode, SubqueryNode
 )
 from core.ast.enums import JoinType, SortOrder
@@ -69,7 +69,7 @@ def _ast_query_1() -> QueryNode:
     sum_one = FunctionNode("SUM", _args=[LiteralNode(1)])
     cast_state = FunctionNode(
         "CAST",
-        _args=[ColumnNode("state_name"), TypeNode("TEXT")],
+        _args=[ColumnNode("state_name"), DataTypeNode("TEXT")],
     )
     select_clause = SelectNode([sum_one, cast_state])
     # FROM
@@ -84,14 +84,14 @@ def _ast_query_1() -> QueryNode:
         "CAST",
         _args=[
             ColumnNode("created_at"),
-            TypeNode("DATE"),
+            DataTypeNode("DATE"),
         ],
     )
     date_trunc_outer = FunctionNode(
         "CAST",
         _args=[
             FunctionNode("DATE_TRUNC", _args=[LiteralNode("QUARTER"), date_trunc_inner]),
-            TypeNode("DATE"),
+            DataTypeNode("DATE"),
         ],
     )
     in_timestamps = OperatorNode(date_trunc_outer, "IN", ts_list)
@@ -121,7 +121,7 @@ def _ast_query_2() -> QueryNode:
     sum_one = FunctionNode("SUM", _args=[LiteralNode(1)])
     cast_state = FunctionNode(
         "CAST",
-        _args=[ColumnNode("state_name"), TypeNode("TEXT")],
+        _args=[ColumnNode("state_name"), DataTypeNode("TEXT")],
     )
     select_clause = SelectNode([sum_one, cast_state])
     from_clause = FromNode([tweets_table])
@@ -158,7 +158,7 @@ def _ast_query_4() -> QueryNode:
     sum_one = FunctionNode("SUM", _args=[LiteralNode(1)])
     cast_state = FunctionNode(
         "CAST",
-        _args=[ColumnNode("state_name"), TypeNode("TEXT")],
+        _args=[ColumnNode("state_name"), DataTypeNode("TEXT")],
     )
     select_clause = SelectNode([sum_one, cast_state])
     from_clause = FromNode([tweets_table])
@@ -169,13 +169,13 @@ def _ast_query_4() -> QueryNode:
     ])
     date_trunc_inner = FunctionNode(
         "CAST",
-        _args=[ColumnNode("created_at"), TypeNode("DATE")],
+        _args=[ColumnNode("created_at"), DataTypeNode("DATE")],
     )
     date_trunc_outer = FunctionNode(
         "CAST",
         _args=[
             FunctionNode("DATE_TRUNC", _args=[LiteralNode("QUARTER"), date_trunc_inner]),
-            TypeNode("DATE"),
+            DataTypeNode("DATE"),
         ],
     )
     in_timestamps = OperatorNode(date_trunc_outer, "IN", ts_list)
@@ -870,12 +870,12 @@ def _ast_query_31() -> QueryNode:
     )
 
     inner_case = CaseNode(
-        _whens=[(OperatorNode(t1_login_ok, "=", LiteralNode(True)), LiteralNode(1))],
+        _whens=[WhenThenNode(OperatorNode(t1_login_ok, "=", LiteralNode(True)), LiteralNode(1))],
         _else=LiteralNode(0),
     )
     sum_inner = FunctionNode("SUM", _args=[inner_case])
     outer_case = CaseNode(
-        _whens=[(OperatorNode(sum_inner, ">=", LiteralNode(1)), LiteralNode(True))],
+        _whens=[WhenThenNode(OperatorNode(sum_inner, ">=", LiteralNode(1)), LiteralNode(True))],
         _else=LiteralNode(False),
     )
     select_clause = SelectNode([t1_cpf, date_data_with_alias, outer_case])
@@ -1244,14 +1244,14 @@ def _ast_query_41() -> QueryNode:
     # Tables
     emp_table = TableNode("EMP")
     # Inner subquery: SELECT NULL FROM EMP
-    inner_select = SelectNode([TypeNode("NULL")])
+    inner_select = SelectNode([LiteralNode(None)])
     inner_from = FromNode([emp_table])
     inner_subquery = SubqueryNode(
         QueryNode(_select=inner_select, _from=inner_from)
     )
     # Middle subquery: SELECT * FROM (inner) WHERE N IS NULL
     n_col = ColumnNode("N")
-    null_rhs = TypeNode("NULL")
+    null_rhs = LiteralNode(None)
     is_null_cond = OperatorNode(n_col, "IS", null_rhs)
     middle_select = SelectNode([ColumnNode("*")])
     middle_from = FromNode([inner_subquery])
@@ -1307,38 +1307,38 @@ def _ast_query_42() -> QueryNode:
     # 3. CAST(DATE_TRUNC('day', CAST(created_at AS DATE)) + (-EXTRACT(DOW FROM created_at) * INTERVAL '1 DAY') AS DATE) = TIMESTAMP '...'
     cast_created = FunctionNode(
         "CAST",
-        _args=[created_at, TypeNode("DATE")],
+        _args=[created_at, DataTypeNode("DATE")],
     )
     date_trunc_day = FunctionNode("DATE_TRUNC", _args=[LiteralNode("day"), cast_created])
     extract_dow = FunctionNode("EXTRACT", _args=[LiteralNode("DOW"), created_at])
     neg_extract = OperatorNode(LiteralNode(0), "-", extract_dow)
-    interval_1day = IntervalNode(LiteralNode(1), TypeNode("DAY"))
+    interval_1day = IntervalNode(LiteralNode(1), TimeUnitNode("DAY"))
     # -EXTRACT(DOW FROM created_at) * INTERVAL '1 DAY'  =>  neg_extract * interval_1day
     neg_expr = OperatorNode(neg_extract, "*", interval_1day)
     date_plus = OperatorNode(date_trunc_day, "+", neg_expr)
     cast_date = FunctionNode(
         "CAST",
-        _args=[date_plus, TypeNode("DATE")],
+        _args=[date_plus, DataTypeNode("DATE")],
     )
     ts_lit = FunctionNode("TIMESTAMP", _args=[LiteralNode("2018-04-22 00:00:00.000")])
     date_eq = OperatorNode(cast_date, "=", ts_lit)
     # 4. STRPOS(CAST(LOWER(CAST(CAST(text AS TEXT) AS TEXT)) AS TEXT), CAST('microsoft' AS TEXT)) > 0
     cast_text_inner = FunctionNode(
         "CAST",
-        _args=[text_col, TypeNode("TEXT")],
+        _args=[text_col, DataTypeNode("TEXT")],
     )
     cast_text_outer = FunctionNode(
         "CAST",
-        _args=[cast_text_inner, TypeNode("TEXT")],
+        _args=[cast_text_inner, DataTypeNode("TEXT")],
     )
     lower_text = FunctionNode("LOWER", _args=[cast_text_outer])
     cast_lower = FunctionNode(
         "CAST",
-        _args=[lower_text, TypeNode("TEXT")],
+        _args=[lower_text, DataTypeNode("TEXT")],
     )
     cast_microsoft = FunctionNode(
         "CAST",
-        _args=[LiteralNode("microsoft"), TypeNode("TEXT")],
+        _args=[LiteralNode("microsoft"), DataTypeNode("TEXT")],
     )
     strpos_cond = OperatorNode(
         FunctionNode("STRPOS", _args=[cast_lower, cast_microsoft]),
@@ -1380,7 +1380,7 @@ def _ast_query_43() -> QueryNode:
         "DATE_FORMAT",
         _args=[created_at, LiteralNode("%Y-%m-01 00:00:00")],
     )
-    interval_0_second = IntervalNode(LiteralNode(0), TypeNode("SECOND"))
+    interval_0_second = IntervalNode(LiteralNode(0), TimeUnitNode("SECOND"))
     adddate_expr = FunctionNode(
         "ADDDATE",
         _args=[date_format_expr, interval_0_second],
