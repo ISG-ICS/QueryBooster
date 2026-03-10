@@ -1,7 +1,7 @@
 from typing import Optional
 from core.ast.node import (
-    QueryNode, SelectNode, FromNode, WhereNode, TableNode, ColumnNode, 
-    LiteralNode, OperatorNode, FunctionNode, GroupByNode, HavingNode,
+    CaseNode, WhenThenNode, IntervalNode, ListNode, QueryNode, SelectNode, FromNode, WhereNode, TableNode, ColumnNode, 
+    LiteralNode, DataTypeNode, TimeUnitNode, OperatorNode, FunctionNode, GroupByNode, HavingNode,
     OrderByNode, OrderByItemNode, LimitNode, OffsetNode, JoinNode, SubqueryNode
 )
 from core.ast.enums import JoinType, SortOrder
@@ -60,8 +60,7 @@ def _build_asts() -> dict:
         44: _ast_query_44(),
     }
 
-# TODO: keywords like TEXT, INTEGER, DATE should not be function node
-# TODO: ts_list should be a new ListNode instead of a python list
+
 def _ast_query_1() -> QueryNode:
     """Query 1: Remove Cast Date Match Twice."""
     # Tables
@@ -70,29 +69,29 @@ def _ast_query_1() -> QueryNode:
     sum_one = FunctionNode("SUM", _args=[LiteralNode(1)])
     cast_state = FunctionNode(
         "CAST",
-        _args=[ColumnNode("state_name"), FunctionNode("TEXT", _args=[LiteralNode("{}")])],
+        _args=[ColumnNode("state_name"), DataTypeNode("TEXT")],
     )
     select_clause = SelectNode([sum_one, cast_state])
     # FROM
     from_clause = FromNode([tweets_table])
     # WHERE: CAST(DATE_TRUNC(...)) IN (timestamps) AND STRPOS(text, 'iphone') > 0
-    ts_list = [
+    ts_list = ListNode([
         FunctionNode("TIMESTAMP", _args=[LiteralNode("2016-10-01 00:00:00.000")]),
         FunctionNode("TIMESTAMP", _args=[LiteralNode("2017-01-01 00:00:00.000")]),
         FunctionNode("TIMESTAMP", _args=[LiteralNode("2017-04-01 00:00:00.000")]),
-    ]
+    ])
     date_trunc_inner = FunctionNode(
         "CAST",
         _args=[
             ColumnNode("created_at"),
-            FunctionNode("DATE", _args=[LiteralNode("{}")]),
+            DataTypeNode("DATE"),
         ],
     )
     date_trunc_outer = FunctionNode(
         "CAST",
         _args=[
             FunctionNode("DATE_TRUNC", _args=[LiteralNode("QUARTER"), date_trunc_inner]),
-            FunctionNode("DATE", _args=[LiteralNode("{}")]),
+            DataTypeNode("DATE"),
         ],
     )
     in_timestamps = OperatorNode(date_trunc_outer, "IN", ts_list)
@@ -113,8 +112,7 @@ def _ast_query_1() -> QueryNode:
         _group_by=group_by_clause,
     )
 
-# TODO: keywords like TEXT, INTEGER should not be function node
-# TODO: ts_list should be a new ListNode instead of a python list
+
 def _ast_query_2() -> QueryNode:
     """Query 2: Remove Cast Date Match Once."""
     # Tables
@@ -123,17 +121,16 @@ def _ast_query_2() -> QueryNode:
     sum_one = FunctionNode("SUM", _args=[LiteralNode(1)])
     cast_state = FunctionNode(
         "CAST",
-        # TODO: keywords like TEXT, INTEGER should not be function node
-        _args=[ColumnNode("state_name"), FunctionNode("TEXT", _args=[LiteralNode("{}")])],
+        _args=[ColumnNode("state_name"), DataTypeNode("TEXT")],
     )
     select_clause = SelectNode([sum_one, cast_state])
     from_clause = FromNode([tweets_table])
     # WHERE: DATE_TRUNC(QUARTER, created_at) IN (...) AND STRPOS(...) > 0
-    ts_list = [
+    ts_list = ListNode([
         FunctionNode("TIMESTAMP", _args=[LiteralNode("2016-10-01 00:00:00.000")]),
         FunctionNode("TIMESTAMP", _args=[LiteralNode("2017-01-01 00:00:00.000")]),
         FunctionNode("TIMESTAMP", _args=[LiteralNode("2017-04-01 00:00:00.000")]),
-    ]
+    ])
     in_timestamps = OperatorNode(
         FunctionNode("DATE_TRUNC", _args=[LiteralNode("QUARTER"), ColumnNode("created_at")]),
         "IN",
@@ -155,32 +152,30 @@ def _ast_query_2() -> QueryNode:
 
 # query 3 has the exact same query as query 2, so I skipped it
 
-# TODO: keywords like TEXT, INTEGER should not be function node
-# TODO: ts_list should be a new ListNode instead of a python list
 def _ast_query_4() -> QueryNode:
     """Query 4."""
     tweets_table = TableNode("tweets")
     sum_one = FunctionNode("SUM", _args=[LiteralNode(1)])
     cast_state = FunctionNode(
         "CAST",
-        _args=[ColumnNode("state_name"), FunctionNode("TEXT", _args=[LiteralNode("{}")])],
+        _args=[ColumnNode("state_name"), DataTypeNode("TEXT")],
     )
     select_clause = SelectNode([sum_one, cast_state])
     from_clause = FromNode([tweets_table])
-    ts_list = [
+    ts_list = ListNode([
         FunctionNode("TIMESTAMP", _args=[LiteralNode("2016-10-01 00:00:00.000")]),
         FunctionNode("TIMESTAMP", _args=[LiteralNode("2017-01-01 00:00:00.000")]),
         FunctionNode("TIMESTAMP", _args=[LiteralNode("2017-04-01 00:00:00.000")]),
-    ]
+    ])
     date_trunc_inner = FunctionNode(
         "CAST",
-        _args=[ColumnNode("created_at"), FunctionNode("DATE", _args=[LiteralNode("{}")])],
+        _args=[ColumnNode("created_at"), DataTypeNode("DATE")],
     )
     date_trunc_outer = FunctionNode(
         "CAST",
         _args=[
             FunctionNode("DATE_TRUNC", _args=[LiteralNode("QUARTER"), date_trunc_inner]),
-            FunctionNode("DATE", _args=[LiteralNode("{}")]),
+            DataTypeNode("DATE"),
         ],
     )
     in_timestamps = OperatorNode(date_trunc_outer, "IN", ts_list)
@@ -348,7 +343,6 @@ def _ast_query_10() -> QueryNode:
     )
 
 
-# TODO: Rewrite has SELECT DISTINCT (not supported by parser yet)
 def _ast_query_11() -> QueryNode:
     """Query 11: Subquery to Join Match 3."""
     # Construct expected AST for rewrite: SELECT DISTINCT e.* FROM employee e, department d WHERE e.workdept = d.deptno AND d.deptname = 'OPERATIONS' AND e.age > 17
@@ -362,7 +356,7 @@ def _ast_query_11() -> QueryNode:
     e_age = ColumnNode("age", _parent_alias="e")
     d_deptno = ColumnNode("deptno", _parent_alias="d")
     d_deptname = ColumnNode("deptname", _parent_alias="d")
-    select_clause = SelectNode([e_empno, e_firstnme, e_lastname, e_phoneno])
+    select_clause = SelectNode([e_empno, e_firstnme, e_lastname, e_phoneno], _distinct=True)
     from_clause = FromNode([emp_table, dept_table])
     workdept_eq = OperatorNode(e_workdept, "=", d_deptno)
     deptname_eq = OperatorNode(d_deptname, "=", LiteralNode("OPERATIONS"))
@@ -502,7 +496,6 @@ def _ast_query_14() -> QueryNode:
 
 # TODO: Query 15 uses UNION, which is not supported by parser yet
 
-# TODO: DISTINCT is not supported by parser yet
 def _ast_query_16() -> QueryNode:
     """Query 16: Remove Max Distinct."""
     table_s = TableNode("S")
@@ -549,14 +542,13 @@ def _ast_query_17() -> QueryNode:
     )
 
 
-# TODO: DISTINCT is not supported by parser yet
 def _ast_query_18() -> QueryNode:
     """Query 18 (parser drops SELECT for SELECT DISTINCT with comma join)."""
     my_table = TableNode("my_table")
     your_table = TableNode("your_table")
     my_foo = ColumnNode("foo", _parent_alias="my_table")
     your_boo = ColumnNode("boo", _parent_alias="your_table")
-    select_clause = SelectNode([my_foo, your_boo])  # DISTINCT keyword not represented
+    select_clause = SelectNode([my_foo, your_boo], _distinct=True)
     from_clause = FromNode([my_table, your_table])
     num_my = OperatorNode(ColumnNode("num", _parent_alias="my_table"), "=", LiteralNode(1))
     num_your = OperatorNode(ColumnNode("num", _parent_alias="your_table"), "=", LiteralNode(2))
@@ -591,13 +583,11 @@ def _ast_query_19() -> QueryNode:
     )
 
 
-# TODO: IN should be a list of literals, but parser currently does not support this
-# TODO: second argument for IN operator should be a new ListNode instead of a python list
 def _ast_query_20() -> QueryNode:
     """Query 20: Partial Matching Base Case 2."""
     table_b = TableNode("b")
     b_cl1 = ColumnNode("cl1", _parent_alias="b")
-    in_s1_s2 = OperatorNode(b_cl1, "IN", [LiteralNode("s1"), LiteralNode("s2")])
+    in_s1_s2 = OperatorNode(b_cl1, "IN", ListNode([LiteralNode("s1"), LiteralNode("s2")]))
     eq_s3 = OperatorNode(b_cl1, "=", LiteralNode("s3"))
     select_clause = SelectNode([ColumnNode("*")])
     from_clause = FromNode([table_b])
@@ -740,7 +730,6 @@ def _ast_query_26() -> QueryNode:
         _where=where_clause,
     )
 
-# TODO: parser does not support arithmetic expressions yet
 def _ast_query_27() -> QueryNode:
     """Query 27: Remove Where True."""
     emp_table = TableNode("Emp")
@@ -810,7 +799,7 @@ def _ast_query_28() -> QueryNode:
 
 def _ast_query_30() -> QueryNode:
     """Query 30: Over Partial Matching."""
-# Query pattern: SELECT * FROM table_name WHERE (title=1 AND grade=2) OR (title=2 AND debt=2 AND grade=3) OR (prog=1 AND title=1 AND debt=3)
+    # Query pattern: SELECT * FROM table_name WHERE (title=1 AND grade=2) OR (title=2 AND debt=2 AND grade=3) OR (prog=1 AND title=1 AND debt=3)
     # Tables
     table_name = TableNode("table_name")
     # Columns
@@ -858,12 +847,11 @@ def _ast_query_30() -> QueryNode:
         _where=where_clause,
     )
 
-# TODO: make CASE as a specific node instead of FunctionNode?
+
 def _ast_query_31() -> QueryNode:
     """Query 31: Aggregation to Subquery."""
     # Query pattern: SELECT t1.CPF, DATE(t1.data) AS data, CASE WHEN SUM(CASE WHEN t1.login_ok=true THEN 1 ELSE 0 END)>=1 THEN true ELSE false END
-    #             FROM db_risco.site_rn_login AS t1 GROUP BY t1.CPF, DATE(t1.data)
-   
+    # FROM db_risco.site_rn_login AS t1 GROUP BY t1.CPF, DATE(t1.data)
     # Tables
     t1_table = TableNode("db_risco.site_rn_login", _alias="t1")
     # Columns
@@ -881,22 +869,14 @@ def _ast_query_31() -> QueryNode:
         _args=[t1_data]
     )
 
-    inner_case = FunctionNode(
-        "CASE",
-        _args=[
-            FunctionNode("WHEN", _args=[OperatorNode(t1_login_ok, "=", LiteralNode(True))]),
-            FunctionNode("THEN", _args=[LiteralNode(1)]),
-            FunctionNode("ELSE", _args=[LiteralNode(0)]),
-        ],
+    inner_case = CaseNode(
+        _whens=[WhenThenNode(OperatorNode(t1_login_ok, "=", LiteralNode(True)), LiteralNode(1))],
+        _else=LiteralNode(0),
     )
     sum_inner = FunctionNode("SUM", _args=[inner_case])
-    outer_case = FunctionNode(
-        "CASE",
-        _args=[
-            FunctionNode("WHEN", _args=[OperatorNode(sum_inner, ">=", LiteralNode(1))]),
-            FunctionNode("THEN", _args=[LiteralNode(True)]),
-            FunctionNode("ELSE", _args=[LiteralNode(False)]),
-        ],
+    outer_case = CaseNode(
+        _whens=[WhenThenNode(OperatorNode(sum_inner, ">=", LiteralNode(1)), LiteralNode(True))],
+        _else=LiteralNode(False),
     )
     select_clause = SelectNode([t1_cpf, date_data_with_alias, outer_case])
     # FROM
@@ -953,12 +933,11 @@ def _ast_query_34() -> QueryNode:
         _where=where_clause,
     )
 
-# TODO: DISTINCT is not supported by parser yet
 def _ast_query_35() -> QueryNode:
     """Query 35: Spreadsheet ID 9."""
     my_table = TableNode("my_table")
     my_foo = ColumnNode("foo", _parent_alias="my_table")
-    select_clause = SelectNode([my_foo])  # DISTINCT keyword not represented
+    select_clause = SelectNode([my_foo], _distinct=True)
     from_clause = FromNode([my_table])
     num_cond = OperatorNode(
         ColumnNode("num", _parent_alias="my_table"),
@@ -1180,8 +1159,6 @@ def _ast_query_39() -> QueryNode:
     )
 
 
-# TODO: DISTINCT ON is not supported by parser yet
-# TODO: third argument for OperatorNodes using IN should be a new ListNode instead of a python list
 def _ast_query_40() -> QueryNode:
     """Query 40."""
     # Tables
@@ -1202,7 +1179,7 @@ def _ast_query_40() -> QueryNode:
         "COALESCE",
         _args=[p_preferenceValue, LiteralNode("en")],
     )
-    select_clause = SelectNode([t_gzpId, t_pubCode, t_playerId, coalesce_expr, s_segmentId])
+    select_clause = SelectNode([t_gzpId, t_pubCode, t_playerId, coalesce_expr, s_segmentId], _distinct_on=ListNode([t_playerId]))
     # FROM: t LEFT JOIN p ON t.gzpId = p.gzpId LEFT JOIN s ON t.gzpId = s.gzpId
     join_on_1 = OperatorNode(t_gzpId, "=", p_gzpId)
     join_1 = JoinNode(t_table, p_table, JoinType.LEFT, join_on_1)
@@ -1213,17 +1190,17 @@ def _ast_query_40() -> QueryNode:
     pubcode_in = OperatorNode(
         t_pubCode,
         "IN",
-        [LiteralNode("hyrmas"), LiteralNode("ayqioa"), LiteralNode("rj49as99")],
+        ListNode([LiteralNode("hyrmas"), LiteralNode("ayqioa"), LiteralNode("rj49as99")]),
     )
     provider_in = OperatorNode(
         t_provider,
         "IN",
-        [LiteralNode("FCM"), LiteralNode("ONE_SIGNAL")],
+        ListNode([LiteralNode("FCM"), LiteralNode("ONE_SIGNAL")]),
     )
     segmentid_in = OperatorNode(
         s_segmentId,
         "IN",
-        [
+        ListNode([
             LiteralNode(0),
             LiteralNode(1),
             LiteralNode(2),
@@ -1231,12 +1208,12 @@ def _ast_query_40() -> QueryNode:
             LiteralNode(4),
             LiteralNode(5),
             LiteralNode(6),
-        ],
+        ]),
     )
     prefvalue_in = OperatorNode(
         p_preferenceValue,
         "IN",
-        [LiteralNode("en"), LiteralNode("hi")],
+        ListNode([LiteralNode("en"), LiteralNode("hi")]),
     )
     where_condition = OperatorNode(
         OperatorNode(
@@ -1260,7 +1237,6 @@ def _ast_query_40() -> QueryNode:
     )
 
 
-# TODO: NULL should be a keyword node (like TEXT, INTEGER), not supported yet.
 def _ast_query_41() -> QueryNode:
     """Query 41: Spreadsheet ID 20."""
     # Query pattern: SELECT * FROM (SELECT * FROM (SELECT NULL FROM EMP) WHERE N IS NULL) WHERE N IS NULL
@@ -1275,7 +1251,7 @@ def _ast_query_41() -> QueryNode:
     )
     # Middle subquery: SELECT * FROM (inner) WHERE N IS NULL
     n_col = ColumnNode("N")
-    null_rhs = LiteralNode(None)  # should be keyword NULL, not literal
+    null_rhs = LiteralNode(None)
     is_null_cond = OperatorNode(n_col, "IS", null_rhs)
     middle_select = SelectNode([ColumnNode("*")])
     middle_from = FromNode([inner_subquery])
@@ -1295,8 +1271,6 @@ def _ast_query_41() -> QueryNode:
     )
 
 
-# TODO: keywords like DATE should not be function node
-# TODO: double check on how we should handle INTERVAL, it's not supported by parser yet
 def _ast_query_42() -> QueryNode:
     """Query 42: PostgreSQL Test."""
     # Construct expected AST
@@ -1333,38 +1307,38 @@ def _ast_query_42() -> QueryNode:
     # 3. CAST(DATE_TRUNC('day', CAST(created_at AS DATE)) + (-EXTRACT(DOW FROM created_at) * INTERVAL '1 DAY') AS DATE) = TIMESTAMP '...'
     cast_created = FunctionNode(
         "CAST",
-        _args=[created_at, FunctionNode("DATE", _args=[LiteralNode("{}")])],
+        _args=[created_at, DataTypeNode("DATE")],
     )
     date_trunc_day = FunctionNode("DATE_TRUNC", _args=[LiteralNode("day"), cast_created])
     extract_dow = FunctionNode("EXTRACT", _args=[LiteralNode("DOW"), created_at])
     neg_extract = OperatorNode(LiteralNode(0), "-", extract_dow)
-    interval_1day = FunctionNode("INTERVAL", _args=[LiteralNode("1 DAY")])
+    interval_1day = IntervalNode(LiteralNode(1), TimeUnitNode("DAY"))
     # -EXTRACT(DOW FROM created_at) * INTERVAL '1 DAY'  =>  neg_extract * interval_1day
     neg_expr = OperatorNode(neg_extract, "*", interval_1day)
     date_plus = OperatorNode(date_trunc_day, "+", neg_expr)
     cast_date = FunctionNode(
         "CAST",
-        _args=[date_plus, FunctionNode("DATE", _args=[LiteralNode("{}")])],
+        _args=[date_plus, DataTypeNode("DATE")],
     )
     ts_lit = FunctionNode("TIMESTAMP", _args=[LiteralNode("2018-04-22 00:00:00.000")])
     date_eq = OperatorNode(cast_date, "=", ts_lit)
     # 4. STRPOS(CAST(LOWER(CAST(CAST(text AS TEXT) AS TEXT)) AS TEXT), CAST('microsoft' AS TEXT)) > 0
     cast_text_inner = FunctionNode(
         "CAST",
-        _args=[text_col, FunctionNode("TEXT", _args=[LiteralNode("{}")])],
+        _args=[text_col, DataTypeNode("TEXT")],
     )
     cast_text_outer = FunctionNode(
         "CAST",
-        _args=[cast_text_inner, FunctionNode("TEXT", _args=[LiteralNode("{}")])],
+        _args=[cast_text_inner, DataTypeNode("TEXT")],
     )
     lower_text = FunctionNode("LOWER", _args=[cast_text_outer])
     cast_lower = FunctionNode(
         "CAST",
-        _args=[lower_text, FunctionNode("TEXT", _args=[LiteralNode("{}")])],
+        _args=[lower_text, DataTypeNode("TEXT")],
     )
     cast_microsoft = FunctionNode(
         "CAST",
-        _args=[LiteralNode("microsoft"), FunctionNode("TEXT", _args=[LiteralNode("{}")])],
+        _args=[LiteralNode("microsoft"), DataTypeNode("TEXT")],
     )
     strpos_cond = OperatorNode(
         FunctionNode("STRPOS", _args=[cast_lower, cast_microsoft]),
@@ -1386,8 +1360,6 @@ def _ast_query_42() -> QueryNode:
     )
 
 
-# TODO: ColumnNode("SECOND") should be a TypeNode
-# TODO: group by should be a list of columns, not literals, but how to do the translation?
 def _ast_query_43() -> QueryNode:
     """Query 43: MySQL Test."""
     # Query pattern: SELECT tweets.latitude AS latitude, tweets.longitude AS longitude
@@ -1408,7 +1380,7 @@ def _ast_query_43() -> QueryNode:
         "DATE_FORMAT",
         _args=[created_at, LiteralNode("%Y-%m-01 00:00:00")],
     )
-    interval_0_second = FunctionNode("INTERVAL", _args=[LiteralNode(0), ColumnNode("SECOND")])
+    interval_0_second = IntervalNode(LiteralNode(0), TimeUnitNode("SECOND"))
     adddate_expr = FunctionNode(
         "ADDDATE",
         _args=[date_format_expr, interval_0_second],

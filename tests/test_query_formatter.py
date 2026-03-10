@@ -56,7 +56,7 @@ def test_query_4():
     """Query 4."""
     query = get_query(4)
     #sql = formatter.format(get_ast(4))
-    #assert parse(sql) == parse(query["pattern"])
+    #assert parse(sql) == parse(query["rewrite"])
 
 
 # query 5 has the exact same query as query 4, so I skipped it
@@ -159,7 +159,6 @@ def test_query_20():
     """Query 20: Partial Matching Base Case 2."""
     query = get_query(20)
     #sql = formatter.format(get_ast(20))
-    # TODO: IN should be a list of literals, but parser currently does not support this
     #assert parse(sql) == parse(query["pattern"])
 
 
@@ -233,7 +232,7 @@ def test_query_30():
 def test_query_31():
     """Query 31: Aggregation to Subquery."""
     query = get_query(31)
-    sql = formatter.format(get_ast(31))
+    #sql = formatter.format(get_ast(31))
     # TODO: CASE not cleanly supported yet
     #assert parse(sql) == parse(query["pattern"])
 
@@ -302,7 +301,7 @@ def test_query_40():
 def test_query_41():
     """Query 41: Spreadsheet ID 20."""
     query = get_query(41)
-    sql = formatter.format(get_ast(41))
+    #sql = formatter.format(get_ast(41))
     # TODO: NULL keyword and IS NULL not fully supported yet
     #assert parse(sql) == parse(query["pattern"])
 
@@ -318,6 +317,6 @@ def test_query_42():
 def test_query_43():
     """Query 43: MySQL Test."""
     query = get_query(43)
-    sql = formatter.format(get_ast(43))
+    #sql = formatter.format(get_ast(43))
     # TODO: INTERVAL unit keyword not fully supported
     #assert parse(sql) == parse(query["pattern"])

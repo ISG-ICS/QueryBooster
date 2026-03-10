@@ -12,6 +12,11 @@ class NodeType(Enum):
     SUBQUERY = "subquery"
     COLUMN = "column"
     LITERAL = "literal"
+    DATA_TYPE = "data_type"
+    TIME_UNIT = "time_unit"
+    LIST = "list"
+    INTERVAL = "interval"
+
     # VarSQL specific
     VAR = "var"
     VARSET = "varset"
@@ -32,6 +37,8 @@ class NodeType(Enum):
     LIMIT = "limit"
     OFFSET = "offset"
     QUERY = "query"
+    CASE = "case"
+    WHEN_THEN = "when_then"
 
 # ============================================================================
 # Join Type Enumeration
