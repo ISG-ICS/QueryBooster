@@ -14,8 +14,8 @@ class NodeType(Enum):
     LITERAL = "literal"
     DATA_TYPE = "data_type"
     TIME_UNIT = "time_unit"
-    LIST = "list" 
-    INTERVAL  = "interval"
+    LIST = "list"
+    INTERVAL = "interval"
 
     # VarSQL specific
     VAR = "var"

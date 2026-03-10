@@ -116,11 +116,7 @@ class LiteralNode(Node):
 
 class DataTypeNode(Node):
     """SQL data type node used in CAST expressions (e.g. TEXT, DATE, INTEGER)"""
-    SQL_DATA_TYPES = {"TEXT", "DATE", "INTEGER", "TIMESTAMP", "VARCHAR", "BOOLEAN", "FLOAT"}
-
     def __init__(self, _name: str, **kwargs):
-        if _name not in DataTypeNode.SQL_DATA_TYPES:
-            raise ValueError(f"Invalid SQL data type: {_name}")
         super().__init__(NodeType.DATA_TYPE, **kwargs)
         self.name = _name
     
@@ -135,11 +131,7 @@ class DataTypeNode(Node):
 
 class TimeUnitNode(Node):
     """SQL time unit node used in INTERVAL and temporal functions (e.g. DAY, MONTH, SECOND)"""
-    TIME_UNITS = {"SECOND", "MINUTE", "HOUR", "DAY", "WEEK", "MONTH", "YEAR"}
-
     def __init__(self, _name: str, **kwargs):
-        if _name not in TimeUnitNode.TIME_UNITS:
-            raise ValueError(f"Invalid SQL time unit: {_name}")
         super().__init__(NodeType.TIME_UNIT, **kwargs)
         self.name = _name
     
