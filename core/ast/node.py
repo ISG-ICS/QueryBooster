@@ -255,7 +255,10 @@ class JoinNode(Node):
 class SelectNode(Node):
     """SELECT clause node. _distinct_on is the list of expressions for DISTINCT ON (e.g. ListNode of columns)."""
     def __init__(self, _items: List['Node'], _distinct: bool = False, _distinct_on: Optional['Node'] = None, **kwargs):
-        super().__init__(NodeType.SELECT, children=_items, **kwargs)
+        children = list(_items)
+        if _distinct_on is not None:
+            children.append(_distinct_on)
+        super().__init__(NodeType.SELECT, children=children, **kwargs)
         self.distinct = _distinct
         self.distinct_on = _distinct_on
 
