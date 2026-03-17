@@ -46,6 +46,7 @@ class NodeType(Enum):
 
 class JoinType(Enum):
     """Join type enumeration"""
+    JOIN = "join"
     INNER = "inner"
     OUTER = "outer"
     LEFT = "left"

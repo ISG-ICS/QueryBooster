@@ -1007,8 +1007,8 @@ def _ast_query_37() -> QueryNode:
     in_cond = OperatorNode(ColumnNode("requisicion_id"), "IN", subquery_node)
     where_clause = WhereNode([in_cond])
     order_by_clause = OrderByNode([
-        OrderByItemNode(ColumnNode("requisicion_id"), SortOrder.ASC),
-        OrderByItemNode(ColumnNode("estatusrequisicion_id"), SortOrder.ASC),
+        OrderByItemNode(ColumnNode("requisicion_id")),
+        OrderByItemNode(ColumnNode("estatusrequisicion_id")),
     ])
     return QueryNode(
         _select=select_clause,
@@ -1423,7 +1423,7 @@ def _ast_query_44() -> QueryNode:
     select_clause = SelectNode([emp_name, dept_name, count_star])
     # FROM clause with JOIN
     join_condition = OperatorNode(emp_dept_id, "=", dept_id)
-    join_node = JoinNode(emp_table, dept_table, JoinType.INNER, join_condition)
+    join_node = JoinNode(emp_table, dept_table, JoinType.JOIN, join_condition)
     from_clause = FromNode([join_node])
     # WHERE clause
     salary_condition = OperatorNode(emp_salary, ">", LiteralNode(40000))
@@ -1436,7 +1436,7 @@ def _ast_query_44() -> QueryNode:
     having_condition = OperatorNode(count_star, ">", LiteralNode(2))
     having_clause = HavingNode([having_condition])
     # ORDER BY clause
-    order_by_item1 = OrderByItemNode(dept_name, SortOrder.ASC)
+    order_by_item1 = OrderByItemNode(dept_name)
     order_by_item2 = OrderByItemNode(count_star, SortOrder.DESC)
     order_by_clause = OrderByNode([order_by_item1, order_by_item2])
     # LIMIT and OFFSET

@@ -113,7 +113,8 @@ def format_join(join_node: JoinNode) -> list:
     
     # Map join types to mosql format
     join_type_map = {
-        JoinType.INNER: 'join',
+        JoinType.JOIN: 'join',
+        JoinType.INNER: 'inner join',
         JoinType.LEFT: 'left join',
         JoinType.RIGHT: 'right join',
         JoinType.FULL: 'full join',
@@ -194,21 +195,10 @@ def format_order_by(order_by_node: OrderByNode) -> list:
         
         items.append((item, sort_order))
     
-    # check if all sort orders are the same
-    all_same = len(set(sort_orders)) == 1
-    common_sort = sort_orders[0] if all_same else None
-    
-    # reformat into single sort operator if all items have same sort operator
-    # ex. ORDER BY dept_name DESC, emp_count DESC -> ORDER BY dept_name, emp_count DESC
     result = []
-    for i, (item, sort_order) in enumerate(items):
-        if all_same and i == len(items) - 1:
-            if common_sort != SortOrder.ASC:
-                item['sort'] = common_sort.value.lower()
-        elif not all_same:
-            if sort_order != SortOrder.ASC:
-                item['sort'] = sort_order.value.lower()
-        
+    for item, sort_order in items:
+        if sort_order is not None:
+            item['sort'] = sort_order.value.lower()
         result.append(item)
     
     return result

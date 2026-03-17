@@ -218,12 +218,13 @@ class QueryParser:
                     # Parse normally for other cases
                     column = self.parse_expression(value, aliases)
                 
-                # Get sort order (default is ASC)
-                sort_order = SortOrder.ASC
+                sort_order = None
                 if 'sort' in item:
                     sort_str = item['sort'].upper()
                     if sort_str == 'DESC':
                         sort_order = SortOrder.DESC
+                    else:
+                        sort_order = SortOrder.ASC
                 
                 # Wrap in OrderByItemNode
                 order_by_item = OrderByItemNode(column, sort_order)
@@ -231,7 +232,7 @@ class QueryParser:
             else:
                 # Handle direct expression (string, int, etc.)
                 column = self.parse_expression(item, aliases)
-                order_by_item = OrderByItemNode(column, SortOrder.ASC)
+                order_by_item = OrderByItemNode(column)
                 items.append(order_by_item)
 
         return OrderByNode(items)
@@ -425,5 +426,5 @@ class QueryParser:
             return JoinType.FULL
         elif 'cross' in key_lower:
             return JoinType.CROSS
-        
-        return JoinType.INNER
+        else:
+            return JoinType.JOIN
