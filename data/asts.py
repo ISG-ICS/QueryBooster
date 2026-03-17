@@ -1351,7 +1351,7 @@ def _ast_query_42() -> QueryNode:
     where_condition = OperatorNode(where_123, "AND", strpos_cond)
     where_clause = WhereNode([where_condition])
     # GROUP BY 1, 2
-    # Future TODO: Do the actual column references in the next layer
+    # TODO: replace numeric positions with actual column references
     group_by_clause = GroupByNode([LiteralNode(1), LiteralNode(2)])
     return QueryNode(
         _select=select_clause,

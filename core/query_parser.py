@@ -314,6 +314,10 @@ class QueryParser:
             aliases = {}
             
         if isinstance(expr, str):
+            # Alias reference: if a later clause uses a SELECT alias token
+            # (e.g. ORDER BY dept_name), reuse the aliased expression node.
+            if expr in aliases:
+                return aliases[expr]
             # Column reference
             if '.' in expr:
                 parts = expr.split('.', 1)
