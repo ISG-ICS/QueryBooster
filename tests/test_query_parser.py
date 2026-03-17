@@ -23,7 +23,7 @@ def test_basic_parse():
         ORDER BY dept_name, emp_count DESC
         LIMIT 10 OFFSET 5
     """
-
+    # TODO: check if we should treat d.name as new node without alias
     logger.info("\n" + visualize_ast(sql, get_ast(44)))
 
     #assert parser.parse(sql) == get_ast(44)
@@ -46,7 +46,7 @@ def test_query_1():
     query = get_query(1)
     sql = query["pattern"]
     logger.info("\n" + visualize_ast(sql, get_ast(1)))
-    #assert parser.parse(sql) == get_ast(1)
+    assert parser.parse(sql) == get_ast(1)
 
 
 def test_query_2():
@@ -54,7 +54,7 @@ def test_query_2():
     query = get_query(2)
     sql = query["rewrite"]
     logger.info("\n" + visualize_ast(sql, get_ast(2)))
-    #assert parser.parse(sql) == get_ast(2)
+    assert parser.parse(sql) == get_ast(2)
 
 
 # query 3 has the exact same query as query 2, so I skipped it
@@ -65,7 +65,7 @@ def test_query_4():
     query = get_query(4)
     sql = query["rewrite"]
     logger.info("\n" + visualize_ast(sql, get_ast(4)))
-    #assert parser.parse(sql) == get_ast(4)
+    assert parser.parse(sql) == get_ast(4)
 
 
 # query 5 has the exact same query as query 4, so I skipped it
@@ -110,9 +110,8 @@ def test_query_11():
     """Query 11: Subquery to Join Match 3."""
     query = get_query(11)
     sql = query["rewrite"]
-    # TODO: Rewrite has SELECT DISTINCT (not supported by parser yet)
     logger.info("\n" + visualize_ast(sql, get_ast(11)))
-    #assert parser.parse(sql) == get_ast(11)
+    assert parser.parse(sql) == get_ast(11)
 
 
 def test_query_12():
@@ -146,9 +145,8 @@ def test_query_16():
     """Query 16: Remove Max Distinct."""
     query = get_query(16)
     sql = query["pattern"]
-    # TODO: DISTINCT is not supported by parser yet
     logger.info("\n" + visualize_ast(sql, get_ast(16)))
-    #assert parser.parse(sql) == get_ast(16)
+    assert parser.parse(sql) == get_ast(16)
 
 
 def test_query_17():
@@ -163,9 +161,8 @@ def test_query_18():
     """Query 18 (parser drops SELECT for SELECT DISTINCT with comma join)."""
     query = get_query(18)
     sql = query["pattern"]
-    # TODO: DISTINCT is not supported by parser yet
     logger.info("\n" + visualize_ast(sql, get_ast(18)))
-    #assert parser.parse(sql) == get_ast(18)
+    assert parser.parse(sql) == get_ast(18)
 
 
 def test_query_19():
@@ -180,9 +177,8 @@ def test_query_20():
     """Query 20: Partial Matching Base Case 2."""
     query = get_query(20)
     sql = query["pattern"]
-    # TODO: IN with literal list not supported by parser yet
     logger.info("\n" + visualize_ast(sql, get_ast(20)))
-    #assert parser.parse(sql) == get_ast(20)
+    assert parser.parse(sql) == get_ast(20)
 
 
 def test_query_21():
@@ -237,9 +233,8 @@ def test_query_27():
     """Query 27: Remove Where True."""
     query = get_query(27)
     sql = query["pattern"]
-    # TODO: arithmetic expressions not supported by parser yet
     logger.info("\n" + visualize_ast(sql, get_ast(27)))
-    #assert parser.parse(sql) == get_ast(27)
+    assert parser.parse(sql) == get_ast(27)
 
 
 def test_query_28():
@@ -265,9 +260,8 @@ def test_query_31():
     """Query 31: Aggregation to Subquery."""
     query = get_query(31)
     sql = query["pattern"]
-    # TODO: CASE not cleanly supported yet
     logger.info("\n" + visualize_ast(sql, get_ast(31)))
-    #assert parser.parse(sql) == get_ast(31)
+    assert parser.parse(sql) == get_ast(31)
 
 
 # TODO: Query 32: UNION not supported by parser
@@ -293,9 +287,8 @@ def test_query_35():
     """Query 35: Spreadsheet ID 9."""
     query = get_query(35)
     sql = query["pattern"]
-    # TODO: DISTINCT not supported by parser yet
     logger.info("\n" + visualize_ast(sql, get_ast(35)))
-    #assert parser.parse(sql) == get_ast(35)
+    assert parser.parse(sql) == get_ast(35)
 
 
 def test_query_36():
@@ -334,25 +327,22 @@ def test_query_40():
     """Query 40."""
     query = get_query(40)
     sql = query["pattern"]
-    # TODO: DISTINCT ON not supported by parser yet
     logger.info("\n" + visualize_ast(sql, get_ast(40)))
-    #assert parser.parse(sql) == get_ast(40)
+    assert parser.parse(sql) == get_ast(40)
 
 
 def test_query_41():
     """Query 41: Spreadsheet ID 20."""
     query = get_query(41)
     sql = query["pattern"]
-    # TODO: NULL keyword and IS NULL not fully supported yet
     logger.info("\n" + visualize_ast(sql, get_ast(41)))
-    #assert parser.parse(sql) == get_ast(41)
+    assert parser.parse(sql) == get_ast(41)
 
 
 def test_query_42():
     """Query 42: PostgreSQL Test."""
     query = get_query(42)
     sql = query["pattern"]
-    # TODO: INTERVAL, unary minus, keyword types not fully supported
     logger.info("\n" + visualize_ast(sql, get_ast(42)))
     #assert parser.parse(sql) == get_ast(42)
 
@@ -361,6 +351,5 @@ def test_query_43():
     """Query 43: MySQL Test."""
     query = get_query(43)
     sql = query["pattern"]
-    # TODO: INTERVAL unit keyword not fully supported
     logger.info("\n" + visualize_ast(sql, get_ast(43)))
-    #assert parser.parse(sql) == get_ast(43)
+    assert parser.parse(sql) == get_ast(43)
