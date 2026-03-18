@@ -1,6 +1,6 @@
 from core.ast.node import (
     TableNode, ColumnNode, LiteralNode, VarNode, VarSetNode,
-    OperatorNode, FunctionNode, SelectNode, FromNode, WhereNode, GroupByNode,
+    OperatorNode, UnaryOperatorNode, FunctionNode, SelectNode, FromNode, WhereNode, GroupByNode,
     HavingNode, OrderByNode, LimitNode, OffsetNode, QueryNode
 )
 
@@ -78,7 +78,7 @@ def test_operator_nodes():
     # Test logical operators
     and_op = OperatorNode(age_gt, "AND", salary_gte)
     or_op = OperatorNode(and_op, "OR", name_like)
-    not_op = OperatorNode(age_gt, "NOT")  # Unary operator
+    not_op = UnaryOperatorNode(age_gt, "NOT")  # Unary operator
     
     print(f"\nLogical operators:")
     print(f"  {and_op.name} operator with {len(and_op.children)} operands -> Type: {and_op.type}")
@@ -88,7 +88,7 @@ def test_operator_nodes():
     # Test arithmetic operators
     add_op = OperatorNode(salary_col, "+", bonus_col)
     mult_op = OperatorNode(add_op, "*", LiteralNode(1.1))
-    neg_op = OperatorNode(salary_col, "-")  # Unary minus
+    neg_op = UnaryOperatorNode(salary_col, "-")  # Unary minus
     
     print(f"\nArithmetic operators:")
     print(f"  {add_op.name} operator with {len(add_op.children)} operands -> Type: {add_op.type}")

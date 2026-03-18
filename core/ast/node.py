@@ -185,7 +185,12 @@ class VarSetNode(Node):
 class OperatorNode(Node):
     """Operator node"""
     def __init__(self, _left: Node, _name: str, _right: Optional[Node] = None, **kwargs):
-        children = [_left, _right] if _right else [_left]
+        if _left is None:
+            raise ValueError(
+                "OperatorNode requires a left operand. "
+                "Use UnaryOperatorNode for unary operators instead of passing None."
+            )
+        children = [_left] if _right is None else [_left, _right]
         super().__init__(NodeType.OPERATOR, children=children, **kwargs)
         self.name = _name
     
@@ -197,6 +202,13 @@ class OperatorNode(Node):
     
     def __hash__(self):
         return hash((super().__hash__(), self.name))
+
+
+class UnaryOperatorNode(OperatorNode):
+    """Unary operator node (e.g. NOT, unary minus)."""
+    def __init__(self, _operand: Node, _name: str, **kwargs):
+        super().__init__(_operand, _name, **kwargs)
+        self.operand = _operand
 
 
 class FunctionNode(Node):

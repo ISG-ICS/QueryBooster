@@ -228,7 +228,7 @@ def format_expression(node: Node):
         return ast_to_json(subquery_node)
     
     elif node.type == NodeType.OPERATOR:
-        # format: {'operator': [left, right]}
+        # format: {'operator': [left, right]} or {'operator': operand} for unary ops
         op_map = {
             '>': 'gt',
             '<': 'lt',
@@ -240,17 +240,29 @@ def format_expression(node: Node):
             'OR': 'or',
         }
         
-        op_name = op_map.get(node.name.upper(), node.name.lower())
         children = list(node.children)
-        
+
+        if len(children) == 1:
+            operand = format_expression(children[0])
+            unary_op_map = {
+                'NEG': '-',
+                '-': '-',
+                '+': '+',
+                'NOT': 'not',
+            }
+            op_name = unary_op_map.get(node.name.upper(), node.name.lower())
+            return {op_name: operand}
+
+        op_name = op_map.get(node.name.upper(), node.name.lower())
         left = format_expression(children[0])
         
         if len(children) == 2:
             right = format_expression(children[1])
             return {op_name: [left, right]}
-        else:
-            # unary operator
-            return {op_name: left}
+
+        raise ValueError(
+            f"Unsupported operator arity for {node.name!r}: expected 1 or 2 operands, got {len(children)}"
+        )
     
     elif node.type == NodeType.TABLE:
         return format_table(node)
