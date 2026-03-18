@@ -345,10 +345,10 @@ class QueryParser:
                     return FunctionNode(op_name, _args=operands)
                 
                 # Pattern 2: Unary operator
-            if key_lower == 'not':
-                return UnaryOperatorNode(self.parse_expression(value, aliases), 'NOT')
-            if key_lower == 'neg':
-                return UnaryOperatorNode(self.parse_expression(value, aliases), '-')
+                if key_lower == 'not':
+                    return UnaryOperatorNode(self.parse_expression(value, aliases), 'NOT')
+                if key_lower == 'neg':
+                    return UnaryOperatorNode(self.parse_expression(value, aliases), '-')
                 
                 # Pattern 3: EXISTS operator with subquery
                 if key == 'exists' and isinstance(value, dict) and 'select' in value:
