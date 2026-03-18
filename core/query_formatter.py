@@ -244,9 +244,11 @@ def format_expression(node: Node):
 
         if len(children) == 1:
             operand = format_expression(children[0])
+            # Use mo_sql_parsing's unary-operator keys to avoid ambiguity with binary '-'
+            # and to keep the JSON shape consistent with what `parse()` produces.
             unary_op_map = {
-                'NEG': '-',
-                '-': '-',
+                'NEG': 'neg',
+                '-': 'neg',
                 '+': '+',
                 'NOT': 'not',
             }
