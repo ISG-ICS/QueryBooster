@@ -167,36 +167,26 @@ def format_having(having_node: HavingNode) -> dict:
 
 def format_order_by(order_by_node: OrderByNode) -> list:
     """Format ORDER BY clause items."""
-    items = []
+    result = []
     
-    # get all items and their sort orders
-    sort_orders = []
     for child in order_by_node.children:
         if child.type == NodeType.ORDER_BY_ITEM:
             column = list(child.children)[0]
             
-            # Check if the column has an alias
             if hasattr(column, 'alias') and column.alias:
                 item = {'value': column.alias}
             else:
                 item = {'value': format_expression(column)}
             
             sort_order = child.sort
-            sort_orders.append(sort_order)
         else:
-            # Direct column reference (no OrderByItemNode wrapper)
             if hasattr(child, 'alias') and child.alias:
                 item = {'value': child.alias}
             else:
                 item = {'value': format_expression(child)}
             
-            sort_order = SortOrder.ASC
-            sort_orders.append(sort_order)
+            sort_order = None
         
-        items.append((item, sort_order))
-    
-    result = []
-    for item, sort_order in items:
         if sort_order is not None:
             item['sort'] = sort_order.value.lower()
         result.append(item)
