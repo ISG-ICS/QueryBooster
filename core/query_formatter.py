@@ -113,7 +113,8 @@ def format_join(join_node: JoinNode) -> list:
     
     # Map join types to mosql format
     join_type_map = {
-        JoinType.INNER: 'join',
+        JoinType.JOIN: 'join',
+        JoinType.INNER: 'inner join',
         JoinType.LEFT: 'left join',
         JoinType.RIGHT: 'right join',
         JoinType.FULL: 'full join',
@@ -166,49 +167,28 @@ def format_having(having_node: HavingNode) -> dict:
 
 def format_order_by(order_by_node: OrderByNode) -> list:
     """Format ORDER BY clause items."""
-    items = []
+    result = []
     
-    # get all items and their sort orders
-    sort_orders = []
     for child in order_by_node.children:
         if child.type == NodeType.ORDER_BY_ITEM:
             column = list(child.children)[0]
             
-            # Check if the column has an alias
             if hasattr(column, 'alias') and column.alias:
                 item = {'value': column.alias}
             else:
                 item = {'value': format_expression(column)}
             
             sort_order = child.sort
-            sort_orders.append(sort_order)
         else:
-            # Direct column reference (no OrderByItemNode wrapper)
             if hasattr(child, 'alias') and child.alias:
                 item = {'value': child.alias}
             else:
                 item = {'value': format_expression(child)}
             
-            sort_order = SortOrder.ASC
-            sort_orders.append(sort_order)
+            sort_order = None
         
-        items.append((item, sort_order))
-    
-    # check if all sort orders are the same
-    all_same = len(set(sort_orders)) == 1
-    common_sort = sort_orders[0] if all_same else None
-    
-    # reformat into single sort operator if all items have same sort operator
-    # ex. ORDER BY dept_name DESC, emp_count DESC -> ORDER BY dept_name, emp_count DESC
-    result = []
-    for i, (item, sort_order) in enumerate(items):
-        if all_same and i == len(items) - 1:
-            if common_sort != SortOrder.ASC:
-                item['sort'] = common_sort.value.lower()
-        elif not all_same:
-            if sort_order != SortOrder.ASC:
-                item['sort'] = sort_order.value.lower()
-        
+        if sort_order is not None:
+            item['sort'] = sort_order.value.lower()
         result.append(item)
     
     return result
@@ -238,7 +218,7 @@ def format_expression(node: Node):
         return ast_to_json(subquery_node)
     
     elif node.type == NodeType.OPERATOR:
-        # format: {'operator': [left, right]}
+        # format: {'operator': [left, right]} or {'operator': operand} for unary ops
         op_map = {
             '>': 'gt',
             '<': 'lt',
@@ -250,17 +230,31 @@ def format_expression(node: Node):
             'OR': 'or',
         }
         
-        op_name = op_map.get(node.name.upper(), node.name.lower())
         children = list(node.children)
-        
+
+        if len(children) == 1:
+            operand = format_expression(children[0])
+            # Use mo_sql_parsing's unary-operator keys to avoid ambiguity with binary '-'
+            # and to keep the JSON shape consistent with what `parse()` produces.
+            unary_op_map = {
+                'NEG': 'neg',
+                '-': 'neg',
+                '+': '+',
+                'NOT': 'not',
+            }
+            op_name = unary_op_map.get(node.name.upper(), node.name.lower())
+            return {op_name: operand}
+
+        op_name = op_map.get(node.name.upper(), node.name.lower())
         left = format_expression(children[0])
         
         if len(children) == 2:
             right = format_expression(children[1])
             return {op_name: [left, right]}
-        else:
-            # unary operator
-            return {op_name: left}
+
+        raise ValueError(
+            f"Unsupported operator arity for {node.name!r}: expected 1 or 2 operands, got {len(children)}"
+        )
     
     elif node.type == NodeType.TABLE:
         return format_table(node)

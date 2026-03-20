@@ -1,7 +1,7 @@
 from typing import Optional
 from core.ast.node import (
     CaseNode, WhenThenNode, IntervalNode, ListNode, QueryNode, SelectNode, FromNode, WhereNode, TableNode, ColumnNode, 
-    LiteralNode, DataTypeNode, TimeUnitNode, OperatorNode, FunctionNode, GroupByNode, HavingNode,
+    LiteralNode, DataTypeNode, TimeUnitNode, OperatorNode, UnaryOperatorNode, FunctionNode, GroupByNode, HavingNode,
     OrderByNode, OrderByItemNode, LimitNode, OffsetNode, JoinNode, SubqueryNode
 )
 from core.ast.enums import JoinType, SortOrder
@@ -1007,8 +1007,8 @@ def _ast_query_37() -> QueryNode:
     in_cond = OperatorNode(ColumnNode("requisicion_id"), "IN", subquery_node)
     where_clause = WhereNode([in_cond])
     order_by_clause = OrderByNode([
-        OrderByItemNode(ColumnNode("requisicion_id"), SortOrder.ASC),
-        OrderByItemNode(ColumnNode("estatusrequisicion_id"), SortOrder.ASC),
+        OrderByItemNode(ColumnNode("requisicion_id")),
+        OrderByItemNode(ColumnNode("estatusrequisicion_id")),
     ])
     return QueryNode(
         _select=select_clause,
@@ -1311,7 +1311,7 @@ def _ast_query_42() -> QueryNode:
     )
     date_trunc_day = FunctionNode("DATE_TRUNC", _args=[LiteralNode("day"), cast_created])
     extract_dow = FunctionNode("EXTRACT", _args=[LiteralNode("DOW"), created_at])
-    neg_extract = OperatorNode(LiteralNode(0), "-", extract_dow)
+    neg_extract = UnaryOperatorNode(extract_dow, "-")
     interval_1day = IntervalNode(LiteralNode(1), TimeUnitNode("DAY"))
     # -EXTRACT(DOW FROM created_at) * INTERVAL '1 DAY'  =>  neg_extract * interval_1day
     neg_expr = OperatorNode(neg_extract, "*", interval_1day)
@@ -1351,6 +1351,7 @@ def _ast_query_42() -> QueryNode:
     where_condition = OperatorNode(where_123, "AND", strpos_cond)
     where_clause = WhereNode([where_condition])
     # GROUP BY 1, 2
+    # Future TODO: Do the actual column references in the next layer
     group_by_clause = GroupByNode([LiteralNode(1), LiteralNode(2)])
     return QueryNode(
         _select=select_clause,
@@ -1394,7 +1395,8 @@ def _ast_query_43() -> QueryNode:
     locate_cond = OperatorNode(locate_expr, ">", LiteralNode(0))
     where_condition = OperatorNode(date_eq, "AND", locate_cond)
     where_clause = WhereNode([where_condition])
-    # GROUP BY 1, 2 -> actually refer to the 1st and 2nd columns in the SELECT clause
+    # GROUP BY 1, 2
+    # Future TODO: Do the actual column references in the next layer
     group_by_clause = GroupByNode([LiteralNode(1), LiteralNode(2)])
     return QueryNode(
         _select=select_clause,
@@ -1423,7 +1425,7 @@ def _ast_query_44() -> QueryNode:
     select_clause = SelectNode([emp_name, dept_name, count_star])
     # FROM clause with JOIN
     join_condition = OperatorNode(emp_dept_id, "=", dept_id)
-    join_node = JoinNode(emp_table, dept_table, JoinType.INNER, join_condition)
+    join_node = JoinNode(emp_table, dept_table, JoinType.JOIN, join_condition)
     from_clause = FromNode([join_node])
     # WHERE clause
     salary_condition = OperatorNode(emp_salary, ">", LiteralNode(40000))
@@ -1431,12 +1433,13 @@ def _ast_query_44() -> QueryNode:
     where_condition = OperatorNode(salary_condition, "AND", age_condition)
     where_clause = WhereNode([where_condition])
     # GROUP BY clause
-    group_by_clause = GroupByNode([dept_id, dept_name])
+    groupby_dept_name = ColumnNode("name", _parent_alias="d")
+    group_by_clause = GroupByNode([dept_id, groupby_dept_name])
     # HAVING clause
     having_condition = OperatorNode(count_star, ">", LiteralNode(2))
     having_clause = HavingNode([having_condition])
     # ORDER BY clause
-    order_by_item1 = OrderByItemNode(dept_name, SortOrder.ASC)
+    order_by_item1 = OrderByItemNode(dept_name)
     order_by_item2 = OrderByItemNode(count_star, SortOrder.DESC)
     order_by_clause = OrderByNode([order_by_item1, order_by_item2])
     # LIMIT and OFFSET

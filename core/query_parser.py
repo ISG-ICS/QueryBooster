@@ -1,6 +1,6 @@
 from core.ast.node import (
     Node, QueryNode, SelectNode, FromNode, WhereNode, TableNode, ColumnNode, 
-    LiteralNode, OperatorNode, FunctionNode, GroupByNode, HavingNode,
+    LiteralNode, OperatorNode, UnaryOperatorNode, FunctionNode, GroupByNode, HavingNode,
     OrderByNode, OrderByItemNode, LimitNode, OffsetNode, SubqueryNode, VarNode, VarSetNode, JoinNode
 )
 # TODO: implement VarNode, VarSetNode
@@ -218,12 +218,13 @@ class QueryParser:
                     # Parse normally for other cases
                     column = self.parse_expression(value, aliases)
                 
-                # Get sort order (default is ASC)
-                sort_order = SortOrder.ASC
+                sort_order = None
                 if 'sort' in item:
                     sort_str = item['sort'].upper()
                     if sort_str == 'DESC':
                         sort_order = SortOrder.DESC
+                    else:
+                        sort_order = SortOrder.ASC
                 
                 # Wrap in OrderByItemNode
                 order_by_item = OrderByItemNode(column, sort_order)
@@ -231,7 +232,7 @@ class QueryParser:
             else:
                 # Handle direct expression (string, int, etc.)
                 column = self.parse_expression(item, aliases)
-                order_by_item = OrderByItemNode(column, SortOrder.ASC)
+                order_by_item = OrderByItemNode(column)
                 items.append(order_by_item)
 
         return OrderByNode(items)
@@ -239,16 +240,20 @@ class QueryParser:
     def resolve_aliases(self, expr: Node, aliases: dict) -> Node:
         if isinstance(expr, OperatorNode):
             # Recursively resolve aliases in operator operands
-            if len(expr.children) >= 2:
+            if len(expr.children) == 2:
                 left = self.resolve_aliases(expr.children[0], aliases)
                 right = self.resolve_aliases(expr.children[1], aliases)
                 return OperatorNode(left, expr.name, right)
             elif len(expr.children) == 1:
                 # Unary operator (e.g., NOT)
                 operand = self.resolve_aliases(expr.children[0], aliases)
+                if isinstance(expr, UnaryOperatorNode):
+                    return UnaryOperatorNode(operand, expr.name)
                 return OperatorNode(operand, expr.name)
             else:
-                raise ValueError(f"OperatorNode has {len(expr.children)} children, expected 2 for binary operators or 1 for unary operators")
+                raise ValueError(
+                    f"OperatorNode has {len(expr.children)} children, expected 2 for binary operators or 1 for unary operators"
+                )
         elif isinstance(expr, FunctionNode):
             # Check if this function matches an aliased function from SELECT
             if expr.alias is None:
@@ -340,8 +345,10 @@ class QueryParser:
                     return FunctionNode(op_name, _args=operands)
                 
                 # Pattern 2: Unary operator
-                if key == 'not':
-                    return OperatorNode(self.parse_expression(value, aliases), 'NOT')
+                if key_lower == 'not':
+                    return UnaryOperatorNode(self.parse_expression(value, aliases), 'NOT')
+                if key_lower == 'neg':
+                    return UnaryOperatorNode(self.parse_expression(value, aliases), '-')
                 
                 # Pattern 3: EXISTS operator with subquery
                 if key == 'exists' and isinstance(value, dict) and 'select' in value:
@@ -425,5 +432,5 @@ class QueryParser:
             return JoinType.FULL
         elif 'cross' in key_lower:
             return JoinType.CROSS
-        
-        return JoinType.INNER
+        else:
+            return JoinType.JOIN
