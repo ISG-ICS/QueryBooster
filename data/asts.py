@@ -1396,7 +1396,7 @@ def _ast_query_43() -> QueryNode:
     where_condition = OperatorNode(date_eq, "AND", locate_cond)
     where_clause = WhereNode([where_condition])
     # GROUP BY 1, 2
-    # Future TODO: Do the actual column references in the next layer
+    # TODO: Do the actual column references in the next layer
     group_by_clause = GroupByNode([LiteralNode(1), LiteralNode(2)])
     return QueryNode(
         _select=select_clause,
