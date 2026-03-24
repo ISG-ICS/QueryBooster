@@ -23,10 +23,9 @@ def test_basic_parse():
         ORDER BY dept_name, emp_count DESC
         LIMIT 10 OFFSET 5
     """
-    # TODO: check if we should treat d.name as new node without alias
     logger.info("\n" + visualize_ast(sql, get_ast(44)))
 
-    #assert parser.parse(sql) == get_ast(44)
+    assert parser.parse(sql) == get_ast(44)
 
 
 def test_subquery_parse():
@@ -344,7 +343,7 @@ def test_query_42():
     query = get_query(42)
     sql = query["pattern"]
     logger.info("\n" + visualize_ast(sql, get_ast(42)))
-    #assert parser.parse(sql) == get_ast(42)
+    assert parser.parse(sql) == get_ast(42)
 
 
 def test_query_43():

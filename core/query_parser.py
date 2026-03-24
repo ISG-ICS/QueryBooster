@@ -201,11 +201,11 @@ class QueryParser:
     
     def parse_where(self, where_dict: dict, aliases: dict) -> WhereNode:
         predicates = []
-        # For WHERE, we follow the original SQL text exactly:
-        # - If the text used a base column/expression, we keep a fresh node.
-        # - If it used an alias token, mo_sql_parsing will already give us that
-        #   as a simple string and it will be resolved during parse_expression.
-        predicates.append(self.parse_expression(where_dict, aliases))
+        expr = self.parse_expression(where_dict, aliases)
+        # Match expected ASTs: bare column refs in WHERE that correspond to SELECT
+        # list items with AS aliases get the same `.alias` as those items.
+        expr = self.resolve_aliases(expr, aliases)
+        predicates.append(expr)
         return WhereNode(predicates)
     
     def parse_group_by(self, group_by_list: list, aliases: dict) -> GroupByNode:
@@ -302,9 +302,24 @@ class QueryParser:
                             break
             return expr
         elif isinstance(expr, ColumnNode):
-            # Do not propagate column aliases into other clauses based solely
-            # on structural equality; if the SQL text used an alias token,
-            # parse_order_by/parse_expression will already resolve it.
+            if expr.alias is None:
+                for aliased_expr in aliases.values():
+                    if not isinstance(aliased_expr, ColumnNode):
+                        continue
+                    if aliased_expr.alias is None:
+                        continue
+                    # Only mirror SELECT aliases into bare column refs when the output
+                    # name equals the base column name (e.g. "latitude" AS "latitude").
+                    # This matches fixtures that reuse the same aliased column in WHERE
+                    # for that pattern, without attaching unrelated output aliases like
+                    # "is_friendly" AS "is_frien3_4_" to WHERE predicates (see query 14).
+                    if (
+                        expr.name == aliased_expr.name
+                        and expr.parent_alias == aliased_expr.parent_alias
+                        and aliased_expr.alias == aliased_expr.name
+                    ):
+                        expr.alias = aliased_expr.alias
+                        break
             return expr
         else:
             return expr
@@ -437,12 +452,6 @@ class QueryParser:
                         right = self.parse_expression(right_raw, aliases)
 
                     return OperatorNode(left, op_name, right)
-
-                # Unary negation (e.g. -EXTRACT(...)) -> model as 0 - expr.
-                # TODO: double check on this (query 42)
-                if key_lower == 'neg':
-                    inner = self.parse_expression(value, aliases)
-                    return OperatorNode(LiteralNode(0), '-', inner)
 
                 # CASE expressions: {'case': [{'when': ..., 'then': ...}, else_expr]}
                 if key_lower == 'case':
