@@ -38,15 +38,15 @@ def test_subquery_format():
 def test_query_1():
     """Query 1: Remove Cast Date Match Twice."""
     query = get_query(1)
-    #sql = formatter.format(get_ast(1))
-    #assert parse(sql) == parse(query["pattern"])
+    sql = formatter.format(get_ast(1))
+    assert parse(sql) == parse(query["pattern"])
 
 
 def test_query_2():
     """Query 2: Remove Cast Date Match Once."""
     query = get_query(2)
-    #sql = formatter.format(get_ast(2))
-    #assert parse(sql) == parse(query["rewrite"])
+    sql = formatter.format(get_ast(2))
+    assert parse(sql) == parse(query["rewrite"])
 
 
 # query 3 has the exact same query as query 2, so I skipped it
@@ -55,8 +55,8 @@ def test_query_2():
 def test_query_4():
     """Query 4."""
     query = get_query(4)
-    #sql = formatter.format(get_ast(4))
-    #assert parse(sql) == parse(query["rewrite"])
+    sql = formatter.format(get_ast(4))
+    assert parse(sql) == parse(query["rewrite"])
 
 
 # query 5 has the exact same query as query 4, so I skipped it
@@ -97,29 +97,28 @@ def test_query_11():
     """Query 11: Subquery to Join Match 3."""
     query = get_query(11)
     sql = formatter.format(get_ast(11))
-    # TODO: Rewrite has SELECT DISTINCT (not supported by parser yet)
-    #assert parse(sql) == parse(query["rewrite"])
+    assert parse(sql) == parse(query["rewrite"])
 
 
 def test_query_12():
     """Query 12: Join to Filter Match 1."""
     query = get_query(12)
-    #sql = formatter.format(get_ast(12))
-    #assert parse(sql) == parse(query["pattern"])
+    sql = formatter.format(get_ast(12))
+    assert parse(sql) == parse(query["pattern"])
 
 
 def test_query_13():
     """Query 13: Join to Filter Match 2."""
     query = get_query(13)
-    #sql = formatter.format(get_ast(13))
-    #assert parse(sql) == parse(query["pattern"])
+    sql = formatter.format(get_ast(13))
+    assert parse(sql) == parse(query["pattern"])
 
 
 def test_query_14():
     """Query 14: Test Rule Wetune 90 Match."""
     query = get_query(14)
-    #sql = formatter.format(get_ast(14))
-    #assert parse(sql) == parse(query["pattern"])
+    sql = formatter.format(get_ast(14))
+    assert parse(sql) == parse(query["pattern"])
 
 
 # TODO: Query 15 uses UNION, which is not supported by parser yet
@@ -128,24 +127,22 @@ def test_query_14():
 def test_query_16():
     """Query 16: Remove Max Distinct."""
     query = get_query(16)
-    #sql = formatter.format(get_ast(16))
-    # TODO: DISTINCT is not supported by parser yet
-    #assert parse(sql) == parse(query["pattern"])
+    sql = formatter.format(get_ast(16))
+    assert parse(sql) == parse(query["pattern"])
 
 
 def test_query_17():
     """Query 17."""
     query = get_query(17)
-    #sql = formatter.format(get_ast(17))
-    #assert parse(sql) == parse(query["pattern"])
+    sql = formatter.format(get_ast(17))
+    assert parse(sql) == parse(query["pattern"])
 
 
 def test_query_18():
     """Query 18 (parser drops SELECT for SELECT DISTINCT with comma join)."""
     query = get_query(18)
-    #sql = formatter.format(get_ast(18))
-    # TODO: DISTINCT is not supported by parser yet
-    #assert parse(sql) == parse(query["pattern"])
+    sql = formatter.format(get_ast(18))
+    assert parse(sql) == parse(query["pattern"])
 
 
 def test_query_19():
@@ -158,8 +155,8 @@ def test_query_19():
 def test_query_20():
     """Query 20: Partial Matching Base Case 2."""
     query = get_query(20)
-    #sql = formatter.format(get_ast(20))
-    #assert parse(sql) == parse(query["pattern"])
+    sql = formatter.format(get_ast(20))
+    assert parse(sql) == parse(query["pattern"])
 
 
 def test_query_21():
@@ -208,8 +205,7 @@ def test_query_27():
     """Query 27: Remove Where True."""
     query = get_query(27)
     sql = formatter.format(get_ast(27))
-    # TODO: parser does not support arithmetic expressions yet
-    #assert parse(sql) == parse(query["pattern"])
+    assert parse(sql) == parse(query["pattern"])
 
 
 def test_query_28():
@@ -232,9 +228,8 @@ def test_query_30():
 def test_query_31():
     """Query 31: Aggregation to Subquery."""
     query = get_query(31)
-    #sql = formatter.format(get_ast(31))
-    # TODO: CASE not cleanly supported yet
-    #assert parse(sql) == parse(query["pattern"])
+    sql = formatter.format(get_ast(31))
+    assert parse(sql) == parse(query["pattern"])
 
 
 # TODO: Query 32: UNION not supported by parser
@@ -258,8 +253,7 @@ def test_query_35():
     """Query 35: Spreadsheet ID 9."""
     query = get_query(35)
     sql = formatter.format(get_ast(35))
-    # TODO: DISTINCT is not supported by parser yet
-    #assert parse(sql) == parse(query["pattern"])
+    assert parse(sql) == parse(query["pattern"])
 
 
 def test_query_36():
@@ -279,44 +273,40 @@ def test_query_37():
 def test_query_38():
     """Query 38: Spreadsheet ID 12."""
     query = get_query(38)
-    #sql = formatter.format(get_ast(38))
-    #assert parse(sql) == parse(query["pattern"])
+    sql = formatter.format(get_ast(38))
+    assert parse(sql) == parse(query["pattern"])
 
 
 def test_query_39():
     """Query 39: Spreadsheet ID 15."""
     query = get_query(39)
-    #sql = formatter.format(get_ast(39))
-    #assert parse(sql) == parse(query["pattern"])
+    sql = formatter.format(get_ast(39))
+    assert parse(sql) == parse(query["pattern"])
 
 
 def test_query_40():
     """Query 40."""
     query = get_query(40)
-    #sql = formatter.format(get_ast(40))
-    # TODO: DISTINCT ON is not supported by parser yet
-    #assert parse(sql) == parse(query["pattern"])
+    sql = formatter.format(get_ast(40))
+    assert parse(sql) == parse(query["pattern"])
 
 
 def test_query_41():
     """Query 41: Spreadsheet ID 20."""
     query = get_query(41)
-    #sql = formatter.format(get_ast(41))
-    # TODO: NULL keyword and IS NULL not fully supported yet
-    #assert parse(sql) == parse(query["pattern"])
+    sql = formatter.format(get_ast(41))
+    assert parse(sql) == parse(query["pattern"])
 
 
 def test_query_42():
     """Query 42: PostgreSQL Test."""
     query = get_query(42)
-    #sql = formatter.format(get_ast(42))
-    # TODO: Special query, please double check the AST
-    #assert parse(sql) == parse(query["pattern"])
+    sql = formatter.format(get_ast(42))
+    assert parse(sql) == parse(query["pattern"])
 
 
 def test_query_43():
     """Query 43: MySQL Test."""
     query = get_query(43)
-    #sql = formatter.format(get_ast(43))
-    # TODO: INTERVAL unit keyword not fully supported
-    #assert parse(sql) == parse(query["pattern"])
+    sql = formatter.format(get_ast(43))
+    assert parse(sql) == parse(query["pattern"])
