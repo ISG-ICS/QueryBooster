@@ -4,13 +4,14 @@ import mo_sql_parsing as mosql
 import re
 from typing import Any, Tuple
 
+
 # Variable Type
 # 
 class VarType(Enum):
     Var = 1
     VarList = 2
 
-# Variable Types' info
+# Variable Types' infro
 VarTypesInfo = {
     VarType.Var: {
         'markerStart': '<',
@@ -40,7 +41,6 @@ ScopeExtension = {
     Scope.FROM: 'SELECT * ',
     Scope.SELECT: ''
 }
-
 
 class RuleParser:
     
