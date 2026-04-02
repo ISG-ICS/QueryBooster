@@ -1,5 +1,13 @@
-from core.rule_parser import RuleParser
-from core.rule_parser import Scope
+from core.ast.enums import NodeType
+from core.ast.node import (
+    DataTypeNode,
+    FunctionNode,
+    QueryNode,
+    SelectNode,
+    VarNode,
+    VarSetNode,
+)
+from core.rule_parser import RuleParser, RuleParseResult, Scope
 
 def test_extendToFullSQL():
 
@@ -149,6 +157,32 @@ def test_parse():
         pattern_json, rewrite_json, mapping = RuleParser.parse(rule['pattern'], rule['rewrite'])
         assert pattern_json == internal_rule['pattern_json']
         assert rewrite_json == internal_rule['rewrite_json']
+
+
+def test_parse_v2_cast_rule():
+    result = RuleParser.parse_v2('CAST(<x> AS DATE)', '<x>')
+    assert isinstance(result, RuleParseResult)
+    assert result.pattern_scope == Scope.CONDITION
+    assert result.rewrite_scope == Scope.CONDITION
+    assert result.mapping == {'x': 'V001'}
+    assert isinstance(result.pattern_ast, FunctionNode)
+    assert result.pattern_ast.name.lower() == 'cast'
+    cast_args = list(result.pattern_ast.children)
+    assert isinstance(cast_args[0], VarNode) and cast_args[0].name == 'x'
+    assert isinstance(cast_args[1], DataTypeNode)
+    assert isinstance(result.rewrite_ast, VarNode) and result.rewrite_ast.name == 'x'
+
+
+def test_parse_v2_select_list_varset():
+    pattern = 'select <<s1>> from lineitem where 1 = 1'
+    rewrite = 'select <<s1>> from lineitem where 1 = 1'
+    result = RuleParser.parse_v2(pattern, rewrite)
+    assert result.pattern_scope == Scope.SELECT
+    assert isinstance(result.pattern_ast, QueryNode)
+    select = next(c for c in result.pattern_ast.children if c.type == NodeType.SELECT)
+    assert isinstance(select, SelectNode)
+    first = list(select.children)[0]
+    assert isinstance(first, VarSetNode) and first.name == 's1'
 
 
 #incorrect brackets
