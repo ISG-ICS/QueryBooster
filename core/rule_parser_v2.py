@@ -233,13 +233,18 @@ class RuleParserV2:
         pattern_query = qparser.parse(pattern_full)
         rewrite_query = qparser.parse(rewrite_full)
 
-        # 4. Extract rule-shaped subtree by scope and map V00x / VL00x back to external names
+        # 4. Map internal tokens (V00x / VL00x) to VarNode / VarSetNode across the full query AST
         #
         internal_to_external = {internal: external for external, internal in mapping.items()}
-        pattern_ast = RuleParserV2._extract_rule_ast(pattern_query, pattern_scope, internal_to_external)
-        rewrite_ast = RuleParserV2._extract_rule_ast(rewrite_query, rewrite_scope, internal_to_external)
+        pattern_after_vars = RuleParserV2._substitute_rule_vars(pattern_query, internal_to_external)
+        rewrite_after_vars = RuleParserV2._substitute_rule_vars(rewrite_query, internal_to_external)
 
-        # 5. Return AST result + mapping + scopes
+        # 5. Reduce to the rule fragment for the inferred scope (CONDITION / WHERE / FROM / SELECT)
+        #
+        pattern_ast = RuleParserV2._extract_rule_fragment(pattern_after_vars, pattern_scope)
+        rewrite_ast = RuleParserV2._extract_rule_fragment(rewrite_after_vars, rewrite_scope)
+
+        # 6. Return AST result + mapping + scopes
         #
         return RuleParseResult(
             pattern_ast=pattern_ast,
@@ -258,13 +263,21 @@ class RuleParserV2:
                 return child
         return None
 
-    # Slice full query AST to the rule fragment for this scope, then substitute placeholders
-    #   (internal column/table names) to VarNode / VarSetNode using internal_to_external.
+    # Apply internal_to_external across an entire parsed query (V00x -> VarNode, etc.).
     #
     @staticmethod
-    def _extract_rule_ast(
-        query: QueryNode, scope: Scope, internal_to_external: Dict[str, str]
-    ) -> Node:
+    def _substitute_rule_vars(
+        query: QueryNode, internal_to_external: Dict[str, str]
+    ) -> QueryNode:
+        out = RuleParserV2._as_rule_ast(query, internal_to_external)
+        if not isinstance(out, QueryNode):
+            raise TypeError("expected QueryNode after substituting rule variables on full query")
+        return out
+
+    # Slice a fully substituted query to the rule fragment for this scope (no VarNode pass).
+    #
+    @staticmethod
+    def _extract_rule_fragment(query: QueryNode, scope: Scope) -> Node:
         frm = RuleParserV2._get_clause(query, NodeType.FROM)
         wh = RuleParserV2._get_clause(query, NodeType.WHERE)
         gb = RuleParserV2._get_clause(query, NodeType.GROUP_BY)
@@ -278,46 +291,39 @@ class RuleParserV2:
         if scope == Scope.CONDITION:
             if wh is None or not list(wh.children):
                 raise ValueError("CONDITION scope requires a WHERE predicate")
-            pred = list(wh.children)[0]
-            return RuleParserV2._as_rule_ast(pred, internal_to_external)
+            return list(wh.children)[0]
 
-        # case WHERE: rewrite-shaped query without select/from
+        # case WHERE: query without select/from lists
         #
         if scope == Scope.WHERE:
-            return RuleParserV2._as_rule_ast(
-                QueryNode(
-                    _select=None,
-                    _from=None,
-                    _where=RuleParserV2._as_rule_ast(wh, internal_to_external) if wh else None,
-                    _group_by=RuleParserV2._as_rule_ast(gb, internal_to_external) if gb else None,
-                    _having=RuleParserV2._as_rule_ast(hav, internal_to_external) if hav else None,
-                    _order_by=RuleParserV2._as_rule_ast(ob, internal_to_external) if ob else None,
-                    _limit=RuleParserV2._as_rule_ast(lim, internal_to_external) if lim else None,
-                    _offset=RuleParserV2._as_rule_ast(off, internal_to_external) if off else None,
-                ),
-                internal_to_external,
+            return QueryNode(
+                _select=None,
+                _from=None,
+                _where=wh,
+                _group_by=gb,
+                _having=hav,
+                _order_by=ob,
+                _limit=lim,
+                _offset=off,
             )
 
         # case FROM: from + following clauses, no select list
         #
         if scope == Scope.FROM:
-            return RuleParserV2._as_rule_ast(
-                QueryNode(
-                    _select=None,
-                    _from=RuleParserV2._as_rule_ast(frm, internal_to_external) if frm else None,
-                    _where=RuleParserV2._as_rule_ast(wh, internal_to_external) if wh else None,
-                    _group_by=RuleParserV2._as_rule_ast(gb, internal_to_external) if gb else None,
-                    _having=RuleParserV2._as_rule_ast(hav, internal_to_external) if hav else None,
-                    _order_by=RuleParserV2._as_rule_ast(ob, internal_to_external) if ob else None,
-                    _limit=RuleParserV2._as_rule_ast(lim, internal_to_external) if lim else None,
-                    _offset=RuleParserV2._as_rule_ast(off, internal_to_external) if off else None,
-                ),
-                internal_to_external,
+            return QueryNode(
+                _select=None,
+                _from=frm,
+                _where=wh,
+                _group_by=gb,
+                _having=hav,
+                _order_by=ob,
+                _limit=lim,
+                _offset=off,
             )
 
         # case SELECT: full query
         #
-        return RuleParserV2._as_rule_ast(query, internal_to_external)
+        return query
 
     # Run VarNode / VarSetNode substitution on one subtree (None stays None).
     #
