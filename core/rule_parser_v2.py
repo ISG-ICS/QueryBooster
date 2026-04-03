@@ -1,5 +1,5 @@
 # Rule parser v2: self-contained rule preprocessing (duplicated from v1 on purpose), then
-#   QueryParser and VarNode / VarSetNode rule AST via parse().
+#   QueryParser and ElementVariableNode / SetVariableNode rule AST via parse().
 
 from __future__ import annotations
 
@@ -30,34 +30,35 @@ from core.ast.node import (
     SubqueryNode,
     TableNode,
     UnaryOperatorNode,
-    VarNode,
-    VarSetNode,
+    ElementVariableNode,
+    SetVariableNode,
     WhenThenNode,
     WhereNode,
 )
 from core.query_parser import QueryParser
 
 
-# Variable type (same as v1).
+# Variable types (v2 naming; same placeholder syntax as v1).
+# AST: ``<name>`` → ElementVariableNode, ``<<name>>`` → SetVariableNode.
 #
 class VarType(Enum):
-    Var = 1
-    VarList = 2
+    ElementVariable = 1  # <x>  → ElementVariableNode in rule AST
+    SetVariable = 2  # <<y>> → SetVariableNode in rule AST
 
 
-# Variable Types' info (same as v1).
+# Placeholder markers and internal token prefixes for rule variables.
 #
 VarTypesInfo = {
-    VarType.Var: {
+    VarType.ElementVariable: {
         "markerStart": "<",
         "markerEnd": ">",
-        "internalBase": "V",
+        "internalBase": "EV",
         "externalBase": "x",
     },
-    VarType.VarList: {
+    VarType.SetVariable: {
         "markerStart": "<<",
         "markerEnd": ">>",
-        "internalBase": "VL",
+        "internalBase": "SV",
         "externalBase": "y",
     },
 }
@@ -89,8 +90,6 @@ class RuleParseResult:
     pattern_ast: Node
     rewrite_ast: Node
     mapping: Dict[str, str]
-    pattern_scope: Scope
-    rewrite_scope: Scope
 
 
 class RuleParserV2:
@@ -109,10 +108,10 @@ class RuleParserV2:
             regexPatternVarStart = (
                 CommonMistakeVarTypesInfo["markerStart"][i]
                 + r"(\w+)"
-                + VarTypesInfo[VarType.Var]["markerEnd"]
+                + VarTypesInfo[VarType.ElementVariable]["markerEnd"]
             )
             regexPatternVarEnd = (
-                VarTypesInfo[VarType.Var]["markerStart"]
+                VarTypesInfo[VarType.ElementVariable]["markerStart"]
                 + r"(\w+)"
                 + CommonMistakeVarTypesInfo["markerEnd"][i]
             )
@@ -171,8 +170,8 @@ class RuleParserV2:
         partialSQL = ScopeExtension[scope] + partialSQL
         return partialSQL, scope
 
-    # Replace user-facing rule variables with internal tokens (same as v1 RuleParser.replaceVars).
-    #   e.g., <x> ==> V001, <<y>> ==> VL001
+    # Replace user-facing rule variables with internal tokens.
+    #   e.g., <x> ==> EV001, <<y>> ==> SV001
     #
     @staticmethod
     def replaceVars(pattern: str, rewrite: str) -> Tuple[str, str, Dict[str, str]]:
@@ -203,11 +202,11 @@ class RuleParserV2:
             return pattern, rewrite
 
         mapping: Dict[str, str] = {}
-        pattern, rewrite = _replace_one_var_type(pattern, rewrite, VarType.VarList, mapping)
-        pattern, rewrite = _replace_one_var_type(pattern, rewrite, VarType.Var, mapping)
+        pattern, rewrite = _replace_one_var_type(pattern, rewrite, VarType.SetVariable, mapping)
+        pattern, rewrite = _replace_one_var_type(pattern, rewrite, VarType.ElementVariable, mapping)
         return pattern, rewrite, mapping
 
-    # parse a rule into project AST nodes (VarNode / VarSetNode for rule variables)
+    # parse a rule into project AST nodes (ElementVariableNode / SetVariableNode for rule variables)
     #
     @staticmethod
     def parse(pattern: str, rewrite: str) -> RuleParseResult:
@@ -233,7 +232,7 @@ class RuleParserV2:
         pattern_query = qparser.parse(pattern_full)
         rewrite_query = qparser.parse(rewrite_full)
 
-        # 4. Map internal tokens (V00x / VL00x) to VarNode / VarSetNode across the full query AST
+        # 4. Map internal tokens (EV00x / SV00x) to ElementVariableNode / SetVariableNode across the full query AST
         #
         internal_to_external = {internal: external for external, internal in mapping.items()}
         pattern_after_vars = RuleParserV2._substitute_rule_vars(pattern_query, internal_to_external)
@@ -244,14 +243,12 @@ class RuleParserV2:
         pattern_ast = RuleParserV2._extract_rule_fragment(pattern_after_vars, pattern_scope)
         rewrite_ast = RuleParserV2._extract_rule_fragment(rewrite_after_vars, rewrite_scope)
 
-        # 6. Return AST result + mapping + scopes
+        # 6. Return AST result + mapping
         #
         return RuleParseResult(
             pattern_ast=pattern_ast,
             rewrite_ast=rewrite_ast,
             mapping=mapping,
-            pattern_scope=pattern_scope,
-            rewrite_scope=rewrite_scope,
         )
 
     # Find first child of query with given clause type (SELECT, FROM, WHERE, ...).
@@ -263,7 +260,7 @@ class RuleParserV2:
                 return child
         return None
 
-    # Apply internal_to_external across an entire parsed query (V00x -> VarNode, etc.).
+    # Apply internal_to_external across an entire parsed query (EV00x / SV00x -> ElementVariableNode, etc.).
     #
     @staticmethod
     def _substitute_rule_vars(
@@ -274,7 +271,7 @@ class RuleParserV2:
             raise TypeError("expected QueryNode after substituting rule variables on full query")
         return out
 
-    # Slice a fully substituted query to the rule fragment for this scope (no VarNode pass).
+    # Slice a fully substituted query to the rule fragment for this scope (no variable-node pass).
     #
     @staticmethod
     def _extract_rule_fragment(query: QueryNode, scope: Scope) -> Node:
@@ -325,7 +322,7 @@ class RuleParserV2:
         #
         return query
 
-    # Run VarNode / VarSetNode substitution on one subtree (None stays None).
+    # Run ElementVariableNode / SetVariableNode substitution on one subtree (None stays None).
     #
     @staticmethod
     def _as_rule_ast(node: Optional[Node], internal_to_external: Dict[str, str]) -> Optional[Node]:
@@ -333,15 +330,15 @@ class RuleParserV2:
             return None
         return RuleParserV2._substitute_placeholders(node, internal_to_external)
 
-    # Build VarNode or VarSetNode from internal token prefix (V... vs VL...).
+    # Build ElementVariableNode or SetVariableNode from internal token prefix (EV... vs SV...).
     #
     @staticmethod
     def _placeholder_varnode(internal_token: str, external_name: str) -> Node:
-        if internal_token.startswith(VarTypesInfo[VarType.VarList]["internalBase"]):
-            return VarSetNode(external_name)
-        return VarNode(external_name)
+        if internal_token.startswith(VarTypesInfo[VarType.SetVariable]["internalBase"]):
+            return SetVariableNode(external_name)
+        return ElementVariableNode(external_name)
 
-    # Structural recursion: replace internal identifiers with VarNode / VarSetNode where appropriate.
+    # Structural recursion: replace internal identifiers with ElementVariableNode / SetVariableNode where appropriate.
     #
     @staticmethod
     def _substitute_placeholders(node: Node, rev: Dict[str, str]) -> Node:
@@ -363,8 +360,11 @@ class RuleParserV2:
             t = node
             if not isinstance(t, TableNode):
                 return node
-            new_name = rev.get(t.name, t.name)
-            new_alias = rev[t.alias] if t.alias and t.alias in rev else t.alias
+            new_name = rev.get(t.name, t.name) if isinstance(t.name, str) else t.name
+            if t.alias is not None and isinstance(t.alias, str) and t.alias in rev:
+                new_alias = rev[t.alias]
+            else:
+                new_alias = t.alias
             return TableNode(new_name, new_alias)
 
         if node.type == NodeType.QUERY:

@@ -7,7 +7,7 @@ from core.ast.node import (
     Node, QueryNode, SelectNode, FromNode, WhereNode, TableNode, ColumnNode,
     LiteralNode, OperatorNode, FunctionNode, GroupByNode, HavingNode,
     OrderByNode, OrderByItemNode, LimitNode, OffsetNode, JoinNode, SubqueryNode,
-    VarNode, VarSetNode
+    ElementVariableNode, SetVariableNode
 )
 
 
@@ -222,8 +222,8 @@ def _node_to_string(node: Node, indent: int = 0) -> str:
                 for line in child_lines:
                     result.append(line)
     
-    elif isinstance(node, (VarNode, VarSetNode)):
-        # VarNode/VarSetNode: VarSQL variable, display as "var: name" or "varset: name"
+    elif isinstance(node, (ElementVariableNode, SetVariableNode)):
+        # ElementVariableNode / SetVariableNode: rule variables (<x> / <<y>>)
         result.append(f"{prefix}{node_type}: {node.name}")
     
     else:

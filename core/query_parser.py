@@ -4,9 +4,9 @@ from core.ast.node import (
     CaseNode, WhenThenNode,
     OperatorNode, UnaryOperatorNode, FunctionNode, GroupByNode, HavingNode,
     OrderByNode, OrderByItemNode, LimitNode, OffsetNode, SubqueryNode,
-    VarNode, VarSetNode, JoinNode, ListNode
+    ElementVariableNode, SetVariableNode, JoinNode, ListNode
 )
-# TODO: implement VarNode, VarSetNode
+# TODO: implement ElementVariableNode, SetVariableNode
 from core.ast.enums import JoinType, SortOrder
 import mo_sql_parsing as mosql
 import json
