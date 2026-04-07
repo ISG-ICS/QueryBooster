@@ -42,7 +42,10 @@ def _collect_union_branches(node: CompoundQueryNode, is_all: bool) -> list:
         result.extend(_collect_union_branches(node.left, is_all))
     else:
         result.append(node.left)
-    result.append(node.right)
+    if isinstance(node.right, CompoundQueryNode) and node.right.is_all == is_all:
+        result.extend(_collect_union_branches(node.right, is_all))
+    else:
+        result.append(node.right)
     return result
 
 

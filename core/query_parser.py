@@ -495,7 +495,12 @@ class QueryParser:
         )
 
     def parse_compound_union_dict(self, d: dict) -> CompoundQueryNode:
-        """Build a left-associative binary tree from a mo_sql_parsing union/union_all dict."""
+        """Build a left-associative binary tree from a mo_sql_parsing union/union_all dict.
+
+        mo_sql_parsing never attaches extra clause keys (e.g. limit, orderby) directly
+        to the union dict — it always lifts them to an outer wrapper dict.  So d is
+        expected to contain only a 'union' or 'union_all' key.
+        """
         if 'union_all' in d:
             is_all = True
             items = self.normalize_to_list(d['union_all'])
