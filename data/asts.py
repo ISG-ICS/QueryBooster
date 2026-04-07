@@ -1,12 +1,13 @@
 from typing import Optional
 from core.ast.node import (
-    CaseNode, WhenThenNode, IntervalNode, ListNode, QueryNode, SelectNode, FromNode, WhereNode, TableNode, ColumnNode, 
+    CaseNode, WhenThenNode, IntervalNode, ListNode, Node, QueryNode, CompoundQueryNode, SelectNode, FromNode,
+    WhereNode, TableNode, ColumnNode,
     LiteralNode, DataTypeNode, TimeUnitNode, OperatorNode, UnaryOperatorNode, FunctionNode, GroupByNode, HavingNode,
     OrderByNode, OrderByItemNode, LimitNode, OffsetNode, JoinNode, SubqueryNode
 )
 from core.ast.enums import JoinType, SortOrder
 
-def get_ast(query_id: int) -> Optional[QueryNode]:
+def get_ast(query_id: int) -> Optional[Node]:
     """Return the expected AST for a given query id, or None if not available."""
     _asts = _build_asts()
     return _asts.get(query_id, None)
@@ -28,7 +29,7 @@ def _build_asts() -> dict:
         12: _ast_query_12(),
         13: _ast_query_13(),
         14: _ast_query_14(),
-        # 15: UNION not supported by parser
+        15: _ast_query_15(),
         16: _ast_query_16(),
         17: _ast_query_17(),
         18: _ast_query_18(),
@@ -42,10 +43,10 @@ def _build_asts() -> dict:
         26: _ast_query_26(),
         27: _ast_query_27(),
         28: _ast_query_28(),
-        # 29: UNION not supported by parser
+        29: _ast_query_29(),
         30: _ast_query_30(),
         31: _ast_query_31(),
-        # 32: UNION not supported by parser
+        32: _ast_query_32(),
         33: _ast_query_33(),
         34: _ast_query_34(),
         35: _ast_query_35(),
@@ -494,7 +495,24 @@ def _ast_query_14() -> QueryNode:
         _limit=limit_clause,
     )
 
-# TODO: Query 15 uses UNION, which is not supported by parser yet
+def _ast_query_15() -> QueryNode:
+    """Query 15: UNION ALL inside derived table (Calcite push min through union)."""
+    emp_branch = QueryNode(
+        _select=SelectNode([ColumnNode("*")]),
+        _from=FromNode([TableNode("EMP", _alias="EMP")]),
+    )
+    union_subquery = SubqueryNode(
+        CompoundQueryNode(emp_branch, emp_branch, True),
+        _alias="t",
+    )
+    ename = ColumnNode("ENAME", _parent_alias="t")
+    empno_min = FunctionNode("MIN", _args=[ColumnNode("EMPNO", _parent_alias="t")])
+    return QueryNode(
+        _select=SelectNode([ename, empno_min]),
+        _from=FromNode([union_subquery]),
+        _group_by=GroupByNode([ColumnNode("ENAME", _parent_alias="t")]),
+    )
+
 
 def _ast_query_16() -> QueryNode:
     """Query 16: Remove Max Distinct."""
@@ -797,6 +815,49 @@ def _ast_query_28() -> QueryNode:
     )
 
 
+def _ast_query_29() -> CompoundQueryNode:
+    """Query 29: Full matching — top-level UNION of two entity scans."""
+    entities1 = TableNode("entities")
+    data1 = ColumnNode("data", _parent_alias="entities")
+    id1 = ColumnNode("_id", _parent_alias="entities")
+    sub_e_select = SelectNode([ColumnNode("_id", _parent_alias="index_users_email")])
+    sub_e_from = FromNode([TableNode("index_users_email")])
+    sub_e_where = WhereNode([
+        OperatorNode(
+            ColumnNode("key", _parent_alias="index_users_email"),
+            "=",
+            LiteralNode("test"),
+        )
+    ])
+    sub_e = SubqueryNode(QueryNode(_select=sub_e_select, _from=sub_e_from, _where=sub_e_where))
+    q1 = QueryNode(
+        _select=SelectNode([data1]),
+        _from=FromNode([entities1]),
+        _where=WhereNode([OperatorNode(id1, "IN", sub_e)]),
+    )
+
+    entities2 = TableNode("entities")
+    data2 = ColumnNode("data", _parent_alias="entities")
+    id2 = ColumnNode("_id", _parent_alias="entities")
+    sub_p_select = SelectNode([ColumnNode("_id", _parent_alias="index_users_profile_name")])
+    sub_p_from = FromNode([TableNode("index_users_profile_name")])
+    sub_p_where = WhereNode([
+        OperatorNode(
+            ColumnNode("key", _parent_alias="index_users_profile_name"),
+            "=",
+            LiteralNode("test"),
+        )
+    ])
+    sub_p = SubqueryNode(QueryNode(_select=sub_p_select, _from=sub_p_from, _where=sub_p_where))
+    q2 = QueryNode(
+        _select=SelectNode([data2]),
+        _from=FromNode([entities2]),
+        _where=WhereNode([OperatorNode(id2, "IN", sub_p)]),
+    )
+
+    return CompoundQueryNode(q1, q2, False)
+
+
 def _ast_query_30() -> QueryNode:
     """Query 30: Over Partial Matching."""
     # Query pattern: SELECT * FROM table_name WHERE (title=1 AND grade=2) OR (title=2 AND debt=2 AND grade=3) OR (prog=1 AND title=1 AND debt=3)
@@ -889,7 +950,59 @@ def _ast_query_31() -> QueryNode:
         _group_by=group_by_clause,
     )
 
-# TODO: Query 32: UNION not supported by parser
+def _ast_query_32() -> QueryNode:
+    """Query 32: Spreadsheet ID 2 — rewrite: UNION of two limited scans in a derived table."""
+    place_a = TableNode("place")
+    branch1 = QueryNode(
+        _select=SelectNode([ColumnNode("*")]),
+        _from=FromNode([place_a]),
+        _where=WhereNode([
+            OperatorNode(ColumnNode("select"), "=", LiteralNode(True)),
+        ]),
+        _limit=LimitNode(10),
+    )
+
+    place_b = TableNode("place")
+    bookmark = TableNode("bookmark")
+    exists_inner = QueryNode(
+        _select=SelectNode([LiteralNode(1)]),
+        _from=FromNode([bookmark]),
+        _where=WhereNode([
+            OperatorNode(
+                OperatorNode(
+                    ColumnNode("user"),
+                    "IN",
+                    ListNode([
+                        LiteralNode(1),
+                        LiteralNode(2),
+                        LiteralNode(3),
+                        LiteralNode(4),
+                    ]),
+                ),
+                "AND",
+                OperatorNode(
+                    ColumnNode("place", _parent_alias="bookmark"),
+                    "=",
+                    ColumnNode("id", _parent_alias="place"),
+                ),
+            ),
+        ]),
+    )
+    exists_sq = SubqueryNode(exists_inner)
+    branch2 = QueryNode(
+        _select=SelectNode([ColumnNode("*")]),
+        _from=FromNode([place_b]),
+        _where=WhereNode([OperatorNode(exists_sq, "EXISTS")]),
+        _limit=LimitNode(10),
+    )
+
+    union_from = SubqueryNode(CompoundQueryNode(branch1, branch2, False), None)
+    return QueryNode(
+        _select=SelectNode([ColumnNode("*")]),
+        _from=FromNode([union_from]),
+        _limit=LimitNode(10),
+    )
+
 
 def _ast_query_33() -> QueryNode:
     """Query 33: Spreadsheet ID 3."""

@@ -4,7 +4,7 @@ Utility functions for visualizing and working with AST structures.
 import textwrap
 import sqlparse
 from core.ast.node import (
-    Node, QueryNode, SelectNode, FromNode, WhereNode, TableNode, ColumnNode,
+    Node, QueryNode, CompoundQueryNode, SelectNode, FromNode, WhereNode, TableNode, ColumnNode,
     LiteralNode, OperatorNode, FunctionNode, GroupByNode, HavingNode,
     OrderByNode, OrderByItemNode, LimitNode, OffsetNode, JoinNode, SubqueryNode,
     VarNode, VarSetNode
@@ -199,6 +199,14 @@ def _node_to_string(node: Node, indent: int = 0) -> str:
         value = node.limit if isinstance(node, LimitNode) else node.offset
         result.append(f"{prefix}{node_type}: {value}")
     
+    elif isinstance(node, CompoundQueryNode):
+        op = "UNION ALL" if node.is_all else "UNION"
+        result.append(f"{prefix}compound_query: {op}")
+        for child in node.children:
+            child_lines = _node_to_string(child, indent + 1).split('\n')
+            for line in child_lines:
+                result.append(line)
+
     elif isinstance(node, QueryNode):
         # QueryNode: root query or subquery structure, display as "query"
         # Maintains tree structure consistency by using proper prefix and indentation
@@ -238,7 +246,7 @@ def _node_to_string(node: Node, indent: int = 0) -> str:
     return '\n'.join(result)
 
 
-def visualize_ast(sql: str, ast: QueryNode, max_sql_width: int = 50) -> str:
+def visualize_ast(sql: str, ast: Node, max_sql_width: int = 50) -> str:
     """
     Generate a side-by-side visualization of SQL query and AST structure.
     
@@ -248,7 +256,7 @@ def visualize_ast(sql: str, ast: QueryNode, max_sql_width: int = 50) -> str:
     
     Args:
         sql: SQL query string to visualize
-        ast: QueryNode representing the parsed AST
+        ast: Root AST node (QueryNode or CompoundQueryNode, etc.)
         max_sql_width: Maximum width for SQL column before wrapping (default: 50)
         
     Returns:

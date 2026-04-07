@@ -383,7 +383,38 @@ class QueryNode(Node):
         if _offset:
             children.append(_offset)
         super().__init__(NodeType.QUERY, children=children, **kwargs)
-    
+
+
+class CompoundQueryNode(Node):
+    """Binary UNION / UNION ALL node: left and right are query-producing Nodes.
+
+    Multi-branch chains are represented as left-associative trees, so
+    A UNION B UNION C becomes CompoundQueryNode(CompoundQueryNode(A, B, False), C, False).
+    The formatter collapses same-type left-chains back to flat lists to match
+    mo_sql_parsing's wire format.
+    """
+
+    def __init__(
+        self,
+        _left: Node,
+        _right: Node,
+        _is_all: bool = False,
+        **kwargs,
+    ):
+        super().__init__(NodeType.COMPOUND_QUERY, children=[_left, _right], **kwargs)
+        self.left = _left
+        self.right = _right
+        self.is_all = _is_all
+
+    def __eq__(self, other):
+        if not isinstance(other, CompoundQueryNode):
+            return False
+        return super().__eq__(other) and self.is_all == other.is_all
+
+    def __hash__(self):
+        return hash((super().__hash__(), self.is_all))
+
+
 class WhenThenNode(Node):
     """Single WHEN ... THEN ... branch of a CASE expression"""
     def __init__(self, _when: Node, _then: Node, **kwargs):
