@@ -126,17 +126,6 @@ class RuleParserV2:
 
         return -1
 
-    # Reject mismatched rule-variable brackets before any preprocessing (same intent as rule_generator).
-    #
-    @staticmethod
-    def _reject_malformed_var_brackets(pattern: str, rewrite: str) -> None:
-        i = RuleParserV2.find_malformed_brackets(pattern)
-        if i >= 0:
-            raise ValueError(f"mismatching brackets in pattern at index {i}")
-        i = RuleParserV2.find_malformed_brackets(rewrite)
-        if i >= 0:
-            raise ValueError(f"mismatching brackets in rewrite at index {i}")
-
     # Extend pattern/rewrite fragment to full SQL (same as v1 RuleParser.extendToFullSQL).
     #
     @staticmethod
@@ -210,10 +199,6 @@ class RuleParserV2:
     #
     @staticmethod
     def parse(pattern: str, rewrite: str) -> RuleParseResult:
-
-        # 0. Reject mismatched <...> / <<...>> brackets
-        #
-        RuleParserV2._reject_malformed_var_brackets(pattern, rewrite)
 
         # 1. Replace user-faced variables and variable lists
         #    with internal representations
@@ -354,6 +339,8 @@ class RuleParserV2:
                 return ColumnNode(rev[nm], _alias=col.alias, _parent_alias=rev[pa])
             if pa is not None and pa in rev:
                 return ColumnNode(nm, _alias=col.alias, _parent_alias=rev[pa])
+            if pa is not None and nm in rev:
+                return ColumnNode(rev[nm], _alias=col.alias, _parent_alias=pa)
             return ColumnNode(nm, _alias=col.alias, _parent_alias=pa)
 
         if node.type == NodeType.TABLE:

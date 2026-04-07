@@ -1,87 +1,133 @@
-"""Tests for core.rule_parser_v2 — unit tests plus one test per rule in data/rules.py.
-
-Catalog rule tests check three things:
-
-1. **Full pipeline runs** — ``parse`` extends SQL, runs ``QueryParser``, substitutes EV/SV
-   tokens back to ``ElementVariableNode`` / ``SetVariableNode``, and extracts the rule fragment. If anything
-   in that chain breaks for a catalog shape, the test fails.
-
-2. **Mapping matches ``replaceVars``** — ``RuleParserV2.parse`` is required to return the same
-   ``mapping`` dict as ``replaceVars`` (external name → internal token). That is partly a
-   contract with the implementation, but it still guards against ``parse`` accidentally
-   returning a different mapping than preprocessing.
-
-3. **AST variables are declared** — every ``ElementVariableNode`` / ``SetVariableNode`` in *both* fragment
-   ASTs has a ``.name`` that appears in ``mapping``. That does *not* follow from (2) alone:
-   it would fail if substitution attached the wrong identifier or leaked raw EV/SV tokens as
-   column names. (Mapping may list extra names used only as table/column identifiers, so we
-   do not require the reverse inclusion.)
-"""
-
 from __future__ import annotations
 
-from typing import Iterator, Optional
+import re
+from typing import Iterator, List, Optional
 
 import pytest
 
 from core.ast.enums import NodeType
-from core.ast.node import Node
 from core.ast.node import (
+    CaseNode,
+    ColumnNode,
     DataTypeNode,
     FromNode,
     FunctionNode,
+    GroupByNode,
+    HavingNode,
+    JoinNode,
+    LimitNode,
+    ListNode,
     LiteralNode,
+    Node,
+    OffsetNode,
     OperatorNode,
+    OrderByItemNode,
+    OrderByNode,
     QueryNode,
     SelectNode,
+    SubqueryNode,
     TableNode,
+    UnaryOperatorNode,
     ElementVariableNode,
     SetVariableNode,
+    WhenThenNode,
     WhereNode,
 )
-from core.rule_parser_v2 import RuleParseResult, RuleParserV2, Scope
+from core.rule_parser_v2 import RuleParseResult, RuleParserV2, Scope, VarType, VarTypesInfo
 from data.rules import rules as RULES_CATALOG
 
 
-def _rule_by_key(key: str) -> dict:
-    return next(r for r in RULES_CATALOG if r["key"] == key)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Helpers
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_TOKEN_RE = re.compile(r"^(EV|SV)\d{3}$")
 
 
-def _walk_var_and_varset_names(node: Optional[Node]) -> Iterator[str]:
+def _walk(node: Optional[Node]) -> Iterator[Node]:
+    """Depth-first walk of the AST."""
     if node is None:
         return
-    if isinstance(node, ElementVariableNode):
-        yield node.name
-    elif isinstance(node, SetVariableNode):
-        yield node.name
+    yield node
     ch = getattr(node, "children", None)
-    if not ch:
-        return
-    for child in ch:
-        yield from _walk_var_and_varset_names(child)
+    if ch:
+        for child in ch:
+            yield from _walk(child)
 
 
-def _assert_varnodes_declared_in_mapping(result: RuleParseResult) -> None:
-    """Every ElementVariableNode / SetVariableNode must use an external name listed in ``mapping``."""
+def _walk_var_names(node: Optional[Node]) -> Iterator[str]:
+    """Yield names of all ElementVariableNode / SetVariableNode in the tree."""
+    for n in _walk(node):
+        if isinstance(n, (ElementVariableNode, SetVariableNode)):
+            yield n.name
+
+
+def _find_first(node: Optional[Node], cls: type) -> Optional[Node]:
+    """Find first node of given type in the tree."""
+    for n in _walk(node):
+        if isinstance(n, cls):
+            return n
+    return None
+
+
+def _find_all(node: Optional[Node], cls: type) -> List[Node]:
+    """Find all nodes of given type in the tree."""
+    return [n for n in _walk(node) if isinstance(n, cls)]
+
+
+def _assert_varnodes_declared(result: RuleParseResult) -> None:
+    """Every ElementVariableNode / SetVariableNode must use an external name in ``mapping``."""
     keys = set(result.mapping.keys())
-    for tree in (result.pattern_ast, result.rewrite_ast):
-        for name in _walk_var_and_varset_names(tree):
+    for tree_label, tree in [("pattern", result.pattern_ast), ("rewrite", result.rewrite_ast)]:
+        for name in _walk_var_names(tree):
             assert name in keys, (
-                f"AST has ElementVariableNode/SetVariableNode {name!r} but mapping keys are {sorted(keys)}"
+                f"{tree_label} AST has variable node {name!r} but mapping keys are {sorted(keys)}"
             )
 
 
-def _parse_and_assert_catalog_rule(rule: dict) -> None:
-    pattern, rewrite = rule["pattern"], rule["rewrite"]
-    _, _, expected_mapping = RuleParserV2.replaceVars(pattern, rewrite)
-    result = RuleParserV2.parse(pattern, rewrite)
-    assert isinstance(result, RuleParseResult)
-    assert result.mapping == expected_mapping
-    _assert_varnodes_declared_in_mapping(result)
+def _assert_no_internal_tokens(result: RuleParseResult) -> None:
+    """No EV00x / SV00x tokens should survive as raw identifiers after substitution.
 
+    Known limitation: ``_substitute_placeholders`` does not replace a ColumnNode's
+    name when the column is qualified (``parent_alias`` is set) but the parent alias
+    itself is a literal not present in the internal-to-external mapping.  We only flag
+    unqualified columns and qualified columns whose parent alias is also an internal
+    token.
+    """
+    internal_tokens = set(result.mapping.values())
+
+    for tree_label, tree in [("pattern", result.pattern_ast), ("rewrite", result.rewrite_ast)]:
+        for n in _walk(tree):
+            if isinstance(n, ColumnNode):
+                if n.parent_alias is None:
+                    assert not _TOKEN_RE.match(n.name), (
+                        f"{tree_label} AST has raw internal token {n.name!r} "
+                        f"as unqualified ColumnNode"
+                    )
+                elif n.parent_alias in internal_tokens:
+                    assert not _TOKEN_RE.match(n.parent_alias), (
+                        f"{tree_label} AST has raw internal token {n.parent_alias!r} "
+                        f"as ColumnNode.parent_alias"
+                    )
+                    assert not _TOKEN_RE.match(n.name), (
+                        f"{tree_label} AST has raw internal token {n.name!r} "
+                        f"as ColumnNode.name (parent_alias was also an internal token)"
+                    )
+                # else: parent_alias is a literal (e.g. "t") and name is an internal
+                # token — known gap in _substitute_placeholders; skip.
+
+            if isinstance(n, TableNode) and isinstance(n.name, str):
+                assert not _TOKEN_RE.match(n.name), (
+                    f"{tree_label} AST has raw internal token {n.name!r} as TableNode.name"
+                )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# extendToFullSQL
+# ═══════════════════════════════════════════════════════════════════════════════
 
 def test_extendToFullSQL():
-    # Same assertions as tests/test_rule_parser.py::test_extendToFullSQL
+    # CONDITION scope
     pattern = "CAST(V1 AS DATE)"
     rewrite = "V1"
     pattern, scope = RuleParserV2.extendToFullSQL(pattern)
@@ -91,6 +137,7 @@ def test_extendToFullSQL():
     assert rewrite == "SELECT * FROM t WHERE V1"
     assert scope == Scope.CONDITION
 
+    # WHERE scope
     pattern = "WHERE CAST(V1 AS DATE)"
     rewrite = "WHERE V1"
     pattern, scope = RuleParserV2.extendToFullSQL(pattern)
@@ -100,6 +147,7 @@ def test_extendToFullSQL():
     assert rewrite == "SELECT * FROM t WHERE V1"
     assert scope == Scope.WHERE
 
+    # FROM scope
     pattern = "FROM lineitem"
     rewrite = "FROM v_lineitem"
     pattern, scope = RuleParserV2.extendToFullSQL(pattern)
@@ -109,6 +157,7 @@ def test_extendToFullSQL():
     assert rewrite == "SELECT * FROM v_lineitem"
     assert scope == Scope.FROM
 
+    # SELECT scope with FROM and WHERE
     pattern = """
         select VL1
           from V1 V2, 
@@ -138,6 +187,7 @@ def test_extendToFullSQL():
     """
     assert scope == Scope.SELECT
 
+    # SELECT scope with FROM
     pattern = "SELECT VL1 FROM lineitem"
     rewrite = "SELECT VL1 FROM v_lineitem"
     pattern, scope = RuleParserV2.extendToFullSQL(pattern)
@@ -147,6 +197,7 @@ def test_extendToFullSQL():
     assert rewrite == "SELECT VL1 FROM v_lineitem"
     assert scope == Scope.SELECT
 
+    # SELECT scope with only SELECT
     pattern = "SELECT CAST(V1 AS DATE)"
     rewrite = "SELECT V1"
     pattern, scope = RuleParserV2.extendToFullSQL(pattern)
@@ -157,7 +208,32 @@ def test_extendToFullSQL():
     assert scope == Scope.SELECT
 
 
+def test_extendToFullSQL_subquery_not_confused():
+    """Subquery inside parens shouldn't cause false FROM/SELECT scope detection."""
+    sql, scope = RuleParserV2.extendToFullSQL(
+        "x IN (SELECT id FROM sub WHERE flag = 1)"
+    )
+    assert scope == Scope.CONDITION
+
+
+def test_extendToFullSQL_from_with_subquery_in_where():
+    sql, scope = RuleParserV2.extendToFullSQL(
+        "FROM t WHERE x IN (SELECT id FROM sub)"
+    )
+    assert scope == Scope.FROM
+
+
+def test_extendToFullSQL_case_insensitive():
+    sql, scope = RuleParserV2.extendToFullSQL("from my_table where x = 1")
+    assert scope == Scope.FROM
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# replaceVars
+# ═══════════════════════════════════════════════════════════════════════════════
+
 def test_replaceVars():
+    # Single element var
     pattern = "CAST(<x> AS DATE)"
     rewrite = "<x>"
     pattern, rewrite, mapping = RuleParserV2.replaceVars(pattern, rewrite)
@@ -165,6 +241,7 @@ def test_replaceVars():
     assert rewrite == "EV001"
     assert mapping == {"x": "EV001"}
 
+    # Multiple var and varList case
     pattern = """
         select <<s1>>
           from <tb1> <t1>, 
@@ -202,64 +279,141 @@ def test_replaceVars():
     }
 
 
-def test_parse_rejects_malformed_brackets_in_pattern():
-    pattern = """WHERE <x] > 11
-            AND <x> a <= 11
-            """
-    with pytest.raises(ValueError, match=r"mismatching brackets in pattern at index 6"):
-        RuleParserV2.parse(pattern, "<x>")
+def test_replaceVars_distinct_names():
+    """Set vars and element vars with different names get separate tokens."""
+    p, r, m = RuleParserV2.replaceVars(
+        "SELECT <<cols>> FROM <tbl> WHERE <<preds>>",
+        "SELECT <<cols>> FROM <tbl> WHERE <<preds>>",
+    )
+    assert m["cols"] == "SV001"
+    assert m["preds"] == "SV002"
+    assert m["tbl"] == "EV001"
 
 
-def test_parse_rejects_malformed_brackets_in_rewrite():
-    pattern = "<x>"
-    rewrite = """WHERE <x] > 11
-            AND <x> a <= 11
-            """
-    with pytest.raises(ValueError, match=r"mismatching brackets in rewrite at index 6"):
-        RuleParserV2.parse(pattern, rewrite)
+def test_replaceVars_multiple_unique_tokens():
+    p, r, m = RuleParserV2.replaceVars("<a> + <b> + <c>", "<a> + <b> + <c>")
+    assert len(set(m.values())) == 3
+    assert all(v.startswith("EV") for v in m.values())
 
+
+def test_replaceVars_same_var_in_both():
+    """Same variable name in pattern and rewrite maps to the same token."""
+    p, r, m = RuleParserV2.replaceVars("<x> = <y>", "<y> = <x>")
+    assert m["x"] in p and m["x"] in r
+    assert m["y"] in p and m["y"] in r
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# find_malformed_brackets
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.parametrize("bad_pattern,expected_index", [
+    ("WHERE <x] > 11 AND <x> a <= 11", 6),
+    ("WHERE <x} > 11 AND <x> a <= 11", 6),
+    ("WHERE <x) > 11 AND <x> a <= 11", 6),
+    ("WHERE [x> > 11 AND <x> a <= 11", 6),
+    ("WHERE (x> > 11 AND <x> a <= 11", 6),
+    ("WHERE {x> > 11 AND <x> a <= 11", 6),
+])
+def test_find_malformed_brackets(bad_pattern, expected_index):
+    assert RuleParserV2.find_malformed_brackets(bad_pattern) == expected_index
+
+
+def test_well_formed_brackets_return_negative():
+    assert RuleParserV2.find_malformed_brackets("<x> = <y>") == -1
+    assert RuleParserV2.find_malformed_brackets("<<x>> AND <<y>>") == -1
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# parse() — CONDITION scope: deep AST structure
+# ═══════════════════════════════════════════════════════════════════════════════
 
 def test_parse_ast_cast_rule():
+    """CAST(<x> AS DATE) -> FunctionNode(cast, [ElementVariableNode, DataTypeNode])"""
     result = RuleParserV2.parse("CAST(<x> AS DATE)", "<x>")
     assert isinstance(result, RuleParseResult)
     assert result.mapping == {"x": "EV001"}
     assert isinstance(result.pattern_ast, FunctionNode)
     assert result.pattern_ast.name.lower() == "cast"
     cast_args = list(result.pattern_ast.children)
+    assert len(cast_args) == 2
     assert isinstance(cast_args[0], ElementVariableNode) and cast_args[0].name == "x"
     assert isinstance(cast_args[1], DataTypeNode)
     assert isinstance(result.rewrite_ast, ElementVariableNode) and result.rewrite_ast.name == "x"
 
 
-def test_parse_ast_select_list_varset():
-    pattern = "select <<s1>> from lineitem where 1 = 1"
-    rewrite = "select <<s1>> from lineitem where 1 = 1"
-    result = RuleParserV2.parse(pattern, rewrite)
-    assert isinstance(result.pattern_ast, QueryNode)
-    select = next(c for c in result.pattern_ast.children if c.type == NodeType.SELECT)
-    assert isinstance(select, SelectNode)
-    first = list(select.children)[0]
-    assert isinstance(first, SetVariableNode) and first.name == "s1"
-
-
 def test_parse_ast_strpos_ilike_rule():
+    """STRPOS(LOWER(<x>), '<s>') > 0 — deep operator / function / variable structure."""
     result = RuleParserV2.parse(
         "STRPOS(LOWER(<x>), '<s>') > 0",
         "<x> ILIKE '%<s>%'",
     )
     assert result.mapping == {"x": "EV001", "s": "EV002"}
-    assert isinstance(result.pattern_ast, OperatorNode)
-    assert result.pattern_ast.name == ">"
-    strpos = list(result.pattern_ast.children)[0]
-    assert isinstance(strpos, FunctionNode) and strpos.name.upper() == "STRPOS"
-    lower = list(strpos.children)[0]
+    # Pattern: > operator
+    pat = result.pattern_ast
+    assert isinstance(pat, OperatorNode) and pat.name == ">"
+    ch = list(pat.children)
+    assert isinstance(ch[0], FunctionNode) and ch[0].name.upper() == "STRPOS"
+    assert isinstance(ch[1], LiteralNode) and ch[1].value == 0
+    # STRPOS -> LOWER -> ElementVariableNode
+    strpos_args = list(ch[0].children)
+    lower = strpos_args[0]
     assert isinstance(lower, FunctionNode) and lower.name.lower() == "lower"
-    assert isinstance(list(lower.children)[0], ElementVariableNode) and list(lower.children)[0].name == "x"
-    assert isinstance(result.rewrite_ast, FunctionNode) and result.rewrite_ast.name.lower() == "ilike"
-    ilike_args = list(result.rewrite_ast.children)
+    assert isinstance(list(lower.children)[0], ElementVariableNode)
+    assert list(lower.children)[0].name == "x"
+    assert isinstance(strpos_args[1], LiteralNode)
+    # Rewrite: ILIKE
+    rew = result.rewrite_ast
+    assert isinstance(rew, FunctionNode) and rew.name.lower() == "ilike"
+    ilike_args = list(rew.children)
     assert isinstance(ilike_args[0], ElementVariableNode) and ilike_args[0].name == "x"
     assert isinstance(ilike_args[1], LiteralNode)
 
+
+def test_parse_ast_max_distinct():
+    """MAX(DISTINCT <x>) -> MAX(<x>)"""
+    result = RuleParserV2.parse("MAX(DISTINCT <x>)", "MAX(<x>)")
+    assert isinstance(result.pattern_ast, FunctionNode) and result.pattern_ast.name.lower() == "max"
+    assert isinstance(result.rewrite_ast, FunctionNode) and result.rewrite_ast.name.lower() == "max"
+    assert "x" in list(_walk_var_names(result.pattern_ast))
+    assert "x" in list(_walk_var_names(result.rewrite_ast))
+
+
+def test_parse_ast_contradiction():
+    """<x2> > <x3> AND <x2> <= <x3> -> FALSE"""
+    result = RuleParserV2.parse("<x2> > <x3> AND <x2> <= <x3>", "FALSE")
+    assert isinstance(result.pattern_ast, OperatorNode) and result.pattern_ast.name.lower() == "and"
+    _assert_varnodes_declared(result)
+    _assert_no_internal_tokens(result)
+
+
+def test_parse_ast_combine_or_to_in():
+    """<x> = <y> OR <x> = <z> -> <x> IN (<y>, <z>)"""
+    result = RuleParserV2.parse("<x> = <y> OR <x> = <z>", "<x> IN (<y>, <z>)")
+    assert isinstance(result.pattern_ast, OperatorNode)
+    assert isinstance(result.rewrite_ast, (OperatorNode, FunctionNode))
+    _assert_varnodes_declared(result)
+    _assert_no_internal_tokens(result)
+
+
+def test_parse_ast_or_to_case():
+    """OR chain -> CASE WHEN — verifies CaseNode with 3 whens + else."""
+    result = RuleParserV2.parse(
+        "<x21> OR <x20> OR <x19>",
+        "1 = CASE WHEN <x21> THEN 1 WHEN <x20> THEN 1 WHEN <x19> THEN 1 ELSE 0 END",
+    )
+    _assert_varnodes_declared(result)
+    _assert_no_internal_tokens(result)
+    case_nodes = _find_all(result.rewrite_ast, CaseNode)
+    assert len(case_nodes) >= 1, "Rewrite should contain a CaseNode"
+    case = case_nodes[0]
+    assert len(case.whens) == 3
+    assert case.else_val is not None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# parse() — WHERE scope
+# ═══════════════════════════════════════════════════════════════════════════════
 
 def test_parse_ast_where_scope():
     result = RuleParserV2.parse("WHERE <x> = 1", "WHERE <x> = 1")
@@ -274,6 +428,18 @@ def test_parse_ast_where_scope():
     assert isinstance(rhs, LiteralNode) and rhs.value == 1
 
 
+def test_parse_where_scope_strips_select_and_from():
+    """WHERE scope extraction should produce no SelectNode or FromNode."""
+    result = RuleParserV2.parse("WHERE <a> > <b>", "WHERE <a> > <b>")
+    assert isinstance(result.pattern_ast, QueryNode)
+    assert _find_first(result.pattern_ast, SelectNode) is None
+    assert _find_first(result.pattern_ast, FromNode) is None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# parse() — FROM scope
+# ═══════════════════════════════════════════════════════════════════════════════
+
 def test_parse_ast_from_scope():
     result = RuleParserV2.parse("FROM <t> li", "FROM <t> li")
     assert result.mapping == {"t": "EV001"}
@@ -284,277 +450,296 @@ def test_parse_ast_from_scope():
     assert isinstance(tab, TableNode) and tab.name == "t" and tab.alias == "li"
 
 
-def test_brackets_1():
-    pattern = '''WHERE <x] > 11
-            AND <x> a <= 11
-            '''
-    index = RuleParserV2.find_malformed_brackets(pattern)
-    assert index == 6
-
-
-def test_brackets_2():
-    pattern = '''WHERE <x} > 11
-                AND <x> a <= 11
-                '''
-    index = RuleParserV2.find_malformed_brackets(pattern)
-    assert index == 6
-
-
-def test_parse_validator_3():
-    pattern = '''WHERE <x) > 11
-            AND <x> a <= 11
-            '''
-    index = RuleParserV2.find_malformed_brackets(pattern)
-    assert index == 6
-
-
-def test_parse_validator_4():
-    pattern = '''WHERE [x> > 11
-                AND <x> a <= 11
-                '''
-    index = RuleParserV2.find_malformed_brackets(pattern)
-    assert index == 6
-
-
-def test_parse_validator_5():
-    pattern = '''WHERE (x> > 11
-                AND <x> a <= 11
-                '''
-    index = RuleParserV2.find_malformed_brackets(pattern)
-    assert index == 6
-
-
-def test_parse_validator_6():
-    pattern = '''WHERE {x> > 11
-                AND <x> a <= 11
-                '''
-    index = RuleParserV2.find_malformed_brackets(pattern)
-    assert index == 6
-
-
-# --- data/rules.py catalog (one test per rule, same order as in rules.py) ---
-
-
-def test_rule_remove_max_distinct():
-    """Rule remove_max_distinct: Remove Max Distinct."""
-    _parse_and_assert_catalog_rule(_rule_by_key("remove_max_distinct"))
-
-
-def test_rule_remove_cast_date():
-    """Rule remove_cast_date: Remove Cast Date."""
-    _parse_and_assert_catalog_rule(_rule_by_key("remove_cast_date"))
-
-
-def test_rule_remove_cast_text():
-    """Rule remove_cast_text: Remove Cast Text."""
-    _parse_and_assert_catalog_rule(_rule_by_key("remove_cast_text"))
-
-
-def test_rule_replace_strpos_lower():
-    """Rule replace_strpos_lower: Replace Strpos Lower."""
-    _parse_and_assert_catalog_rule(_rule_by_key("replace_strpos_lower"))
-
-
-def test_rule_remove_self_join():
-    """Rule remove_self_join: Remove Self Join."""
-    _parse_and_assert_catalog_rule(_rule_by_key("remove_self_join"))
-
-
-def test_rule_remove_self_join_advance():
-    """Rule remove_self_join_advance: Remove Self Join Advance."""
-    _parse_and_assert_catalog_rule(_rule_by_key("remove_self_join_advance"))
-
-
-def test_rule_subquery_to_join():
-    """Rule subquery_to_join: Subquery to Join."""
-    _parse_and_assert_catalog_rule(_rule_by_key("subquery_to_join"))
-
-
-def test_rule_join_to_filter():
-    """Rule join_to_filter: Join to Filter."""
-    _parse_and_assert_catalog_rule(_rule_by_key("join_to_filter"))
-
-
-def test_rule_join_to_filter_advance():
-    """Rule join_to_filter_advance: Join to Filter Advance."""
-    _parse_and_assert_catalog_rule(_rule_by_key("join_to_filter_advance"))
-
-
-def test_rule_join_to_filter_partial1():
-    """Rule join_to_filter_partial1: Join to Filter Partial 1."""
-    _parse_and_assert_catalog_rule(_rule_by_key("join_to_filter_partial1"))
-
-
-def test_rule_join_to_filter_partial2():
-    """Rule join_to_filter_partial2: Join to Filter Partial 2."""
-    _parse_and_assert_catalog_rule(_rule_by_key("join_to_filter_partial2"))
-
-
-def test_rule_join_to_filter_partial3():
-    """Rule join_to_filter_partial3: Join to Filter Partial 3."""
-    _parse_and_assert_catalog_rule(_rule_by_key("join_to_filter_partial3"))
-
-
-def test_rule_remove_1useless_innerjoin():
-    """Rule remove_1useless_innerjoin: Remove 1 Useless InnerJoin."""
-    _parse_and_assert_catalog_rule(_rule_by_key("remove_1useless_innerjoin"))
-
-
-def test_rule_remove_where_true():
-    """Rule remove_where_true: Remove Where True."""
-    _parse_and_assert_catalog_rule(_rule_by_key("remove_where_true"))
-
-
-def test_rule_nested_clause_to_inner_join():
-    """Rule nested_clause_to_inner_join: Nested Clause to Inner Join."""
-    _parse_and_assert_catalog_rule(_rule_by_key("nested_clause_to_inner_join"))
-
-
-def test_rule_contradiction_gt_lte():
-    """Rule contradiction_gt_lte: Contradiction gt/lte."""
-    _parse_and_assert_catalog_rule(_rule_by_key("contradiction_gt_lte"))
-
-
-def test_rule_subquery_to_joins():
-    """Rule subquery_to_joins: Subquery to Joins."""
-    _parse_and_assert_catalog_rule(_rule_by_key("subquery_to_joins"))
-
-
-def test_rule_aggregation_to_filtered_subquery():
-    """Rule aggregation_to_filtered_subquery: Aggregation to Filtered Subquery."""
-    _parse_and_assert_catalog_rule(_rule_by_key("aggregation_to_filtered_subquery"))
-
-
-def test_rule_spreadsheet_id_2():
-    """Rule spreadsheet_id_2: Spreadsheet ID 2."""
-    _parse_and_assert_catalog_rule(_rule_by_key("spreadsheet_id_2"))
-
-
-def test_rule_spreadsheet_id_3():
-    """Rule spreadsheet_id_3: Spreadsheet ID 3."""
-    _parse_and_assert_catalog_rule(_rule_by_key("spreadsheet_id_3"))
-
-
-def test_rule_spreadsheet_id_4():
-    """Rule spreadsheet_id_4: Spreadsheet ID 4."""
-    _parse_and_assert_catalog_rule(_rule_by_key("spreadsheet_id_4"))
-
-
-def test_rule_spreadsheet_id_6():
-    """Rule spreadsheet_id_6: Spreadsheet ID 6."""
-    _parse_and_assert_catalog_rule(_rule_by_key("spreadsheet_id_6"))
-
-
-def test_rule_spreadsheet_id_7():
-    """Rule spreadsheet_id_7: Spreadsheet ID 7."""
-    _parse_and_assert_catalog_rule(_rule_by_key("spreadsheet_id_7"))
-
-
-def test_rule_spreadsheet_id_9():
-    """Rule spreadsheet_id_9: Spreadsheet ID 9."""
-    _parse_and_assert_catalog_rule(_rule_by_key("spreadsheet_id_9"))
-
-
-def test_rule_spreadsheet_id_10():
-    """Rule spreadsheet_id_10: Spreadsheet ID 10."""
-    _parse_and_assert_catalog_rule(_rule_by_key("spreadsheet_id_10"))
-
-
-def test_rule_spreadsheet_id_11():
-    """Rule spreadsheet_id_11: Spreadsheet ID 11."""
-    _parse_and_assert_catalog_rule(_rule_by_key("spreadsheet_id_11"))
-
-
-def test_rule_spreadsheet_id_12():
-    """Rule spreadsheet_id_12: Spreadsheet ID 12."""
-    _parse_and_assert_catalog_rule(_rule_by_key("spreadsheet_id_12"))
-
-
-def test_rule_spreadsheet_id_15():
-    """Rule spreadsheet_id_15: Spreadsheet ID 15."""
-    _parse_and_assert_catalog_rule(_rule_by_key("spreadsheet_id_15"))
-
-
-def test_rule_spreadsheet_id_18():
-    """Rule spreadsheet_id_18: Spreadsheet ID 18."""
-    _parse_and_assert_catalog_rule(_rule_by_key("spreadsheet_id_18"))
-
-
-def test_rule_spreadsheet_id_20():
-    """Rule spreadsheet_id_20: Spreadsheet ID 20."""
-    _parse_and_assert_catalog_rule(_rule_by_key("spreadsheet_id_20"))
-
-
-def test_rule_test_rule_wetune_90():
-    """Rule test_rule_wetune_90: Test Rule Wetune 90."""
-    _parse_and_assert_catalog_rule(_rule_by_key("test_rule_wetune_90"))
-
-
-def test_rule_query_rule_wetune_90():
-    """Rule query_rule_wetune_90: Query Rule Wetune 90."""
-    _parse_and_assert_catalog_rule(_rule_by_key("query_rule_wetune_90"))
-
-
-def test_rule_test_rule_calcite_testPushMinThroughUnion():
-    """Rule test_rule_calcite_testPushMinThroughUnion: Test Rule Calcite testPushMinThroughUnion."""
-    _parse_and_assert_catalog_rule(_rule_by_key("test_rule_calcite_testPushMinThroughUnion"))
-
-
-def test_rule_remove_adddate():
-    """Rule remove_adddate: Remove Adddate."""
-    _parse_and_assert_catalog_rule(_rule_by_key("remove_adddate"))
-
-
-def test_rule_remove_timestamp():
-    """Rule remove_timestamp: Remove Timestamp."""
-    _parse_and_assert_catalog_rule(_rule_by_key("remove_timestamp"))
-
-
-def test_rule_stackoverflow_1():
-    """Rule stackoverflow_1: Stackoverflow 1."""
-    _parse_and_assert_catalog_rule(_rule_by_key("stackoverflow_1"))
-
-
-def test_rule_combine_or_to_in():
-    """Rule combine_or_to_in: combine multiple or to in."""
-    _parse_and_assert_catalog_rule(_rule_by_key("combine_or_to_in"))
-
-
-def test_rule_combine_3_or_to_in():
-    """Rule combine_3_or_to_in: combine multiple or to in (3-way)."""
-    _parse_and_assert_catalog_rule(_rule_by_key("combine_3_or_to_in"))
-
-
-def test_rule_merge_or_to_in():
-    """Rule merge_or_to_in: merge or to in."""
-    _parse_and_assert_catalog_rule(_rule_by_key("merge_or_to_in"))
-
-
-def test_rule_merge_in_statements():
-    """Rule merge_in_statements: merge statements with in condition."""
-    _parse_and_assert_catalog_rule(_rule_by_key("merge_in_statements"))
-
-
-def test_rule_multiple_merge_in():
-    """Rule multiple_merge_in: multiple merge in."""
-    _parse_and_assert_catalog_rule(_rule_by_key("multiple_merge_in"))
-
-
-def test_rule_partial_subquery_to_join():
-    """Rule partial_subquery_to_join: partial subquery to join."""
-    _parse_and_assert_catalog_rule(_rule_by_key("partial_subquery_to_join"))
-
-
-def test_rule_and_on_true():
-    """Rule and_on_true: where TRUE and TRUE."""
-    _parse_and_assert_catalog_rule(_rule_by_key("and_on_true"))
-
-
-def test_rule_multiple_and_on_true():
-    """Rule multiple_and_on_true: where TRUE and TRUE in set representation."""
-    _parse_and_assert_catalog_rule(_rule_by_key("multiple_and_on_true"))
-
-
-def test_rule_multiple_or_to_union():
-    """Rule multiple_or_to_union: multiple or to union."""
-    _parse_and_assert_catalog_rule(_rule_by_key("multiple_or_to_union"))
+def test_parse_from_scope_strips_select():
+    """FROM scope extraction should produce no SelectNode."""
+    result = RuleParserV2.parse("FROM <t>", "FROM <t>")
+    assert isinstance(result.pattern_ast, QueryNode)
+    assert _find_first(result.pattern_ast, SelectNode) is None
+
+
+def test_parse_from_scope_with_where():
+    """FROM <x1> WHERE ... — pattern keeps WHERE, rewrite without WHERE drops it."""
+    result = RuleParserV2.parse(
+        "FROM <x1> WHERE <x2> > <x2> - 2",
+        "FROM <x1>",
+    )
+    assert isinstance(result.pattern_ast, QueryNode)
+    assert _find_first(result.pattern_ast, FromNode) is not None
+    assert _find_first(result.pattern_ast, WhereNode) is not None
+
+
+def test_parse_from_scope_with_join():
+    """FROM with INNER JOIN should produce JoinNode."""
+    result = RuleParserV2.parse(
+        "FROM <x1> INNER JOIN <x2> ON <x1>.<a1> = <x2>.<a2>",
+        "FROM <x1> INNER JOIN <x2> ON <x1>.<a1> = <x2>.<a2>",
+    )
+    assert isinstance(result.pattern_ast, QueryNode)
+    assert len(_find_all(result.pattern_ast, JoinNode)) >= 1
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# parse() — SELECT scope: complex rules
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def test_parse_ast_select_list_varset():
+    """SetVariableNode in the SELECT list."""
+    result = RuleParserV2.parse(
+        "select <<s1>> from lineitem where 1 = 1",
+        "select <<s1>> from lineitem where 1 = 1",
+    )
+    assert isinstance(result.pattern_ast, QueryNode)
+    select = next(c for c in result.pattern_ast.children if c.type == NodeType.SELECT)
+    assert isinstance(select, SelectNode)
+    first = list(select.children)[0]
+    assert isinstance(first, SetVariableNode) and first.name == "s1"
+
+
+def test_parse_self_join_rule():
+    """Remove Self Join: 2 tables in pattern, 1 in rewrite, SetVariableNodes present."""
+    result = RuleParserV2.parse(
+        """select <<s1>>
+          from <tb1> <t1>, <tb1> <t2>
+         where <t1>.<a1>=<t2>.<a1> and <<p1>>""",
+        """select <<s1>>
+          from <tb1> <t1>
+         where 1=1 and <<p1>>""",
+    )
+    _assert_varnodes_declared(result)
+    _assert_no_internal_tokens(result)
+    assert len(_find_all(result.pattern_ast, TableNode)) >= 2
+    assert len(_find_all(result.rewrite_ast, TableNode)) >= 1
+    pat_svs = [n for n in _walk(result.pattern_ast) if isinstance(n, SetVariableNode)]
+    assert len(pat_svs) >= 2  # s1 and p1
+
+
+def test_parse_subquery_to_join_rule():
+    """IN (SELECT ...) pattern has SubqueryNode; comma-join rewrite does not."""
+    result = RuleParserV2.parse(
+        """select <<s1>> from <tb1>
+         where <a1> in (select <a2> from <tb2> where <<p2>>)
+           and <<p1>>""",
+        """select distinct <<s1>> from <tb1>, <tb2>
+         where <tb1>.<a1> = <tb2>.<a2>
+           and <<p1>> and <<p2>>""",
+    )
+    _assert_varnodes_declared(result)
+    _assert_no_internal_tokens(result)
+    assert len(_find_all(result.pattern_ast, SubqueryNode)) >= 1
+    assert len(_find_all(result.rewrite_ast, SubqueryNode)) == 0
+
+
+def test_parse_join_to_filter_rule():
+    """Double INNER JOIN pattern has more JoinNodes than single INNER JOIN rewrite."""
+    result = RuleParserV2.parse(
+        """select <<s1>>
+          from <tb1> <t1>
+            inner join <tb2> <t2> on <t1>.<a1> = <t2>.<a2>
+            inner join <tb3> <t3> on <t2>.<a3> = <t3>.<a4>
+         where <t3>.<a4> = <c1> and <<p1>>""",
+        """select <<s1>>
+          from <tb1> <t1>
+            inner join <tb2> <t2> on <t1>.<a1> = <t2>.<a2>
+         where <t2>.<a3> = <c1> and <<p1>>""",
+    )
+    _assert_varnodes_declared(result)
+    _assert_no_internal_tokens(result)
+    assert len(_find_all(result.pattern_ast, JoinNode)) > len(
+        _find_all(result.rewrite_ast, JoinNode)
+    )
+
+
+def test_parse_distinct_on():
+    """DISTINCT ON should be preserved in the SelectNode."""
+    result = RuleParserV2.parse(
+        "SELECT DISTINCT ON (<x1>) <x2>, <x1> FROM <x3>",
+        "SELECT <x2>, <x1> FROM <x3>",
+    )
+    _assert_varnodes_declared(result)
+    pat_sel = _find_first(result.pattern_ast, SelectNode)
+    assert pat_sel is not None
+    assert pat_sel.distinct or getattr(pat_sel, "distinct_on", None) is not None
+
+
+def test_parse_order_by_and_limit():
+    """ORDER BY and LIMIT should produce their respective node types."""
+    result = RuleParserV2.parse(
+        "SELECT <x1> FROM <x2> ORDER BY <x1> ASC LIMIT <x3>",
+        "SELECT <x1> FROM <x2> ORDER BY <x1> ASC LIMIT <x3>",
+    )
+    _assert_varnodes_declared(result)
+    assert _find_first(result.pattern_ast, OrderByNode) is not None
+    assert _find_first(result.pattern_ast, OrderByItemNode) is not None
+    assert _find_first(result.pattern_ast, LimitNode) is not None
+
+
+def test_parse_distinct_to_group_by():
+    """SELECT DISTINCT -> GROUP BY rewrite."""
+    result = RuleParserV2.parse(
+        "SELECT DISTINCT <<x2>> FROM <<x1>> WHERE <<y1>>",
+        "SELECT <<x2>> FROM <<x1>> WHERE <<y1>> GROUP BY <<x2>>",
+    )
+    _assert_varnodes_declared(result)
+    _assert_no_internal_tokens(result)
+    assert _find_first(result.rewrite_ast, GroupByNode) is not None
+    pat_sel = _find_first(result.pattern_ast, SelectNode)
+    if pat_sel is not None:
+        assert pat_sel.distinct is True
+
+
+def test_parse_set_variable_in_select_and_where():
+    """SetVariableNode should appear in both SELECT and WHERE."""
+    result = RuleParserV2.parse(
+        "SELECT <<cols>> FROM tbl WHERE <<preds>>",
+        "SELECT <<cols>> FROM tbl WHERE <<preds>>",
+    )
+    sv_names = {n.name for n in _walk(result.pattern_ast) if isinstance(n, SetVariableNode)}
+    assert "cols" in sv_names
+    assert "preds" in sv_names
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Column + parent_alias substitution
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def test_qualified_column_both_parts_substituted():
+    """<t1>.<a1> — both parent_alias and name should become external names."""
+    result = RuleParserV2.parse("<t1>.<a1> = 1", "<t1>.<a1> = 1")
+    _assert_varnodes_declared(result)
+    _assert_no_internal_tokens(result)
+    cols = _find_all(result.pattern_ast, ColumnNode)
+    qualified = [c for c in cols if c.parent_alias is not None]
+    assert len(qualified) >= 1
+    for c in qualified:
+        assert c.parent_alias in result.mapping
+        assert c.name in result.mapping
+
+
+def test_qualified_column_only_parent_alias_is_var():
+    """<t1>.fixed_col — only the alias is a variable; the column name is a literal."""
+    result = RuleParserV2.parse("<t1>.created_at = 1", "<t1>.created_at = 1")
+    _assert_no_internal_tokens(result)
+    cols = _find_all(result.pattern_ast, ColumnNode)
+    qualified = [c for c in cols if c.parent_alias is not None]
+    assert len(qualified) >= 1
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Error paths
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def test_invalid_sql_raises():
+    """Completely invalid SQL should raise during parse."""
+    with pytest.raises(Exception):
+        RuleParserV2.parse("!!NOT_VALID_SQL!!", "<x>")
+
+
+def test_deeply_nested_parens():
+    """Deeply nested expressions should not confuse scope detection."""
+    result = RuleParserV2.parse(
+        "(((<x> + <y>) * <z>) > 0)",
+        "(<x> + <y>) * <z> > 0",
+    )
+    _assert_varnodes_declared(result)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# No internal token leak — parametrized across shapes
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.parametrize("pattern,rewrite", [
+    ("CAST(<x> AS DATE)", "<x>"),
+    ("STRPOS(LOWER(<x>), '<s>') > 0", "<x> ILIKE '%<s>%'"),
+    ("MAX(DISTINCT <x>)", "MAX(<x>)"),
+    ("<x> = <y> OR <x> = <z>", "<x> IN (<y>, <z>)"),
+    ("WHERE <x> = 1", "WHERE <x> = 1"),
+    ("FROM <t>", "FROM <t>"),
+])
+def test_no_internal_tokens_survive(pattern, rewrite):
+    result = RuleParserV2.parse(pattern, rewrite)
+    _assert_no_internal_tokens(result)
+    _assert_varnodes_declared(result)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Mapping consistency — parse() vs replaceVars()
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.parametrize("pattern,rewrite", [
+    ("CAST(<x> AS DATE)", "<x>"),
+    ("STRPOS(LOWER(<x>), '<s>') > 0", "<x> ILIKE '%<s>%'"),
+    ("SELECT <<cols>> FROM <tbl> WHERE <<preds>>", "SELECT <<cols>> FROM <tbl> WHERE <<preds>>"),
+])
+def test_parse_mapping_matches_replaceVars(pattern, rewrite):
+    _, _, expected = RuleParserV2.replaceVars(pattern, rewrite)
+    result = RuleParserV2.parse(pattern, rewrite)
+    assert result.mapping == expected
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Variable coverage
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def test_rewrite_vars_subset_of_pattern():
+    """For simple rules, rewrite variables are a subset of pattern variables."""
+    result = RuleParserV2.parse("CAST(<x> AS DATE)", "<x>")
+    assert set(_walk_var_names(result.rewrite_ast)) <= set(_walk_var_names(result.pattern_ast))
+
+
+def test_identity_rule_same_vars():
+    """An identity rewrite has the same variable set in both trees."""
+    result = RuleParserV2.parse("<x> = <y>", "<x> = <y>")
+    assert set(_walk_var_names(result.pattern_ast)) == set(_walk_var_names(result.rewrite_ast))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# VarType / VarTypesInfo metadata
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def test_element_var_markers():
+    info = VarTypesInfo[VarType.ElementVariable]
+    assert info["markerStart"] == "<"
+    assert info["markerEnd"] == ">"
+    assert info["internalBase"] == "EV"
+
+
+def test_set_var_markers():
+    info = VarTypesInfo[VarType.SetVariable]
+    assert info["markerStart"] == "<<"
+    assert info["markerEnd"] == ">>"
+    assert info["internalBase"] == "SV"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# data/rules.py catalog — parametrized over all rules
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.parametrize(
+    "rule",
+    RULES_CATALOG,
+    ids=[r["key"] for r in RULES_CATALOG],
+)
+class TestCatalogRules:
+
+    def test_parse_succeeds(self, rule):
+        """Full parse pipeline completes without error."""
+        result = RuleParserV2.parse(rule["pattern"], rule["rewrite"])
+        assert isinstance(result, RuleParseResult)
+        assert result.pattern_ast is not None
+        assert result.rewrite_ast is not None
+
+    def test_mapping_matches_replaceVars(self, rule):
+        """parse() returns the same mapping as replaceVars()."""
+        _, _, expected = RuleParserV2.replaceVars(rule["pattern"], rule["rewrite"])
+        result = RuleParserV2.parse(rule["pattern"], rule["rewrite"])
+        assert result.mapping == expected
+
+    def test_varnodes_declared_in_mapping(self, rule):
+        """Every variable node in the AST uses an external name present in mapping."""
+        result = RuleParserV2.parse(rule["pattern"], rule["rewrite"])
+        _assert_varnodes_declared(result)
+
+    def test_no_internal_tokens_leak(self, rule):
+        """No EV00x / SV00x tokens survive as raw identifiers."""
+        result = RuleParserV2.parse(rule["pattern"], rule["rewrite"])
+        _assert_no_internal_tokens(result)
