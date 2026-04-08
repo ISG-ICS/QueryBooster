@@ -86,35 +86,20 @@ def _assert_varnodes_declared(result: RuleParseResult) -> None:
 
 
 def _assert_no_internal_tokens(result: RuleParseResult) -> None:
-    """No EV00x / SV00x tokens should survive as raw identifiers after substitution.
-
-    Known limitation: ``_substitute_placeholders`` does not replace a ColumnNode's
-    name when the column is qualified (``parent_alias`` is set) but the parent alias
-    itself is a literal not present in the internal-to-external mapping.  We only flag
-    unqualified columns and qualified columns whose parent alias is also an internal
-    token.
-    """
+    """No EV00x / SV00x tokens should survive in identifier-bearing AST fields."""
     internal_tokens = set(result.mapping.values())
 
     for tree_label, tree in [("pattern", result.pattern_ast), ("rewrite", result.rewrite_ast)]:
         for n in _walk(tree):
             if isinstance(n, ColumnNode):
-                if n.parent_alias is None:
-                    assert not _TOKEN_RE.match(n.name), (
-                        f"{tree_label} AST has raw internal token {n.name!r} "
-                        f"as unqualified ColumnNode"
-                    )
-                elif n.parent_alias in internal_tokens:
+                assert not _TOKEN_RE.match(n.name), (
+                    f"{tree_label} AST has raw internal token {n.name!r} as ColumnNode.name"
+                )
+                if n.parent_alias in internal_tokens:
                     assert not _TOKEN_RE.match(n.parent_alias), (
                         f"{tree_label} AST has raw internal token {n.parent_alias!r} "
                         f"as ColumnNode.parent_alias"
                     )
-                    assert not _TOKEN_RE.match(n.name), (
-                        f"{tree_label} AST has raw internal token {n.name!r} "
-                        f"as ColumnNode.name (parent_alias was also an internal token)"
-                    )
-                # else: parent_alias is a literal (e.g. "t") and name is an internal
-                # token — known gap in _substitute_placeholders; skip.
 
             if isinstance(n, TableNode) and isinstance(n.name, str):
                 assert not _TOKEN_RE.match(n.name), (
@@ -368,6 +353,19 @@ def test_parse_ast_strpos_ilike_rule():
     ilike_args = list(rew.children)
     assert isinstance(ilike_args[0], ElementVariableNode) and ilike_args[0].name == "x"
     assert isinstance(ilike_args[1], LiteralNode)
+    assert ilike_args[1].value == "%s%"
+
+
+def test_substitute_placeholders_limit_offset_string_tokens():
+    """Directly exercise LIMIT/OFFSET token replacement for string payloads."""
+    lim = RuleParserV2._substitute_placeholders(  # type: ignore[arg-type]
+        LimitNode("EV001"), {"EV001": "x"}
+    )
+    off = RuleParserV2._substitute_placeholders(  # type: ignore[arg-type]
+        OffsetNode("EV002"), {"EV002": "y"}
+    )
+    assert isinstance(lim, LimitNode) and lim.limit == "x"
+    assert isinstance(off, OffsetNode) and off.offset == "y"
 
 
 def test_parse_ast_max_distinct():

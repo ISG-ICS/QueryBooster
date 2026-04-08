@@ -18,6 +18,7 @@ from core.ast.node import (
     HavingNode,
     IntervalNode,
     JoinNode,
+    LiteralNode,
     LimitNode,
     ListNode,
     Node,
@@ -327,6 +328,13 @@ class RuleParserV2:
     #
     @staticmethod
     def _substitute_placeholders(node: Node, rev: Dict[str, str]) -> Node:
+        def _replace_internal_in_string(s: str) -> str:
+            # Replace EV00x / SV00x occurrences inside strings (e.g., '%EV001%').
+            out = s
+            for internal, external in rev.items():
+                out = out.replace(internal, external)
+            return out
+
         if node.type == NodeType.COLUMN:
             col = node
             if not isinstance(col, ColumnNode):
@@ -353,6 +361,14 @@ class RuleParserV2:
             else:
                 new_alias = t.alias
             return TableNode(new_name, new_alias)
+
+        if node.type == NodeType.LITERAL:
+            lit = node
+            if not isinstance(lit, LiteralNode):
+                return node
+            if isinstance(lit.value, str):
+                return LiteralNode(_replace_internal_in_string(lit.value))
+            return LiteralNode(lit.value)
 
         if node.type == NodeType.QUERY:
             q = node
@@ -413,6 +429,22 @@ class RuleParserV2:
             if not isinstance(o, OrderByNode):
                 return node
             return OrderByNode([RuleParserV2._substitute_placeholders(c, rev) for c in o.children])
+
+        if node.type == NodeType.LIMIT:
+            lim = node
+            if not isinstance(lim, LimitNode):
+                return node
+            if isinstance(lim.limit, str):
+                return LimitNode(_replace_internal_in_string(lim.limit))
+            return LimitNode(lim.limit)
+
+        if node.type == NodeType.OFFSET:
+            off = node
+            if not isinstance(off, OffsetNode):
+                return node
+            if isinstance(off.offset, str):
+                return OffsetNode(_replace_internal_in_string(off.offset))
+            return OffsetNode(off.offset)
 
         if node.type == NodeType.ORDER_BY_ITEM:
             oi = node
