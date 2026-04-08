@@ -341,15 +341,17 @@ class RuleParserV2:
                 return node
             pa = col.parent_alias
             nm = col.name
+            new_alias = _replace_internal_in_string(col.alias) if isinstance(col.alias, str) else col.alias
+            new_pa = _replace_internal_in_string(pa) if isinstance(pa, str) else pa
             if pa is None and nm in rev:
                 return RuleParserV2._placeholder_varnode(nm, rev[nm])
             if pa is not None and pa in rev and nm in rev:
-                return ColumnNode(rev[nm], _alias=col.alias, _parent_alias=rev[pa])
+                return ColumnNode(rev[nm], _alias=new_alias, _parent_alias=rev[pa])
             if pa is not None and pa in rev:
-                return ColumnNode(nm, _alias=col.alias, _parent_alias=rev[pa])
+                return ColumnNode(nm, _alias=new_alias, _parent_alias=rev[pa])
             if pa is not None and nm in rev:
-                return ColumnNode(rev[nm], _alias=col.alias, _parent_alias=pa)
-            return ColumnNode(nm, _alias=col.alias, _parent_alias=pa)
+                return ColumnNode(rev[nm], _alias=new_alias, _parent_alias=new_pa)
+            return ColumnNode(nm, _alias=new_alias, _parent_alias=new_pa)
 
         if node.type == NodeType.TABLE:
             t = node
@@ -470,14 +472,16 @@ class RuleParserV2:
             if not isinstance(sq, SubqueryNode):
                 return node
             inner = list(sq.children)[0]
-            return SubqueryNode(RuleParserV2._substitute_placeholders(inner, rev), sq.alias)
+            alias = _replace_internal_in_string(sq.alias) if isinstance(sq.alias, str) else sq.alias
+            return SubqueryNode(RuleParserV2._substitute_placeholders(inner, rev), alias)
 
         if node.type == NodeType.FUNCTION:
             f = node
             if not isinstance(f, FunctionNode):
                 return node
             new_args = [RuleParserV2._substitute_placeholders(a, rev) for a in f.children]
-            return FunctionNode(f.name, _args=new_args, _alias=f.alias)
+            alias = _replace_internal_in_string(f.alias) if isinstance(f.alias, str) else f.alias
+            return FunctionNode(f.name, _args=new_args, _alias=alias)
 
         if node.type == NodeType.LIST:
             ln = node

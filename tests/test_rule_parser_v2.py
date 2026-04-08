@@ -95,6 +95,10 @@ def _assert_no_internal_tokens(result: RuleParseResult) -> None:
                 assert not _TOKEN_RE.match(n.name), (
                     f"{tree_label} AST has raw internal token {n.name!r} as ColumnNode.name"
                 )
+                if isinstance(n.alias, str):
+                    assert not _TOKEN_RE.match(n.alias), (
+                        f"{tree_label} AST has raw internal token {n.alias!r} as ColumnNode.alias"
+                    )
                 if n.parent_alias in internal_tokens:
                     assert not _TOKEN_RE.match(n.parent_alias), (
                         f"{tree_label} AST has raw internal token {n.parent_alias!r} "
@@ -104,6 +108,20 @@ def _assert_no_internal_tokens(result: RuleParseResult) -> None:
             if isinstance(n, TableNode) and isinstance(n.name, str):
                 assert not _TOKEN_RE.match(n.name), (
                     f"{tree_label} AST has raw internal token {n.name!r} as TableNode.name"
+                )
+                if isinstance(n.alias, str):
+                    assert not _TOKEN_RE.match(n.alias), (
+                        f"{tree_label} AST has raw internal token {n.alias!r} as TableNode.alias"
+                    )
+
+            if isinstance(n, SubqueryNode) and isinstance(n.alias, str):
+                assert not _TOKEN_RE.match(n.alias), (
+                    f"{tree_label} AST has raw internal token {n.alias!r} as SubqueryNode.alias"
+                )
+
+            if isinstance(n, FunctionNode) and isinstance(n.alias, str):
+                assert not _TOKEN_RE.match(n.alias), (
+                    f"{tree_label} AST has raw internal token {n.alias!r} as FunctionNode.alias"
                 )
 
 
@@ -366,6 +384,19 @@ def test_substitute_placeholders_limit_offset_string_tokens():
     )
     assert isinstance(lim, LimitNode) and lim.limit == "x"
     assert isinstance(off, OffsetNode) and off.offset == "y"
+
+
+def test_parse_substitutes_alias_fields():
+    """Column/function/subquery aliases should not leak EV/SV internal tokens."""
+    result = RuleParserV2.parse(
+        "SELECT SUM(<x>) AS <f_alias>, t.c AS <c_alias> FROM (SELECT <x> FROM <t>) AS <sq_alias>, <t> t",
+        "SELECT SUM(<x>) AS <f_alias>, t.c AS <c_alias> FROM (SELECT <x> FROM <t>) AS <sq_alias>, <t> t",
+    )
+    assert isinstance(result, RuleParseResult)
+    assert result.mapping["f_alias"].startswith("EV")
+    assert result.mapping["c_alias"].startswith("EV")
+    assert result.mapping["sq_alias"].startswith("EV")
+    _assert_no_internal_tokens(result)
 
 
 def test_parse_ast_max_distinct():
