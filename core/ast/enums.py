@@ -37,6 +37,7 @@ class NodeType(Enum):
     LIMIT = "limit"
     OFFSET = "offset"
     QUERY = "query"
+    COMPOUND_QUERY = "compound_query"
     CASE = "case"
     WHEN_THEN = "when_then"
 

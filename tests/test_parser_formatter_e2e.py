@@ -126,7 +126,12 @@ def test_query_14():
     assert parse(formatted_sql) == parse(original_sql)
 
 
-# TODO: Query 15 uses UNION, which is not supported by parser yet
+def test_query_15():
+    query = get_query(15)
+    original_sql = query["pattern"]
+    parsed_ast = parser.parse(original_sql)
+    formatted_sql = formatter.format(parsed_ast)
+    assert parse(formatted_sql) == parse(original_sql)
 
 
 def test_query_16():
@@ -233,7 +238,12 @@ def test_query_28():
     assert parse(formatted_sql) == parse(original_sql)
 
 
-# TODO: Query 29: Full Matching: UNION not supported by parser
+def test_query_29():
+    query = get_query(29)
+    original_sql = query["pattern"]
+    parsed_ast = parser.parse(original_sql)
+    formatted_sql = formatter.format(parsed_ast)
+    assert parse(formatted_sql) == parse(original_sql)
 
 
 def test_query_30():
@@ -252,7 +262,12 @@ def test_query_31():
     assert parse(formatted_sql) == parse(original_sql)
 
 
-# TODO: Query 32: UNION not supported by parser
+def test_query_32():
+    query = get_query(32)
+    original_sql = query["rewrite"]
+    parsed_ast = parser.parse(original_sql)
+    formatted_sql = formatter.format(parsed_ast)
+    assert parse(formatted_sql) == parse(original_sql)
 
 
 def test_query_33():

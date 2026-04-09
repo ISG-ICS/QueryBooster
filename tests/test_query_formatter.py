@@ -121,7 +121,11 @@ def test_query_14():
     assert parse(sql) == parse(query["pattern"])
 
 
-# TODO: Query 15 uses UNION, which is not supported by parser yet
+def test_query_15():
+    """Query 15: UNION ALL in derived table."""
+    query = get_query(15)
+    sql = formatter.format(get_ast(15))
+    assert parse(sql) == parse(query["pattern"])
 
 
 def test_query_16():
@@ -215,7 +219,11 @@ def test_query_28():
     assert parse(sql) == parse(query["pattern"])
 
 
-# TODO: Query 29: Full Matching: UNION not supported by parser
+def test_query_29():
+    """Query 29: Top-level UNION."""
+    query = get_query(29)
+    sql = formatter.format(get_ast(29))
+    assert parse(sql) == parse(query["pattern"])
 
 
 def test_query_30():
@@ -232,7 +240,11 @@ def test_query_31():
     assert parse(sql) == parse(query["pattern"])
 
 
-# TODO: Query 32: UNION not supported by parser
+def test_query_32():
+    """Query 32: Spreadsheet ID 2."""
+    query = get_query(32)
+    sql = formatter.format(get_ast(32))
+    assert parse(sql) == parse(query["rewrite"])
 
 
 def test_query_33():

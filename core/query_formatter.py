@@ -1,15 +1,24 @@
 import re
 import mo_sql_parsing as mosql
 from core.ast.node import (
-    QueryNode, SelectNode, FromNode, WhereNode, TableNode, GroupByNode, HavingNode,
-    OrderByNode,JoinNode
+    QueryNode,
+    CompoundQueryNode,
+    SelectNode,
+    FromNode,
+    WhereNode,
+    TableNode,
+    GroupByNode,
+    HavingNode,
+    OrderByNode,
+    JoinNode,
+    SubqueryNode,
 )
 from core.ast.enums import NodeType, JoinType, SortOrder
 from core.ast.node import Node
 
 class QueryFormatter:
-    def format(self, query: QueryNode) -> str:
-        # [1] AST (QueryNode) ->  JSON
+    def format(self, query: Node) -> str:
+        # [1] AST -> JSON
         json_query = ast_to_json(query)
 
         # [2] Any (JSON) -> str
@@ -20,8 +29,41 @@ class QueryFormatter:
               
         return sql
 
-def ast_to_json(node: QueryNode) -> dict:
-    """Convert QueryNode AST to JSON dictionary for mosql"""
+def _collect_union_branches(node: CompoundQueryNode, is_all: bool) -> list:
+    """Flatten a left-chain of same-type CompoundQueryNodes into a list.
+
+    mo_sql_parsing uses flat lists for chains of the same operator
+    (e.g. A UNION B UNION C → {'union': [A, B, C]}).  Nesting is only
+    used at type boundaries (e.g. (A UNION ALL B) UNION C).  This helper
+    mirrors that convention so round-trips produce identical JSON.
+    """
+    result = []
+    if isinstance(node.left, CompoundQueryNode) and node.left.is_all == is_all:
+        result.extend(_collect_union_branches(node.left, is_all))
+    else:
+        result.append(node.left)
+    if isinstance(node.right, CompoundQueryNode) and node.right.is_all == is_all:
+        result.extend(_collect_union_branches(node.right, is_all))
+    else:
+        result.append(node.right)
+    return result
+
+
+def compound_to_mosql_json(node: CompoundQueryNode) -> dict:
+    """Convert a CompoundQueryNode binary tree to mo_sql_parsing union/union_all JSON."""
+    key = 'union_all' if node.is_all else 'union'
+    branches = _collect_union_branches(node, node.is_all)
+    return {key: [ast_to_json(b) for b in branches]}
+
+
+def ast_to_json(node: Node) -> dict:
+    """Convert AST to JSON dictionary for mosql."""
+    if isinstance(node, CompoundQueryNode):
+        return compound_to_mosql_json(node)
+    if not isinstance(node, QueryNode):
+        raise TypeError(
+            f"ast_to_json: expected QueryNode or CompoundQueryNode, got {type(node).__name__}"
+        )
     result = {}
     
     # process each clause in the query
@@ -81,11 +123,35 @@ def format_select(select_node: SelectNode) -> dict:
     return result
 
 
-def format_from(from_node: FromNode) -> list:
-    """Format FROM clause with explicit JOIN support"""
-    sources = []
+def format_from(from_node: FromNode):
+    """Format the FROM clause for mo_sql_parsing.
+
+    mo_sql_parsing quirk: a bare (unaliased) UNION/UNION ALL in FROM is
+    represented as a plain dict at the FROM key, NOT as a one-element list
+    wrapping a {'value': ...} dict.  For example:
+
+        SELECT * FROM (SELECT 1 UNION SELECT 2)
+        → {"select": ..., "from": {"union": [...]}}   ← dict, not list
+
+    An aliased variant uses the normal list-of-sources form:
+        SELECT * FROM (SELECT 1 UNION SELECT 2) t
+        → {"select": ..., "from": [{"value": {"union": [...]}, "name": "t"}]}
+
+    Everything else (tables, aliased subqueries, JOINs) returns a list.
+    """
     children = list(from_node.children)
-    
+
+    # Special case: single unaliased UNION subquery must be a bare dict
+    if (
+        len(children) == 1
+        and isinstance(children[0], SubqueryNode)
+        and children[0].alias is None
+    ):
+        inner = list(children[0].children)[0]
+        if isinstance(inner, CompoundQueryNode):
+            return compound_to_mosql_json(inner)
+
+    sources = []
     if not children:
         return sources
     

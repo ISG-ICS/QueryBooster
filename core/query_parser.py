@@ -1,5 +1,5 @@
 from core.ast.node import (
-    Node, QueryNode, SelectNode, FromNode, WhereNode, TableNode, ColumnNode, 
+    Node, QueryNode, CompoundQueryNode, SelectNode, FromNode, WhereNode, TableNode, ColumnNode,
     LiteralNode, DataTypeNode, TimeUnitNode, IntervalNode,
     CaseNode, WhenThenNode,
     OperatorNode, UnaryOperatorNode, FunctionNode, GroupByNode, HavingNode,
@@ -45,22 +45,18 @@ class QueryParser:
                 "Expected None, list, dict, or str."
             )
 
-    def parse(self, query: str) -> QueryNode:
-        # str -> mo_sql_parsing -> QueryNode
+    def parse(self, query: str) -> Node:
+        # str -> mo_sql_parsing -> QueryNode or CompoundQueryNode
         mosql_ast = mosql.parse(query)
-        return self.parse_query_dict(mosql_ast, aliases={})
+        return self.parse_top_level_dict(mosql_ast, aliases={})
    
     def parse_select(self, select_list: list, aliases: dict, distinct: bool = False, distinct_on_expr = None) -> SelectNode:
         items = []
         for item in select_list:
             if isinstance(item, dict) and 'value' in item:
                 value = item['value']
-                # Check if value is a subquery
-                if isinstance(value, dict) and 'select' in value:
-                    # This is a subquery in SELECT clause
-                    # Subquery has its own alias scope (no leaking to/from outer query)
-                    subquery_query = self.parse_query_dict(value, aliases={})
-                    expression = SubqueryNode(subquery_query)
+                if self._is_subquery_dict(value):
+                    expression = SubqueryNode(self.parse_top_level_dict(value, aliases={}))
                 else:
                     expression = self.parse_expression(value, aliases)
                 
@@ -87,113 +83,74 @@ class QueryParser:
 
         return SelectNode(items, _distinct=distinct, _distinct_on=distinct_on_node)
     
+    def _build_from_source(self, value, alias) -> Node:
+        """Resolve a FROM/JOIN value and its alias into a SubqueryNode or TableNode."""
+        if self._is_subquery_dict(value):
+            return SubqueryNode(self.parse_top_level_dict(value, aliases={}), alias)
+        return TableNode(value, alias)
+
     def parse_from(self, from_list: list, aliases: dict) -> FromNode:
         sources = []
         left_source = None  # Can be a table or the result of a previous join
-        
+
+        def _append_source(node: Node, alias):
+            nonlocal left_source
+            if alias:
+                aliases[alias] = node
+            if left_source is None:
+                left_source = node
+            else:
+                sources.append(node)
+
         for item in from_list:
-            # Check for JOIN first (before checking for 'value')
             if isinstance(item, dict):
-                # Look for any join key
                 join_key = next((k for k in item.keys() if 'join' in k.lower()), None)
-                
+
                 if join_key:
-                    # This is a JOIN
                     if left_source is None:
                         raise ValueError(f"JOIN found without a left table. join_key={join_key}, item={item}")
-                    
+
                     join_info = item[join_key]
-                    # Handle both string and dict join_info
                     if isinstance(join_info, str):
-                        table_name = join_info
+                        right_source = TableNode(join_info)
                         alias = None
-                        right_source = TableNode(table_name, alias)
                     elif isinstance(join_info, dict):
-                        # Derived table: {'value': {<subquery>}, 'name': <alias>}
                         value = join_info.get('value')
-                        if isinstance(value, dict) and 'select' in value:
-                            subquery_query = self.parse_query_dict(value, aliases={})
-                            alias = join_info.get('name')
-                            right_source = SubqueryNode(subquery_query, alias)
-                        elif 'select' in join_info:
-                            # Subquery at top level (alias in 'name' if present)
-                            subquery_query = self.parse_query_dict(join_info, aliases={})
-                            alias = join_info.get('name')
-                            right_source = SubqueryNode(subquery_query, alias)
+                        alias = join_info.get('name')
+                        if value is not None:
+                            right_source = self._build_from_source(value, alias)
                         else:
-                            table_name = join_info.get('value', join_info)
-                            alias = join_info.get('name')
-                            right_source = TableNode(table_name, alias)
+                            # Bare subquery dict at join level: {'select': ..., 'name': ...}
+                            right_source = self._build_from_source(join_info, alias)
                     else:
-                        table_name = join_info
+                        right_source = TableNode(join_info)
                         alias = None
-                        right_source = TableNode(table_name, alias)
-                    
-                    # Track alias
+
                     if alias:
                         aliases[alias] = right_source
-                    
+
                     on_condition = None
                     if 'on' in item:
                         on_condition = self.parse_expression(item['on'], aliases)
-                    
-                    # Create join node - left_source might be a table or a previous join
+
                     join_type = self.parse_join_type(join_key)
                     join_node = JoinNode(left_source, right_source, join_type, on_condition)
-                    # The result of this JOIN becomes the new left source for potential next JOIN
                     left_source = join_node
+
                 elif 'value' in item:
-                    # Check if value is a subquery
-                    value = item['value']
                     alias = item.get('name')
-                    
-                    if isinstance(value, dict) and 'select' in value:
-                        # This is a subquery in FROM clause
-                        # Subquery has its own alias scope (no leaking to/from outer query)
-                        subquery_query = self.parse_query_dict(value, aliases={})
-                        subquery_node = SubqueryNode(subquery_query, alias)
-                        # Track subquery alias
-                        if alias:
-                            aliases[alias] = subquery_node
-                        
-                        if left_source is None:
-                            left_source = subquery_node
-                        else:
-                            sources.append(subquery_node)
-                    else:
-                        # This is a table reference
-                        table_name = value
-                        table_node = TableNode(table_name, alias)
-                        # Track table alias
-                        if alias:
-                            aliases[alias] = table_node
-                        
-                        if left_source is None:
-                            # First table becomes the left source
-                            left_source = table_node
-                        else:
-                            # Multiple tables without explicit JOIN (cross join)
-                            sources.append(table_node)
-                # Subquery in FROM specified directly as a query dict (with 'select').
-                elif 'select' in item:
+                    node = self._build_from_source(item['value'], alias)
+                    _append_source(node, alias)
+
+                elif self._is_subquery_dict(item):
+                    # Bare query/union dict directly in FROM (no 'value' wrapper)
                     alias = item.get('name')
-                    subquery_query = self.parse_query_dict(item, aliases={})
-                    subquery_node = SubqueryNode(subquery_query, alias)
-                    if alias:
-                        aliases[alias] = subquery_node
-                    if left_source is None:
-                        left_source = subquery_node
-                    else:
-                        sources.append(subquery_node)
+                    node = self._build_from_source(item, alias)
+                    _append_source(node, alias)
+
             elif isinstance(item, str):
-                # Simple string table name
-                table_node = TableNode(item)
-                if left_source is None:
-                    left_source = table_node
-                else:
-                    sources.append(table_node)
-        
-        # Prepend the first/left source so order is preserved
+                _append_source(TableNode(item), None)
+
         if left_source is not None:
             sources.insert(0, left_source)
 
@@ -348,12 +305,8 @@ class QueryParser:
             return parsed
         
         if isinstance(expr, dict):
-            # Check if this is a subquery (has 'select' key)
-            if 'select' in expr:
-                # This is a subquery - parse it recursively
-                # Subquery has its own alias scope (no leaking to/from outer query)
-                subquery_query = self.parse_query_dict(expr, aliases={})
-                return SubqueryNode(subquery_query)
+            if self._is_subquery_dict(expr):
+                return SubqueryNode(self.parse_top_level_dict(expr, aliases={}))
             
             # Special cases first
             if 'all_columns' in expr:
@@ -438,16 +391,8 @@ class QueryParser:
 
                     left = self.parse_expression(left_raw, aliases)
 
-                    # Subquery RHS
-                    if isinstance(right_raw, dict) and 'select' in right_raw:
-                        right = self.parse_expression(right_raw, aliases)
-                    # Literal-list RHS
-                    elif isinstance(right_raw, dict) and 'literal' in right_raw:
-                        # parse_expression on this dict will return a ListNode or LiteralNode
-                        right = self.parse_expression(right_raw, aliases)
-                    elif isinstance(right_raw, list):
-                        items = [self.parse_expression(item, aliases) for item in right_raw]
-                        right = ListNode(items)
+                    if isinstance(right_raw, list):
+                        right = ListNode([self.parse_expression(item, aliases) for item in right_raw])
                     else:
                         right = self.parse_expression(right_raw, aliases)
 
@@ -513,9 +458,8 @@ class QueryParser:
                     return UnaryOperatorNode(self.parse_expression(value, aliases), '-')
                 
                 # Pattern 3: EXISTS operator with subquery
-                if key == 'exists' and isinstance(value, dict) and 'select' in value:
-                    # Subquery has its own alias scope (no leaking to/from outer query)
-                    subquery_query = self.parse_query_dict(value, aliases={})
+                if key == 'exists' and self._is_subquery_dict(value):
+                    subquery_query = self.parse_top_level_dict(value, aliases={})
                     subquery_node = SubqueryNode(subquery_query)
                     return OperatorNode(subquery_node, 'EXISTS')
                 
@@ -533,6 +477,59 @@ class QueryParser:
         
         # Other types
         return LiteralNode(expr)
+
+    @staticmethod
+    def _mosql_dict_is_compound_union(d: dict) -> bool:
+        if not isinstance(d, dict):
+            return False
+        if 'select' in d or 'select_distinct' in d:
+            return False
+        return 'union' in d or 'union_all' in d
+
+    @classmethod
+    def _is_subquery_dict(cls, d) -> bool:
+        """True if d is any mo_sql_parsing dict that produces a query (SELECT, UNION, etc.)."""
+        return isinstance(d, dict) and (
+            'select' in d or 'select_distinct' in d
+            or cls._mosql_dict_is_compound_union(d)
+        )
+
+    def parse_compound_union_dict(self, d: dict) -> CompoundQueryNode:
+        """Build a left-associative binary tree from a mo_sql_parsing union/union_all dict.
+
+        mo_sql_parsing never attaches extra clause keys (e.g. limit, orderby) directly
+        to the union dict — it always lifts them to an outer wrapper dict.  So d is
+        expected to contain only a 'union' or 'union_all' key.
+        """
+        if 'union_all' in d:
+            is_all = True
+            items = self.normalize_to_list(d['union_all'])
+        elif 'union' in d:
+            is_all = False
+            items = self.normalize_to_list(d['union'])
+        else:
+            raise ValueError(f'Expected union or union_all in dict, got keys {list(d.keys())}')
+
+        if len(items) < 2:
+            raise ValueError(
+                f"Expected at least 2 branches for "
+                f"{'union_all' if is_all else 'union'}, got {len(items)}"
+            )
+
+        def parse_item(item) -> Node:
+            if isinstance(item, dict) and self._mosql_dict_is_compound_union(item):
+                return self.parse_compound_union_dict(item)
+            return self.parse_query_dict(item, {})
+
+        left = parse_item(items[0])
+        for item in items[1:]:
+            left = CompoundQueryNode(left, parse_item(item), is_all)
+        return left
+
+    def parse_top_level_dict(self, query_dict: dict, aliases: dict) -> Node:
+        if self._mosql_dict_is_compound_union(query_dict):
+            return self.parse_compound_union_dict(query_dict)
+        return self.parse_query_dict(query_dict, aliases)
     
     def parse_query_dict(self, query_dict: dict, aliases: dict) -> QueryNode:
         """Parse a mo_sql_parsing query-dict into a QueryNode.
