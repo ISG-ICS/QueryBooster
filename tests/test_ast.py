@@ -1,5 +1,5 @@
 from core.ast.node import (
-    TableNode, ColumnNode, LiteralNode, VarNode, VarSetNode,
+    TableNode, ColumnNode, LiteralNode, ElementVariableNode, SetVariableNode,
     OperatorNode, UnaryOperatorNode, FunctionNode, SelectNode, FromNode, WhereNode, GroupByNode,
     HavingNode, OrderByNode, LimitNode, OffsetNode, QueryNode
 )
@@ -42,9 +42,9 @@ def test_operand_nodes():
     print(f"  {null_literal.value} -> Type: {null_literal.type}")
     
     # Test VarSQL nodes
-    var_table = VarNode("V001")
-    var_column = VarNode("V002")
-    var_set = VarSetNode("VS001")
+    var_table = ElementVariableNode("V001")
+    var_column = ElementVariableNode("V002")
+    var_set = SetVariableNode("VS001")
     
     print(f"\nVarSQL nodes:")
     print(f"  Variable {var_table.name} -> Type: {var_table.type}")
@@ -243,11 +243,11 @@ def test_varsql_pattern_matching():
     print("="*50)
     
     # Pattern: SELECT V1 FROM V2 WHERE V3 op V4
-    var_select = VarNode("V1")  # Any select item
-    var_table = VarNode("V2")   # Any table
-    var_left = VarNode("V3")    # Left operand of condition
-    var_op = VarNode("OP")      # Any operator
-    var_right = VarNode("V4")   # Right operand of condition
+    var_select = ElementVariableNode("V1")  # Any select item
+    var_table = ElementVariableNode("V2")   # Any table
+    var_left = ElementVariableNode("V3")    # Left operand of condition
+    var_op = ElementVariableNode("OP")      # Any operator
+    var_right = ElementVariableNode("V4")   # Right operand of condition
     
     # Build pattern query
     pattern_select = SelectNode({var_select})
@@ -268,7 +268,7 @@ def test_varsql_pattern_matching():
     print(f"  Total pattern variables: 4 (V1, V2, V3, V4)")
     
     # Test VarSet for multiple columns
-    var_columns = VarSetNode("COLS")
+    var_columns = SetVariableNode("COLS")
     multi_select = SelectNode({var_columns})
     print(f"\nVarSet pattern for multiple columns:")
     print(f"  VarSet {var_columns.name} can match multiple SELECT items")

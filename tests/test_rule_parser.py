@@ -1,5 +1,4 @@
-from core.rule_parser import RuleParser
-from core.rule_parser import Scope
+from core.rule_parser import RuleParser, Scope
 
 def test_extendToFullSQL():
 
@@ -151,63 +150,50 @@ def test_parse():
         assert rewrite_json == internal_rule['rewrite_json']
 
 
-#incorrect brackets
 def test_brackets_1():
-    
-  pattern = '''WHERE <x] > 11
+    pattern = '''WHERE <x] > 11
             AND <x> a <= 11
             '''
-  
-  index = RuleParser.find_malformed_brackets(pattern)
-  assert index == 6
+    index = RuleParser.find_malformed_brackets(pattern)
+    assert index == 6
 
-  #incorrect brackets
-  def test_brackets_2():
-        
+
+def test_brackets_2():
     pattern = '''WHERE <x} > 11
                 AND <x> a <= 11
                 '''
-    
     index = RuleParser.find_malformed_brackets(pattern)
     assert index == 6
 
-#incorrect brackets
+
 def test_parse_validator_3():
-    
-  pattern = '''WHERE <x) > 11
+    pattern = '''WHERE <x) > 11
             AND <x> a <= 11
             '''
+    index = RuleParser.find_malformed_brackets(pattern)
+    assert index == 6
 
-  index = RuleParser.find_malformed_brackets(pattern)
-  assert index == 6
 
-#incorrect brackets
-  def test_parse_validator_4():
-        
+def test_parse_validator_4():
     pattern = '''WHERE [x> > 11
                 AND <x> a <= 11
                 '''
-    
     index = RuleParser.find_malformed_brackets(pattern)
     assert index == 6
 
 
-#incorrect brackets
-  def test_parse_validator_5():
-        
+def test_parse_validator_5():
     pattern = '''WHERE (x> > 11
                 AND <x> a <= 11
                 '''
-  
     index = RuleParser.find_malformed_brackets(pattern)
     assert index == 6
-    
-#incorrect brackets
-  def test_parse_validator_6():
-        
+
+
+def test_parse_validator_6():
     pattern = '''WHERE {x> > 11
                 AND <x> a <= 11
                 '''
     index = RuleParser.find_malformed_brackets(pattern)
     assert index == 6
-    
+

@@ -168,18 +168,34 @@ class IntervalNode(Node):
     def __hash__(self):
         return hash((super().__hash__(), self.value, self.unit))
 
-class VarNode(Node):
-    """VarSQL variable node"""
+class ElementVariableNode(Node):
+    """Rule element variable ``<name>`` (see ``VarType.ElementVariable`` in rule_parser_v2)."""
     def __init__(self, _name: str, **kwargs):
         super().__init__(NodeType.VAR, **kwargs)
         self.name = _name
 
+    def __eq__(self, other):
+        if not isinstance(other, ElementVariableNode):
+            return False
+        return super().__eq__(other) and self.name == other.name
 
-class VarSetNode(Node):
-    """VarSQL variable set node"""
+    def __hash__(self):
+        return hash((super().__hash__(), self.name))
+
+
+class SetVariableNode(Node):
+    """Rule set variable ``<<name>>`` (see ``VarType.SetVariable`` in rule_parser_v2)."""
     def __init__(self, _name: str, **kwargs):
         super().__init__(NodeType.VARSET, **kwargs)
         self.name = _name
+
+    def __eq__(self, other):
+        if not isinstance(other, SetVariableNode):
+            return False
+        return super().__eq__(other) and self.name == other.name
+
+    def __hash__(self):
+        return hash((super().__hash__(), self.name))
 
 
 class OperatorNode(Node):
