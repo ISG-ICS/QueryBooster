@@ -505,3 +505,18 @@ def test_drop_branch_3():
     parsed = RuleParserV2.parse(out["pattern"], out["rewrite"])
     assert not isinstance(parsed.pattern_ast, QueryNode)
     assert not isinstance(parsed.rewrite_ast, QueryNode)
+
+
+def test_fingerprint_normalizes_numbered_placeholders():
+    rule = _build_rule("SELECT <x9>, <x2> FROM <x10> WHERE <<y4>>", "SELECT <x9> FROM <x10> WHERE <<y4>>")
+    fp = RuleGeneratorV2.fingerPrint(rule)
+    assert "<x>" in fp
+    assert "<<y>>" in fp
+    assert "<x9>" not in fp
+    assert "<<y4>>" not in fp
+
+
+def test_fingerprint_same_for_renamed_variables():
+    rule1 = _build_rule("CAST(<x1> AS DATE)", "<x1>")
+    rule2 = _build_rule("CAST(<x7> AS DATE)", "<x7>")
+    assert RuleGeneratorV2.fingerPrint(rule1) == RuleGeneratorV2.fingerPrint(rule2)

@@ -192,6 +192,21 @@ class RuleGeneratorV2:
         return new_rule
 
     @staticmethod
+    def fingerPrint(rule: Dict[str, object]) -> str:
+        ast = rule.get("pattern_ast")
+        if not isinstance(ast, Node):
+            raise TypeError("rule['pattern_ast'] must be an AST Node")
+        pattern = RuleGeneratorV2.deparse(copy.deepcopy(ast))
+        return RuleGeneratorV2._fingerPrint(pattern)
+
+    @staticmethod
+    def _fingerPrint(fingerprint: str) -> str:
+        out = fingerprint
+        out = RuleGeneratorV2._normalize_placeholder_numbers(out, "<x", ">")
+        out = RuleGeneratorV2._normalize_placeholder_numbers(out, "<<y", ">>")
+        return out
+
+    @staticmethod
     def variablize_literal(rule: Dict[str, object], literal: Union[str, numbers.Number]) -> Dict[str, object]:
         new_rule = copy.deepcopy(rule)
         mapping = copy.deepcopy(new_rule["mapping"])
@@ -631,6 +646,25 @@ class RuleGeneratorV2:
                 start = i + len(replacement)
             else:
                 start = i + 1
+        return out
+
+    @staticmethod
+    def _normalize_placeholder_numbers(text: str, start_token: str, end_token: str) -> str:
+        out = text
+        start = 0
+        while True:
+            i = out.find(start_token, start)
+            if i < 0:
+                break
+            j = out.find(end_token, i + len(start_token))
+            if j < 0:
+                break
+            inner = out[i + len(start_token):j]
+            if inner.isdigit():
+                out = out[: i + len(start_token)] + out[j:]
+                start = i + len(start_token)
+            else:
+                start = j + len(end_token)
         return out
 
     @staticmethod
