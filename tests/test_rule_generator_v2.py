@@ -89,3 +89,117 @@ def test_columns_excludes_variable_placeholders():
     )
     columns = RuleGeneratorV2.columns(result.pattern_ast, result.rewrite_ast)
     assert set(columns) == {"name", "age", "salary"}
+
+
+def test_literals_1():
+    result = RuleParserV2.parse("STRPOS(LOWER(text), 'iphone') > 0", "ILIKE(text, '%iphone%')")
+    assert set(RuleGeneratorV2.literals(result.pattern_ast, result.rewrite_ast)) == {"iphone"}
+
+
+def test_literals_2():
+    result = RuleParserV2.parse(
+        """
+        select e1.name, e1.age, e2.salary
+        from employee e1, employee e2
+        where e1.id = e2.id
+          and e1.age > 17
+          and e2.salary > 35000
+        """,
+        """
+        select e1.name, e1.age, e1.salary
+        from employee e1
+        where e1.age > 17
+          and e1.salary > 35000
+        """,
+    )
+    assert set(RuleGeneratorV2.literals(result.pattern_ast, result.rewrite_ast)) == {17, 35000}
+
+
+def test_literals_3():
+    result = RuleParserV2.parse(
+        """
+        SELECT *
+        FROM blc_admin_permission adminpermi0_
+          INNER JOIN blc_admin_role_permission_xref allroles1_
+            ON adminpermi0_.admin_permission_id = allroles1_.admin_permission_id
+          INNER JOIN blc_admin_role adminrolei2_
+            ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE adminrolei2_.admin_role_id = 1
+        """,
+        """
+        SELECT *
+        FROM blc_admin_permission AS adminpermi0_
+          INNER JOIN blc_admin_role_permission_xref AS allroles1_
+            ON adminpermi0_.admin_permission_id = allroles1_.admin_permission_id
+        WHERE allroles1_.admin_role_id = 1
+        """,
+    )
+    assert set(RuleGeneratorV2.literals(result.pattern_ast, result.rewrite_ast)) == {1}
+
+
+def test_tables_1():
+    result = RuleParserV2.parse("STRPOS(LOWER(text), 'iphone') > 0", "ILIKE(text, '%iphone%')")
+    assert RuleGeneratorV2.tables(result.pattern_ast, result.rewrite_ast) == []
+
+
+def test_tables_2():
+    result = RuleParserV2.parse(
+        """
+        select e1.name, e1.age, e2.salary
+        from employee e1, employee e2
+        where e1.id = e2.id
+          and e1.age > 17
+          and e2.salary > 35000
+        """,
+        """
+        select e1.name, e1.age, e1.salary
+        from employee e1
+        where e1.age > 17
+          and e1.salary > 35000
+        """,
+    )
+    expected = {("employee", "e1"), ("employee", "e2")}
+    actual = {(t["value"], t["name"]) for t in RuleGeneratorV2.tables(result.pattern_ast, result.rewrite_ast)}
+    assert actual == expected
+
+
+def test_tables_3_excludes_variable_tables():
+    result = RuleParserV2.parse(
+        """
+        select <tb1>.name, <tb1>.age, <tb2>.salary
+        from <tb1>, <tb2>
+        where <tb1>.<a1> = <tb2>.<a1>
+          and <tb1>.age > 17
+          and <tb2>.salary > 35000
+        """,
+        """
+        select <tb1>.name, <tb1>.age, <tb1>.salary
+        from <tb1>
+        where <tb1>.age > 17
+          and <tb1>.salary > 35000
+        """,
+    )
+    assert RuleGeneratorV2.tables(result.pattern_ast, result.rewrite_ast) == []
+
+
+def test_tables_4_subquery_tables():
+    result = RuleParserV2.parse(
+        """
+        select *
+        from employee
+        where workdept in (
+            select deptno
+            from department
+            where deptname = 'OPERATIONS'
+        )
+        """,
+        """
+        select distinct *
+        from employee, department
+        where employee.workdept = department.deptno
+          and department.deptname = 'OPERATIONS'
+        """,
+    )
+    expected = {("employee", "employee"), ("department", "department")}
+    actual = {(t["value"], t["name"]) for t in RuleGeneratorV2.tables(result.pattern_ast, result.rewrite_ast)}
+    assert actual == expected

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import numbers
 import re
-from typing import Dict, Iterator, List, Optional, Set
+from collections import defaultdict
+from typing import Dict, Iterator, List, Optional, Set, Union
 
 from core.ast.enums import NodeType
 from core.ast.node import (
@@ -75,6 +77,54 @@ class RuleGeneratorV2:
         return list(found)
 
     @staticmethod
+    def literals(pattern_ast: Node, rewrite_ast: Node) -> List[Union[str, numbers.Number]]:
+        pattern_literals = RuleGeneratorV2._literal_counts(pattern_ast)
+        rewrite_literals = RuleGeneratorV2._literal_counts(rewrite_ast)
+
+        variablize_literals: List[Union[str, numbers.Number]] = [
+            lit for lit, count in pattern_literals.items() if count > 1
+        ] + [lit for lit, count in rewrite_literals.items() if count > 1]
+
+        intersect_literals = set(pattern_literals.keys()).intersection(set(rewrite_literals.keys()))
+        return list(set(variablize_literals).union(intersect_literals))
+
+    @staticmethod
+    def tables(pattern_ast: Node, rewrite_ast: Node) -> List[Dict[str, str]]:
+        pattern_tables = RuleGeneratorV2._tables_of_ast(pattern_ast)
+        rewrite_tables = RuleGeneratorV2._tables_of_ast(rewrite_ast)
+
+        pattern_set: Dict[str, List[str]] = defaultdict(list)
+        rewrite_set: Dict[str, List[str]] = defaultdict(list)
+
+        for table in pattern_tables:
+            value = table["value"]
+            alias = table["name"]
+            if alias not in pattern_set[value]:
+                pattern_set[value].append(alias)
+
+        for table in rewrite_tables:
+            value = table["value"]
+            alias = table["name"]
+            if alias not in rewrite_set[value]:
+                rewrite_set[value].append(alias)
+
+        superset: List[Dict[str, str]] = []
+        for value, pattern_aliases in pattern_set.items():
+            rewrite_aliases = rewrite_set.get(value, [])
+            merged_aliases = pattern_aliases + [a for a in rewrite_aliases if a not in pattern_aliases]
+            for alias in merged_aliases:
+                superset.append({"value": value, "name": alias})
+
+        deduped: List[Dict[str, str]] = []
+        seen = set()
+        for table in superset:
+            fingerprint = f"{table['value']}-{table['name']}"
+            if fingerprint not in seen:
+                deduped.append(table)
+                seen.add(fingerprint)
+        return deduped
+
+    @staticmethod
     def _walk(node: Optional[Node]) -> Iterator[Node]:
         if node is None:
             return
@@ -131,6 +181,36 @@ class RuleGeneratorV2:
         if scope == Scope.WHERE:
             return full_sql.replace("SELECT * FROM t ", "", 1)
         return full_sql.replace("SELECT * FROM t WHERE ", "", 1)
+
+    @staticmethod
+    def _literal_counts(ast: Node) -> Dict[Union[str, numbers.Number], int]:
+        counts: Dict[Union[str, numbers.Number], int] = {}
+        for node in RuleGeneratorV2._walk(ast):
+            if node.type != NodeType.LITERAL:
+                continue
+            value = getattr(node, "value", None)
+            if isinstance(value, str):
+                normalized = value.replace("%", "")
+                counts[normalized] = counts.get(normalized, 0) + 1
+            elif isinstance(value, numbers.Number):
+                counts[value] = counts.get(value, 0) + 1
+        return counts
+
+    @staticmethod
+    def _tables_of_ast(ast: Node) -> List[Dict[str, str]]:
+        found: List[Dict[str, str]] = []
+        for node in RuleGeneratorV2._walk(ast):
+            if not isinstance(node, TableNode):
+                continue
+            if not isinstance(node.name, str):
+                continue
+            if RuleGeneratorV2._PLACEHOLDER_NAME_RE.match(node.name):
+                continue
+            alias = node.alias if isinstance(node.alias, str) else node.name
+            if RuleGeneratorV2._PLACEHOLDER_NAME_RE.match(alias):
+                continue
+            found.append({"value": node.name, "name": alias})
+        return found
 
     @staticmethod
     def _encode_vars_for_format(node: Node) -> tuple[Node, Dict[str, str]]:
