@@ -89,7 +89,7 @@ def test_columns_excludes_variable_placeholders():
         """
         select e1.name, e1.age, e2.salary
         from employee e1, employee e2
-        where e1.<a1> = e2.<a1>
+        where e1.<x1> = e2.<x1>
           and e1.age > 17
           and e2.salary > 35000
         """,
@@ -179,17 +179,17 @@ def test_tables_2():
 def test_tables_3_excludes_variable_tables():
     result = RuleParserV2.parse(
         """
-        select <tb1>.name, <tb1>.age, <tb2>.salary
-        from <tb1>, <tb2>
-        where <tb1>.<a1> = <tb2>.<a1>
-          and <tb1>.age > 17
-          and <tb2>.salary > 35000
+        select <x1>.name, <x1>.age, <x2>.salary
+        from <x1>, <x2>
+        where <x1>.<x3> = <x2>.<x3>
+          and <x1>.age > 17
+          and <x2>.salary > 35000
         """,
         """
-        select <tb1>.name, <tb1>.age, <tb1>.salary
-        from <tb1>
-        where <tb1>.age > 17
-          and <tb1>.salary > 35000
+        select <x1>.name, <x1>.age, <x1>.salary
+        from <x1>
+        where <x1>.age > 17
+          and <x1>.salary > 35000
         """,
     )
     assert RuleGeneratorV2.tables(result.pattern_ast, result.rewrite_ast) == []

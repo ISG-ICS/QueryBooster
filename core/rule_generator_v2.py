@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import numbers
-import re
 from collections import defaultdict
 from typing import Dict, Iterator, List, Optional, Set, Tuple, Union
 
@@ -23,7 +22,7 @@ from core.rule_parser_v2 import Scope, VarType, VarTypesInfo
 
 
 class RuleGeneratorV2:
-    _PLACEHOLDER_NAME_RE = re.compile(r"^(x|y|a|t|tb|c|s|p)\d+$", re.IGNORECASE)
+    _PLACEHOLDER_PREFIXES = ("x", "y")
 
     @staticmethod
     def varType(var: str) -> Optional[VarType]:
@@ -42,11 +41,7 @@ class RuleGeneratorV2:
                 continue
             marker_start = VarTypesInfo[var_type]["markerStart"]
             marker_end = VarTypesInfo[var_type]["markerEnd"]
-            out = re.sub(
-                re.escape(internal_name),
-                f"{marker_start}{external_name}{marker_end}",
-                out,
-            )
+            out = out.replace(internal_name, f"{marker_start}{external_name}{marker_end}")
         return out
 
     @staticmethod
@@ -56,8 +51,7 @@ class RuleGeneratorV2:
         sql = QueryFormatter().format(full_query)
         for placeholder, user_var in placeholder_mapping.items():
             sql = sql.replace(placeholder, user_var)
-        sql = re.sub(r"__rv_([A-Za-z0-9_]+)__", r"<\1>", sql)
-        sql = re.sub(r"__rvs_([A-Za-z0-9_]+)__", r"<<\1>>", sql)
+        sql = RuleGeneratorV2._normalize_placeholder_tokens(sql)
         return RuleGeneratorV2._extract_partial_sql(sql, scope)
 
     @staticmethod
@@ -74,7 +68,7 @@ class RuleGeneratorV2:
                 if (
                     node.name
                     and node.name not in var_names
-                    and not RuleGeneratorV2._PLACEHOLDER_NAME_RE.match(node.name)
+                    and not RuleGeneratorV2._is_placeholder_name(node.name)
                 ):
                     found.add(node.name)
         return list(found)
@@ -257,10 +251,10 @@ class RuleGeneratorV2:
                 continue
             if not isinstance(node.name, str):
                 continue
-            if RuleGeneratorV2._PLACEHOLDER_NAME_RE.match(node.name):
+            if RuleGeneratorV2._is_placeholder_name(node.name):
                 continue
             alias = node.alias if isinstance(node.alias, str) else node.name
-            if RuleGeneratorV2._PLACEHOLDER_NAME_RE.match(alias):
+            if RuleGeneratorV2._is_placeholder_name(alias):
                 continue
             found.append({"value": node.name, "name": alias})
         return found
@@ -270,12 +264,12 @@ class RuleGeneratorV2:
         max_external = 0
         max_internal = 0
         for external_name, internal_name in mapping.items():
-            m_ext = re.match(r"^x(\d+)$", external_name, re.IGNORECASE)
-            if m_ext:
-                max_external = max(max_external, int(m_ext.group(1)))
-            m_int = re.match(r"^EV(\d+)$", internal_name, re.IGNORECASE)
-            if m_int:
-                max_internal = max(max_internal, int(m_int.group(1)))
+            external_num = RuleGeneratorV2._suffix_int(external_name, "x")
+            if external_num is not None:
+                max_external = max(max_external, external_num)
+            internal_num = RuleGeneratorV2._suffix_int(internal_name, "EV")
+            if internal_num is not None:
+                max_internal = max(max_internal, internal_num)
 
         next_external = f"x{max_external + 1}"
         next_internal = f"EV{str(max_internal + 1).zfill(3)}"
@@ -345,6 +339,58 @@ class RuleGeneratorV2:
                         continue
         if root is target:
             raise ValueError("Cannot replace root node directly; expected nested target.")
+
+    @staticmethod
+    def _is_placeholder_name(name: str) -> bool:
+        lower = name.lower()
+        for prefix in RuleGeneratorV2._PLACEHOLDER_PREFIXES:
+            if lower.startswith(prefix):
+                suffix = lower[len(prefix):]
+                if suffix.isdigit():
+                    return True
+        return False
+
+    @staticmethod
+    def _suffix_int(value: str, prefix: str) -> Optional[int]:
+        if not value.lower().startswith(prefix.lower()):
+            return None
+        suffix = value[len(prefix):]
+        if not suffix or not suffix.isdigit():
+            return None
+        return int(suffix)
+
+    @staticmethod
+    def _normalize_placeholder_tokens(sql: str) -> str:
+        out = sql
+        out = RuleGeneratorV2._replace_wrapped_tokens(out, "__rvs_", "__", "<<", ">>")
+        out = RuleGeneratorV2._replace_wrapped_tokens(out, "__rv_", "__", "<", ">")
+        return out
+
+    @staticmethod
+    def _replace_wrapped_tokens(
+        text: str,
+        prefix: str,
+        suffix: str,
+        open_marker: str,
+        close_marker: str,
+    ) -> str:
+        out = text
+        start = 0
+        while True:
+            i = out.find(prefix, start)
+            if i < 0:
+                break
+            j = out.find(suffix, i + len(prefix))
+            if j < 0:
+                break
+            inner = out[i + len(prefix):j]
+            if inner and all(ch.isalnum() or ch == "_" for ch in inner):
+                replacement = f"{open_marker}{inner}{close_marker}"
+                out = out[:i] + replacement + out[j + len(suffix):]
+                start = i + len(replacement)
+            else:
+                start = i + 1
+        return out
 
     @staticmethod
     def _encode_vars_for_format(node: Node) -> tuple[Node, Dict[str, str]]:
