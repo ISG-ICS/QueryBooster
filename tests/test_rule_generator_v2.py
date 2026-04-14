@@ -520,3 +520,27 @@ def test_fingerprint_same_for_renamed_variables():
     rule1 = _build_rule("CAST(<x1> AS DATE)", "<x1>")
     rule2 = _build_rule("CAST(<x7> AS DATE)", "<x7>")
     assert RuleGeneratorV2.fingerPrint(rule1) == RuleGeneratorV2.fingerPrint(rule2)
+
+
+def test_unify_variable_names_1():
+    q0 = "FROM <<x9>> INNER JOIN <x10> ON <<x9>>.<x5> = <x10>.<x6>"
+    q1 = "FROM <x10>"
+    a, b = RuleGeneratorV2.unify_variable_names(q0, q1)
+    assert a == "FROM <<x1>> INNER JOIN <x2> ON <<x1>>.<x3> = <x2>.<x4>"
+    assert b == "FROM <x2>"
+
+
+def test_unify_variable_names_2():
+    q0 = "<x2> <<x1>>"
+    q1 = "<x2>"
+    a, b = RuleGeneratorV2.unify_variable_names(q0, q1)
+    assert a == "<x1> <<x2>>"
+    assert b == "<x1>"
+
+
+def test_unify_variable_names_3():
+    q0 = "<x> <<x1>> <x> <x> <y>"
+    q1 = "<x> <<x1>> <y>"
+    a, b = RuleGeneratorV2.unify_variable_names(q0, q1)
+    assert a == "<x1> <<x2>> <x1> <x1> <x3>"
+    assert b == "<x1> <<x2>> <x3>"

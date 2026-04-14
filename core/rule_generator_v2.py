@@ -207,6 +207,73 @@ class RuleGeneratorV2:
         return out
 
     @staticmethod
+    def unify_variable_names(q0: str, q1: str) -> Tuple[str, str]:
+        # Unify placeholders by first appearance across q0 then q1:
+        # <x9> -> <x1>, <x10> -> <x2>, <<x9>> -> <<x1>>, etc.
+        mapping: Dict[str, str] = {}
+        counter = 1
+
+        def _scan_tokens(text: str) -> List[str]:
+            tokens: List[str] = []
+            i = 0
+            while i < len(text):
+                if text.startswith("<<", i):
+                    j = text.find(">>", i + 2)
+                    if j != -1:
+                        token = text[i : j + 2]
+                        inner = token[2:-2]
+                        if inner and all(ch.isalnum() or ch == "_" for ch in inner):
+                            tokens.append(token)
+                            i = j + 2
+                            continue
+                if text[i] == "<":
+                    j = text.find(">", i + 1)
+                    if j != -1:
+                        token = text[i : j + 1]
+                        inner = token[1:-1]
+                        if inner and all(ch.isalnum() or ch == "_" for ch in inner):
+                            tokens.append(token)
+                            i = j + 1
+                            continue
+                i += 1
+            return tokens
+
+        for token in _scan_tokens(q0) + _scan_tokens(q1):
+            if token in mapping:
+                continue
+            if token.startswith("<<") and token.endswith(">>"):
+                mapping[token] = f"<<x{counter}>>"
+            else:
+                mapping[token] = f"<x{counter}>"
+            counter += 1
+
+        def _replace_all(text: str) -> str:
+            out: List[str] = []
+            i = 0
+            while i < len(text):
+                if text.startswith("<<", i):
+                    j = text.find(">>", i + 2)
+                    if j != -1:
+                        token = text[i : j + 2]
+                        if token in mapping:
+                            out.append(mapping[token])
+                            i = j + 2
+                            continue
+                if text[i] == "<":
+                    j = text.find(">", i + 1)
+                    if j != -1:
+                        token = text[i : j + 1]
+                        if token in mapping:
+                            out.append(mapping[token])
+                            i = j + 1
+                            continue
+                out.append(text[i])
+                i += 1
+            return "".join(out)
+
+        return _replace_all(q0), _replace_all(q1)
+
+    @staticmethod
     def variablize_literal(rule: Dict[str, object], literal: Union[str, numbers.Number]) -> Dict[str, object]:
         new_rule = copy.deepcopy(rule)
         mapping = copy.deepcopy(new_rule["mapping"])
