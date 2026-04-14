@@ -549,3 +549,26 @@ def test_unify_variable_names_3():
 def test_number_of_variables():
     rule = _build_rule("SELECT <x1>, <<y1>> FROM <x2>", "SELECT <x1>, <<y1>> FROM <x2>")
     assert RuleGeneratorV2.numberOfVariables(rule) == 3
+
+
+def test_generate_general_rule_1():
+    rule = RuleGeneratorV2.generate_general_rule("SELECT CAST(created_at AS DATE)", "SELECT created_at")
+    assert rule["pattern"] == "CAST(<x1> AS DATE)"
+    assert rule["rewrite"] == "<x1>"
+
+
+def test_generate_general_rule_2():
+    rule = RuleGeneratorV2.generate_general_rule(
+        "SELECT STRPOS(LOWER(text), 'iphone') > 0",
+        "SELECT ILIKE(text, '%iphone%')",
+    )
+    assert rule["pattern"] == "STRPOS(LOWER(<x1>), '<x2>') > 0"
+    assert rule["rewrite"] == "<x1> ILIKE '%<x2>%'"
+
+
+def test_generate_general_rule_8():
+    q0 = "SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'"
+    q1 = "SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
+    rule = RuleGeneratorV2.generate_general_rule(q0, q1)
+    assert RuleGeneratorV2._fingerPrint(rule["pattern"]) == RuleGeneratorV2._fingerPrint("CAST(<x1> AS DATE)")
+    assert RuleGeneratorV2._fingerPrint(rule["rewrite"]) == RuleGeneratorV2._fingerPrint("<x1>")

@@ -20,7 +20,7 @@ from core.ast.node import (
     WhereNode,
 )
 from core.query_formatter import QueryFormatter
-from core.rule_parser_v2 import Scope, VarType, VarTypesInfo
+from core.rule_parser_v2 import RuleParserV2, Scope, VarType, VarTypesInfo
 
 
 class RuleGeneratorV2:
@@ -33,6 +33,70 @@ class RuleGeneratorV2:
         if var.startswith(VarTypesInfo[VarType.ElementVariable]["internalBase"]):
             return VarType.ElementVariable
         return None
+
+    @staticmethod
+    def initialize_seed_rule(q0: str, q1: str) -> Dict[str, object]:
+        parsed = RuleParserV2.parse(q0, q1)
+        pattern = RuleGeneratorV2.deparse(copy.deepcopy(parsed.pattern_ast))
+        rewrite = RuleGeneratorV2.deparse(copy.deepcopy(parsed.rewrite_ast))
+        return {
+            "pattern": pattern,
+            "rewrite": rewrite,
+            "pattern_ast": parsed.pattern_ast,
+            "rewrite_ast": parsed.rewrite_ast,
+            "mapping": parsed.mapping,
+            "constraints": "",
+            "actions": "",
+        }
+
+    @staticmethod
+    def generate_general_rule(q0: str, q1: str) -> Dict[str, object]:
+        rule = RuleGeneratorV2.initialize_seed_rule(q0, q1)
+
+        for column in RuleGeneratorV2.columns(rule["pattern_ast"], rule["rewrite_ast"]):  # type: ignore[arg-type,index]
+            if column == "*":
+                continue
+            rule = RuleGeneratorV2.variablize_column(rule, column)
+
+        for literal in RuleGeneratorV2.literals(rule["pattern_ast"], rule["rewrite_ast"]):  # type: ignore[arg-type,index]
+            rule = RuleGeneratorV2.variablize_literal(rule, literal)
+
+        for table in RuleGeneratorV2.tables(rule["pattern_ast"], rule["rewrite_ast"]):  # type: ignore[arg-type,index]
+            candidate = RuleGeneratorV2.variablize_table(rule, table)
+            if not RuleGeneratorV2._is_rewrite_identity(candidate):
+                rule = candidate
+
+        for variable_list in RuleGeneratorV2.variable_lists(rule["pattern_ast"], rule["rewrite_ast"]):  # type: ignore[arg-type,index]
+            if variable_list:
+                candidate = RuleGeneratorV2.merge_variable_list(rule, variable_list)
+                if not RuleGeneratorV2._is_rewrite_identity(candidate):
+                    rule = candidate
+
+        # Keep dropping common branches until no additional reduction is possible.
+        while True:
+            current = RuleGeneratorV2._fingerPrint(str(rule["pattern"])) + "::" + RuleGeneratorV2._fingerPrint(str(rule["rewrite"]))
+            made_change = False
+            for branch in RuleGeneratorV2.branches(rule["pattern_ast"], rule["rewrite_ast"]):  # type: ignore[arg-type,index]
+                next_rule = RuleGeneratorV2.drop_branch(rule, branch)
+                if RuleGeneratorV2._is_rewrite_identity(next_rule):
+                    continue
+                nxt = RuleGeneratorV2._fingerPrint(str(next_rule["pattern"])) + "::" + RuleGeneratorV2._fingerPrint(str(next_rule["rewrite"]))
+                if nxt != current:
+                    rule = next_rule
+                    made_change = True
+                    break
+            if not made_change:
+                break
+
+        # Preserve v1 behavior for expression-only inputs written as "SELECT expr":
+        # final generalized rule should be expression fragments, not full SELECT clauses.
+        if RuleGeneratorV2._is_select_expression_input(q0) and RuleGeneratorV2._is_select_expression_input(q1):
+            if isinstance(rule.get("pattern"), str) and rule["pattern"].upper().startswith("SELECT "):
+                rule["pattern"] = rule["pattern"][7:]
+            if isinstance(rule.get("rewrite"), str) and rule["rewrite"].upper().startswith("SELECT "):
+                rule["rewrite"] = rule["rewrite"][7:]
+
+        return rule
 
     @staticmethod
     def dereplaceVars(sql: str, mapping: Dict[str, str]) -> str:
@@ -281,6 +345,57 @@ class RuleGeneratorV2:
         return len(mapping.keys())
 
     @staticmethod
+    def _is_rewrite_identity(rule: Dict[str, object]) -> bool:
+        p = rule.get("pattern")
+        r = rule.get("rewrite")
+        if not isinstance(p, str) or not isinstance(r, str):
+            return False
+        return RuleGeneratorV2._fingerPrint(p) == RuleGeneratorV2._fingerPrint(r)
+
+    @staticmethod
+    def _is_select_expression_input(sql: str) -> bool:
+        text = sql.strip()
+        if not text.upper().startswith("SELECT "):
+            return False
+        top_level_keywords = RuleGeneratorV2._top_level_keywords(text)
+        return "SELECT" in top_level_keywords and "FROM" not in top_level_keywords and "WHERE" not in top_level_keywords
+
+    @staticmethod
+    def _top_level_keywords(sql: str) -> Set[str]:
+        keywords: Set[str] = set()
+        depth = 0
+        in_single_quote = False
+        i = 0
+        while i < len(sql):
+            ch = sql[i]
+            if ch == "'":
+                in_single_quote = not in_single_quote
+                i += 1
+                continue
+            if in_single_quote:
+                i += 1
+                continue
+            if ch == "(":
+                depth += 1
+                i += 1
+                continue
+            if ch == ")":
+                depth = max(0, depth - 1)
+                i += 1
+                continue
+            if depth == 0 and (ch.isalpha() or ch == "_"):
+                j = i + 1
+                while j < len(sql) and (sql[j].isalnum() or sql[j] == "_"):
+                    j += 1
+                token = sql[i:j].upper()
+                if token in {"SELECT", "FROM", "WHERE"}:
+                    keywords.add(token)
+                i = j
+                continue
+            i += 1
+        return keywords
+
+    @staticmethod
     def variablize_literal(rule: Dict[str, object], literal: Union[str, numbers.Number]) -> Dict[str, object]:
         new_rule = copy.deepcopy(rule)
         mapping = copy.deepcopy(new_rule["mapping"])
@@ -295,6 +410,26 @@ class RuleGeneratorV2:
             if not isinstance(ast, Node):
                 raise TypeError(f"rule['{key}'] must be an AST Node")
             new_rule[key] = RuleGeneratorV2._replace_literal_in_ast(ast, literal, external_name, placeholder_token)
+
+        new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
+        new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
+        return new_rule
+
+    @staticmethod
+    def variablize_column(rule: Dict[str, object], column: str) -> Dict[str, object]:
+        new_rule = copy.deepcopy(rule)
+        mapping = copy.deepcopy(new_rule["mapping"])
+        if not isinstance(mapping, dict):
+            raise TypeError("rule['mapping'] must be a dict[str, str]")
+
+        mapping, external_name, _placeholder_token = RuleGeneratorV2._find_next_element_variable(mapping)
+        new_rule["mapping"] = mapping
+
+        for key in ("pattern_ast", "rewrite_ast"):
+            ast = new_rule.get(key)
+            if not isinstance(ast, Node):
+                raise TypeError(f"rule['{key}'] must be an AST Node")
+            new_rule[key] = RuleGeneratorV2._replace_column_in_ast(ast, column, external_name)
 
         new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
         new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
@@ -504,6 +639,13 @@ class RuleGeneratorV2:
         return ast
 
     @staticmethod
+    def _replace_column_in_ast(ast: Node, column: str, external_name: str) -> Node:
+        for node in RuleGeneratorV2._walk(ast):
+            if isinstance(node, ColumnNode) and node.name == column:
+                node.name = external_name
+        return ast
+
+    @staticmethod
     def _replace_table_in_ast(
         ast: Node,
         target_value: str,
@@ -596,6 +738,12 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _branches_of_ast(ast: Node) -> List[Dict[str, object]]:
+        if isinstance(ast, OperatorNode):
+            children = list(ast.children)
+            if ast.name == "=" and len(children) == 2:
+                return [{"key": "eq_rhs", "value": children[1]}]
+            return []
+
         if not isinstance(ast, QueryNode):
             return []
 
@@ -628,6 +776,14 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _drop_branch_in_ast(ast: Node, branch: Dict[str, object]) -> Node:
+        if isinstance(ast, OperatorNode):
+            key = branch.get("key")
+            if key == "eq_rhs":
+                children = list(ast.children)
+                if ast.name == "=" and len(children) == 2 and children[1] == branch.get("value"):
+                    return children[0]
+            return ast
+
         if not isinstance(ast, QueryNode):
             return ast
         key = branch.get("key")
