@@ -4,6 +4,19 @@ from core.rule_generator_v2 import RuleGeneratorV2
 from core.rule_parser_v2 import RuleParserV2, VarType
 
 
+def _build_rule(pattern: str, rewrite: str):
+    parsed = RuleParserV2.parse(pattern, rewrite)
+    return {
+        "pattern": pattern,
+        "rewrite": rewrite,
+        "pattern_ast": parsed.pattern_ast,
+        "rewrite_ast": parsed.rewrite_ast,
+        "mapping": parsed.mapping,
+        "constraints": "",
+        "actions": "",
+    }
+
+
 def test_varType_element_variable():
     assert RuleGeneratorV2.varType("EV001") == VarType.ElementVariable
 
@@ -203,3 +216,53 @@ def test_tables_4_subquery_tables():
     expected = {("employee", "employee"), ("department", "department")}
     actual = {(t["value"], t["name"]) for t in RuleGeneratorV2.tables(result.pattern_ast, result.rewrite_ast)}
     assert actual == expected
+
+
+def test_variablize_literal_1():
+    rule = _build_rule("STRPOS(LOWER(text), 'iphone') > 0", "text ILIKE '%iphone%'")
+    out = RuleGeneratorV2.variablize_literal(rule, "iphone")
+    assert out["pattern"] == "STRPOS(LOWER(text), '<x1>') > 0"
+    assert out["rewrite"] == "text ILIKE '%<x1>%'"
+
+
+def test_variablize_literal_2():
+    rule = _build_rule(
+        """
+        select e1.name, e1.age, e2.salary
+        from employee e1, employee e2
+        where e1.id = e2.id
+          and e1.age > 17
+          and e2.salary > 35000
+        """,
+        """
+        select e1.name, e1.age, e1.salary
+        from employee e1
+        where e1.age > 17
+          and e1.salary > 35000
+        """,
+    )
+    out = RuleGeneratorV2.variablize_literal(rule, 17)
+    assert "e1.age > <x1>" in out["pattern"]
+    assert "e1.age > <x1>" in out["rewrite"]
+
+
+def test_variablize_table_1():
+    rule = _build_rule(
+        """
+        select e1.name, e1.age, e2.salary
+        from employee e1, employee e2
+        where e1.id = e2.id
+          and e1.age > 17
+          and e2.salary > 35000
+        """,
+        """
+        select e1.name, e1.age, e1.salary
+        from employee e1
+        where e1.age > 17
+          and e1.salary > 35000
+        """,
+    )
+    out = RuleGeneratorV2.variablize_table(rule, {"value": "employee", "name": "e1"})
+    assert "FROM <x1>, employee AS e2" in out["pattern"] or "FROM <x1>, employee e2" in out["pattern"]
+    assert "<x1>.id = e2.id" in out["pattern"]
+    assert "FROM <x1>" in out["rewrite"]

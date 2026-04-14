@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import copy
 import numbers
 import re
 from collections import defaultdict
-from typing import Dict, Iterator, List, Optional, Set, Union
+from typing import Dict, Iterator, List, Optional, Set, Tuple, Union
 
 from core.ast.enums import NodeType
 from core.ast.node import (
@@ -55,6 +56,8 @@ class RuleGeneratorV2:
         sql = QueryFormatter().format(full_query)
         for placeholder, user_var in placeholder_mapping.items():
             sql = sql.replace(placeholder, user_var)
+        sql = re.sub(r"__rv_([A-Za-z0-9_]+)__", r"<\1>", sql)
+        sql = re.sub(r"__rvs_([A-Za-z0-9_]+)__", r"<<\1>>", sql)
         return RuleGeneratorV2._extract_partial_sql(sql, scope)
 
     @staticmethod
@@ -123,6 +126,56 @@ class RuleGeneratorV2:
                 deduped.append(table)
                 seen.add(fingerprint)
         return deduped
+
+    @staticmethod
+    def variablize_literal(rule: Dict[str, object], literal: Union[str, numbers.Number]) -> Dict[str, object]:
+        new_rule = copy.deepcopy(rule)
+        mapping = copy.deepcopy(new_rule["mapping"])
+        if not isinstance(mapping, dict):
+            raise TypeError("rule['mapping'] must be a dict[str, str]")
+
+        mapping, external_name, placeholder_token = RuleGeneratorV2._find_next_element_variable(mapping)
+        new_rule["mapping"] = mapping
+
+        for key in ("pattern_ast", "rewrite_ast"):
+            ast = new_rule.get(key)
+            if not isinstance(ast, Node):
+                raise TypeError(f"rule['{key}'] must be an AST Node")
+            new_rule[key] = RuleGeneratorV2._replace_literal_in_ast(ast, literal, external_name, placeholder_token)
+
+        new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
+        new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
+        return new_rule
+
+    @staticmethod
+    def variablize_table(rule: Dict[str, object], table: Dict[str, str]) -> Dict[str, object]:
+        new_rule = copy.deepcopy(rule)
+        mapping = copy.deepcopy(new_rule["mapping"])
+        if not isinstance(mapping, dict):
+            raise TypeError("rule['mapping'] must be a dict[str, str]")
+
+        target_value = table.get("value")
+        target_name = table.get("name")
+        if not isinstance(target_value, str) or not isinstance(target_name, str):
+            raise TypeError("table must have string keys 'value' and 'name'")
+
+        mapping, _external_name, placeholder_token = RuleGeneratorV2._find_next_element_variable(mapping)
+        new_rule["mapping"] = mapping
+
+        for key in ("pattern_ast", "rewrite_ast"):
+            ast = new_rule.get(key)
+            if not isinstance(ast, Node):
+                raise TypeError(f"rule['{key}'] must be an AST Node")
+            new_rule[key] = RuleGeneratorV2._replace_table_in_ast(
+                ast,
+                target_value=target_value,
+                target_name=target_name,
+                placeholder_token=placeholder_token,
+            )
+
+        new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
+        new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
+        return new_rule
 
     @staticmethod
     def _walk(node: Optional[Node]) -> Iterator[Node]:
@@ -211,6 +264,87 @@ class RuleGeneratorV2:
                 continue
             found.append({"value": node.name, "name": alias})
         return found
+
+    @staticmethod
+    def _find_next_element_variable(mapping: Dict[str, str]) -> Tuple[Dict[str, str], str, str]:
+        max_external = 0
+        max_internal = 0
+        for external_name, internal_name in mapping.items():
+            m_ext = re.match(r"^x(\d+)$", external_name, re.IGNORECASE)
+            if m_ext:
+                max_external = max(max_external, int(m_ext.group(1)))
+            m_int = re.match(r"^EV(\d+)$", internal_name, re.IGNORECASE)
+            if m_int:
+                max_internal = max(max_internal, int(m_int.group(1)))
+
+        next_external = f"x{max_external + 1}"
+        next_internal = f"EV{str(max_internal + 1).zfill(3)}"
+        mapping[next_external] = next_internal
+        placeholder_token = f"__rv_{next_external}__"
+        return mapping, next_external, placeholder_token
+
+    @staticmethod
+    def _replace_literal_in_ast(
+        ast: Node,
+        literal: Union[str, numbers.Number],
+        external_name: str,
+        placeholder_token: str,
+    ) -> Node:
+        for node in RuleGeneratorV2._walk(ast):
+            if node.type != NodeType.LITERAL:
+                continue
+            value = getattr(node, "value", None)
+
+            if isinstance(literal, str) and isinstance(value, str):
+                if value == literal:
+                    node.value = placeholder_token  # type: ignore[attr-defined]
+                elif value.replace("%", "") == literal:
+                    node.value = value.replace(literal, placeholder_token)  # type: ignore[attr-defined]
+                continue
+
+            if isinstance(literal, numbers.Number) and isinstance(value, numbers.Number) and value == literal:
+                replacement = ElementVariableNode(external_name)
+                RuleGeneratorV2._replace_node_reference(ast, node, replacement)
+        return ast
+
+    @staticmethod
+    def _replace_table_in_ast(
+        ast: Node,
+        target_value: str,
+        target_name: str,
+        placeholder_token: str,
+    ) -> Node:
+        match_aliases: Set[str] = set()
+        for node in RuleGeneratorV2._walk(ast):
+            if not isinstance(node, TableNode):
+                continue
+            current_alias = node.alias if isinstance(node.alias, str) else node.name
+            if node.name == target_value and current_alias == target_name:
+                match_aliases.add(current_alias)
+                node.name = placeholder_token
+                node.alias = None
+
+        if not match_aliases:
+            return ast
+
+        for node in RuleGeneratorV2._walk(ast):
+            if isinstance(node, ColumnNode) and isinstance(node.parent_alias, str) and node.parent_alias in match_aliases:
+                node.parent_alias = placeholder_token
+        return ast
+
+    @staticmethod
+    def _replace_node_reference(root: Node, target: Node, replacement: Node) -> None:
+        for node in RuleGeneratorV2._walk(root):
+            children = getattr(node, "children", None)
+            if not isinstance(children, list):
+                continue
+            for idx, child in enumerate(children):
+                if child is target:
+                    children[idx] = replacement
+                    if isinstance(node, WhereNode):
+                        continue
+        if root is target:
+            raise ValueError("Cannot replace root node directly; expected nested target.")
 
     @staticmethod
     def _encode_vars_for_format(node: Node) -> tuple[Node, Dict[str, str]]:
