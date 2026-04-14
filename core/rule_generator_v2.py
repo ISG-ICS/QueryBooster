@@ -165,6 +165,33 @@ class RuleGeneratorV2:
         return new_rule
 
     @staticmethod
+    def branches(pattern_ast: Node, rewrite_ast: Node) -> List[Dict[str, object]]:
+        pattern_branches = RuleGeneratorV2._branches_of_ast(pattern_ast)
+        rewrite_branches = RuleGeneratorV2._branches_of_ast(rewrite_ast)
+        out: List[Dict[str, object]] = []
+        remaining = list(rewrite_branches)
+        while pattern_branches:
+            pb = pattern_branches.pop()
+            for idx, rb in enumerate(remaining):
+                if pb["key"] == rb["key"] and pb["value"] == rb["value"]:
+                    out.append(pb)
+                    remaining.pop(idx)
+                    break
+        return out
+
+    @staticmethod
+    def drop_branch(rule: Dict[str, object], branch: Dict[str, object]) -> Dict[str, object]:
+        new_rule = copy.deepcopy(rule)
+        for key in ("pattern_ast", "rewrite_ast"):
+            ast = new_rule.get(key)
+            if not isinstance(ast, Node):
+                raise TypeError(f"rule['{key}'] must be an AST Node")
+            new_rule[key] = RuleGeneratorV2._drop_branch_in_ast(ast, branch)
+        new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
+        new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
+        return new_rule
+
+    @staticmethod
     def variablize_literal(rule: Dict[str, object], literal: Union[str, numbers.Number]) -> Dict[str, object]:
         new_rule = copy.deepcopy(rule)
         mapping = copy.deepcopy(new_rule["mapping"])
@@ -477,6 +504,70 @@ class RuleGeneratorV2:
                 continue
 
         return out
+
+    @staticmethod
+    def _branches_of_ast(ast: Node) -> List[Dict[str, object]]:
+        if not isinstance(ast, QueryNode):
+            return []
+
+        select = RuleGeneratorV2._first_clause(ast, NodeType.SELECT)
+        from_clause = RuleGeneratorV2._first_clause(ast, NodeType.FROM)
+        where = RuleGeneratorV2._first_clause(ast, NodeType.WHERE)
+        out: List[Dict[str, object]] = []
+
+        if isinstance(select, SelectNode):
+            if len(select.children) == 1 and isinstance(select.children[0], SetVariableNode):
+                out.append({"key": "select", "value": "set_variable"})
+            elif len(select.children) == 1 and isinstance(select.children[0], ColumnNode) and select.children[0].name == "*":
+                out.append({"key": "select", "value": "all_columns"})
+
+        if isinstance(from_clause, FromNode):
+            if all(isinstance(c, TableNode) for c in from_clause.children):
+                out.append({"key": "from", "value": "table_sources"})
+
+        if isinstance(where, WhereNode):
+            out.append({"key": "where", "value": None})
+
+        # Preserve v1 behavior: when both select and where exist, hide from-branch;
+        # when no select but from exists, hide where-branch.
+        keys = {b["key"] for b in out}
+        if "select" in keys and "where" in keys:
+            out = [b for b in out if b["key"] != "from"]
+        if "select" not in keys and "from" in keys:
+            out = [b for b in out if b["key"] != "where"]
+        return out
+
+    @staticmethod
+    def _drop_branch_in_ast(ast: Node, branch: Dict[str, object]) -> Node:
+        if not isinstance(ast, QueryNode):
+            return ast
+        key = branch.get("key")
+        if key == "select":
+            return RuleGeneratorV2._query_without_clause(ast, NodeType.SELECT)
+        if key == "from":
+            return RuleGeneratorV2._query_without_clause(ast, NodeType.FROM)
+        if key == "where":
+            reduced = RuleGeneratorV2._query_without_clause(ast, NodeType.WHERE)
+            # If this was a WHERE-scope wrapper, unwrap back to condition expression.
+            if isinstance(reduced, QueryNode) and len(reduced.children) == 0:
+                wh = RuleGeneratorV2._first_clause(ast, NodeType.WHERE)
+                if isinstance(wh, WhereNode) and len(wh.children) == 1:
+                    return wh.children[0]
+            return reduced
+        return ast
+
+    @staticmethod
+    def _query_without_clause(query: QueryNode, clause_type: NodeType) -> QueryNode:
+        return QueryNode(
+            _select=None if clause_type == NodeType.SELECT else RuleGeneratorV2._first_clause(query, NodeType.SELECT),
+            _from=None if clause_type == NodeType.FROM else RuleGeneratorV2._first_clause(query, NodeType.FROM),
+            _where=None if clause_type == NodeType.WHERE else RuleGeneratorV2._first_clause(query, NodeType.WHERE),
+            _group_by=RuleGeneratorV2._first_clause(query, NodeType.GROUP_BY),
+            _having=RuleGeneratorV2._first_clause(query, NodeType.HAVING),
+            _order_by=RuleGeneratorV2._first_clause(query, NodeType.ORDER_BY),
+            _limit=RuleGeneratorV2._first_clause(query, NodeType.LIMIT),
+            _offset=RuleGeneratorV2._first_clause(query, NodeType.OFFSET),
+        )
 
     @staticmethod
     def _wrap_xy_identifiers(sql: str) -> str:

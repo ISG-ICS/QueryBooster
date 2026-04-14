@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from core.ast.enums import NodeType
+from core.ast.node import QueryNode
 from core.rule_generator_v2 import RuleGeneratorV2
 from core.rule_parser_v2 import RuleParserV2, VarType
 
@@ -15,6 +17,10 @@ def _build_rule(pattern: str, rewrite: str):
         "constraints": "",
         "actions": "",
     }
+
+
+def _has_clause(query: QueryNode, clause_type: NodeType) -> bool:
+    return any(child.type == clause_type for child in query.children)
 
 
 def test_varType_element_variable():
@@ -427,3 +433,75 @@ def test_merge_variable_list_2():
     out = RuleGeneratorV2.merge_variable_list(rule, ["x11"])
     assert "LIMIT <<y1>>" in out["pattern"]
     assert "LIMIT <<y1>>" in out["rewrite"]
+
+
+def test_branches_1():
+    result = RuleParserV2.parse(
+        "SELECT <<x>> FROM <t> WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
+        "SELECT <<x>> FROM <t> WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'",
+    )
+    branches = RuleGeneratorV2.branches(result.pattern_ast, result.rewrite_ast)
+    assert {"key": "select", "value": "set_variable"} in branches
+
+
+def test_branches_2():
+    result = RuleParserV2.parse(
+        "FROM <t> WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
+        "FROM <t> WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'",
+    )
+    branches = RuleGeneratorV2.branches(result.pattern_ast, result.rewrite_ast)
+    assert {"key": "from", "value": "table_sources"} in branches
+
+
+def test_branches_3():
+    result = RuleParserV2.parse(
+        "WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
+        "WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'",
+    )
+    branches = RuleGeneratorV2.branches(result.pattern_ast, result.rewrite_ast)
+    assert {"key": "where", "value": None} in branches
+
+
+def test_drop_branch_1():
+    rule = _build_rule(
+        "SELECT <<x>> FROM <t> WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
+        "SELECT <<x>> FROM <t> WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'",
+    )
+    out = RuleGeneratorV2.drop_branch(rule, {"key": "select", "value": "set_variable"})
+    parsed = RuleParserV2.parse(out["pattern"], out["rewrite"])
+    assert isinstance(parsed.pattern_ast, QueryNode)
+    assert isinstance(parsed.rewrite_ast, QueryNode)
+    assert _has_clause(parsed.pattern_ast, NodeType.SELECT) is False
+    assert _has_clause(parsed.rewrite_ast, NodeType.SELECT) is False
+    assert _has_clause(parsed.pattern_ast, NodeType.FROM) is True
+    assert _has_clause(parsed.rewrite_ast, NodeType.FROM) is True
+    assert _has_clause(parsed.pattern_ast, NodeType.WHERE) is True
+    assert _has_clause(parsed.rewrite_ast, NodeType.WHERE) is True
+
+
+def test_drop_branch_2():
+    rule = _build_rule(
+        "FROM <t> WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
+        "FROM <t> WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'",
+    )
+    out = RuleGeneratorV2.drop_branch(rule, {"key": "from", "value": "table_sources"})
+    parsed = RuleParserV2.parse(out["pattern"], out["rewrite"])
+    assert isinstance(parsed.pattern_ast, QueryNode)
+    assert isinstance(parsed.rewrite_ast, QueryNode)
+    assert _has_clause(parsed.pattern_ast, NodeType.SELECT) is False
+    assert _has_clause(parsed.rewrite_ast, NodeType.SELECT) is False
+    assert _has_clause(parsed.pattern_ast, NodeType.FROM) is False
+    assert _has_clause(parsed.rewrite_ast, NodeType.FROM) is False
+    assert _has_clause(parsed.pattern_ast, NodeType.WHERE) is True
+    assert _has_clause(parsed.rewrite_ast, NodeType.WHERE) is True
+
+
+def test_drop_branch_3():
+    rule = _build_rule(
+        "WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
+        "WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'",
+    )
+    out = RuleGeneratorV2.drop_branch(rule, {"key": "where", "value": None})
+    parsed = RuleParserV2.parse(out["pattern"], out["rewrite"])
+    assert not isinstance(parsed.pattern_ast, QueryNode)
+    assert not isinstance(parsed.rewrite_ast, QueryNode)
