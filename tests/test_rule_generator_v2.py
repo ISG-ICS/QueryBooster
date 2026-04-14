@@ -544,3 +544,8 @@ def test_unify_variable_names_3():
     a, b = RuleGeneratorV2.unify_variable_names(q0, q1)
     assert a == "<x1> <<x2>> <x1> <x1> <x3>"
     assert b == "<x1> <<x2>> <x3>"
+
+
+def test_number_of_variables():
+    rule = _build_rule("SELECT <x1>, <<y1>> FROM <x2>", "SELECT <x1>, <<y1>> FROM <x2>")
+    assert RuleGeneratorV2.numberOfVariables(rule) == 3

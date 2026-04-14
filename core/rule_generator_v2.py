@@ -274,6 +274,13 @@ class RuleGeneratorV2:
         return _replace_all(q0), _replace_all(q1)
 
     @staticmethod
+    def numberOfVariables(rule: Dict[str, object]) -> int:
+        mapping = rule.get("mapping")
+        if not isinstance(mapping, dict):
+            raise TypeError("rule['mapping'] must be a dict[str, str]")
+        return len(mapping.keys())
+
+    @staticmethod
     def variablize_literal(rule: Dict[str, object], literal: Union[str, numbers.Number]) -> Dict[str, object]:
         new_rule = copy.deepcopy(rule)
         mapping = copy.deepcopy(new_rule["mapping"])
