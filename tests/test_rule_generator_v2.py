@@ -320,3 +320,56 @@ def test_variablize_table_3():
     assert "<x1>.admin_permission_id = allroles1_.admin_permission_id" in out["pattern"]
     assert "<x1>.is_friendly = 1" in out["pattern"]
     assert "FROM <x1>" in out["rewrite"]
+
+
+def test_variable_lists_1():
+    result = RuleParserV2.parse(
+        """
+        SELECT <x18>, <x17>, <x16>, <x15>, <x14>
+        FROM <x1>
+        INNER JOIN <x2> ON <x13>
+        INNER JOIN <x3> ON <x2>.<x4> = <x3>.<x4>
+        WHERE <x12>
+        AND <x3>.<x4> = <x10>
+        ORDER BY <x1>.<x9> ASC
+        LIMIT <x11>
+        """,
+        """
+        SELECT <x18>, <x17>, <x16>, <x15>, <x14>
+        FROM <x1>
+        INNER JOIN <x2> ON <x13>
+        WHERE <x12>
+        AND <x2>.<x4> = <x10>
+        ORDER BY <x1>.<x9> ASC
+        LIMIT <x11>
+        """,
+    )
+    variable_lists = RuleGeneratorV2.variable_lists(result.pattern_ast, result.rewrite_ast)
+    normalized = {",".join(sorted(v)) for v in variable_lists}
+    assert "x14,x15,x16,x17,x18" in normalized
+    assert "x12" in normalized
+    assert "x11" in normalized
+
+
+def test_variable_lists_2():
+    result = RuleParserV2.parse(
+        """
+        SELECT <x11>
+        FROM <x1>
+        INNER JOIN <x2> ON <x9>
+        INNER JOIN <x3> ON <x2>.<x4> = <x3>.<x4>
+        WHERE <x8>
+        AND <x3>.<x4> = <x7>
+        """,
+        """
+        SELECT <x11>
+        FROM <x1>
+        INNER JOIN <x2> ON <x9>
+        WHERE <x2>.<x4> = <x7>
+        AND <x8>
+        """,
+    )
+    variable_lists = RuleGeneratorV2.variable_lists(result.pattern_ast, result.rewrite_ast)
+    normalized = {",".join(sorted(v)) for v in variable_lists}
+    assert "x11" in normalized
+    assert "x8" in normalized

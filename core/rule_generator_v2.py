@@ -10,7 +10,9 @@ from core.ast.node import (
     ColumnNode,
     ElementVariableNode,
     FromNode,
+    LimitNode,
     Node,
+    OperatorNode,
     QueryNode,
     SelectNode,
     SetVariableNode,
@@ -121,6 +123,25 @@ class RuleGeneratorV2:
                 deduped.append(table)
                 seen.add(fingerprint)
         return deduped
+
+    @staticmethod
+    def variable_lists(pattern_ast: Node, rewrite_ast: Node) -> List[List[str]]:
+        pattern_lists = [set(v) for v in RuleGeneratorV2._variable_lists_of_ast(pattern_ast)]
+        rewrite_lists = [set(v) for v in RuleGeneratorV2._variable_lists_of_ast(rewrite_ast)]
+
+        ans: List[List[str]] = []
+        while pattern_lists:
+            p = pattern_lists.pop()
+            matched_idx: Optional[int] = None
+            for idx, r in enumerate(rewrite_lists):
+                inter = p.intersection(r)
+                if inter:
+                    ans.append(list(inter))
+                    matched_idx = idx
+                    break
+            if matched_idx is not None:
+                rewrite_lists.pop(matched_idx)
+        return ans
 
     @staticmethod
     def variablize_literal(rule: Dict[str, object], literal: Union[str, numbers.Number]) -> Dict[str, object]:
@@ -365,6 +386,32 @@ class RuleGeneratorV2:
         out = sql
         out = RuleGeneratorV2._replace_wrapped_tokens(out, "__rvs_", "__", "<<", ">>")
         out = RuleGeneratorV2._replace_wrapped_tokens(out, "__rv_", "__", "<", ">")
+        return out
+
+    @staticmethod
+    def _variable_lists_of_ast(ast: Node) -> List[List[str]]:
+        out: List[List[str]] = []
+        for node in RuleGeneratorV2._walk(ast):
+            if isinstance(node, SelectNode):
+                names = [c.name for c in node.children if isinstance(c, ElementVariableNode)]
+                if names:
+                    out.append(names)
+                continue
+
+            if isinstance(node, OperatorNode) and node.name.lower() == "and":
+                names = [c.name for c in node.children if isinstance(c, ElementVariableNode)]
+                if names:
+                    out.append(names)
+                continue
+
+            if isinstance(node, WhereNode) and len(node.children) == 1 and isinstance(node.children[0], ElementVariableNode):
+                out.append([node.children[0].name])
+                continue
+
+            if isinstance(node, LimitNode) and isinstance(node.limit, str) and RuleGeneratorV2._is_placeholder_name(node.limit):
+                out.append([node.limit])
+                continue
+
         return out
 
     @staticmethod
