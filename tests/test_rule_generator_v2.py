@@ -373,3 +373,57 @@ def test_variable_lists_2():
     normalized = {",".join(sorted(v)) for v in variable_lists}
     assert "x11" in normalized
     assert "x8" in normalized
+
+
+def test_merge_variable_list_1():
+    rule = _build_rule(
+        """
+        SELECT <x18>, <x17>, <x16>, <x15>, <x14>
+        FROM <x1>
+        INNER JOIN <x2> ON <x13>
+        INNER JOIN <x3> ON <x2>.<x4> = <x3>.<x4>
+        WHERE <x12>
+        AND <x3>.<x4> = <x10>
+        ORDER BY <x1>.<x9> ASC
+        LIMIT <x11>
+        """,
+        """
+        SELECT <x18>, <x17>, <x16>, <x15>, <x14>
+        FROM <x1>
+        INNER JOIN <x2> ON <x13>
+        WHERE <x12>
+        AND <x2>.<x4> = <x10>
+        ORDER BY <x1>.<x9> ASC
+        LIMIT <x11>
+        """,
+    )
+    out = RuleGeneratorV2.merge_variable_list(rule, ["x18", "x17", "x16", "x15", "x14"])
+    assert "SELECT <<y1>>" in out["pattern"]
+    assert "SELECT <<y1>>" in out["rewrite"]
+
+
+def test_merge_variable_list_2():
+    rule = _build_rule(
+        """
+        SELECT <x18>, <x17>, <x16>, <x15>, <x14>
+        FROM <x1>
+        INNER JOIN <x2> ON <x13>
+        INNER JOIN <x3> ON <x2>.<x4> = <x3>.<x4>
+        WHERE <x12>
+        AND <x3>.<x4> = <x10>
+        ORDER BY <x1>.<x9> ASC
+        LIMIT <x11>
+        """,
+        """
+        SELECT <x18>, <x17>, <x16>, <x15>, <x14>
+        FROM <x1>
+        INNER JOIN <x2> ON <x13>
+        WHERE <x12>
+        AND <x2>.<x4> = <x10>
+        ORDER BY <x1>.<x9> ASC
+        LIMIT <x11>
+        """,
+    )
+    out = RuleGeneratorV2.merge_variable_list(rule, ["x11"])
+    assert "LIMIT <<y1>>" in out["pattern"]
+    assert "LIMIT <<y1>>" in out["rewrite"]

@@ -144,6 +144,27 @@ class RuleGeneratorV2:
         return ans
 
     @staticmethod
+    def merge_variable_list(rule: Dict[str, object], variable_list: List[str]) -> Dict[str, object]:
+        new_rule = copy.deepcopy(rule)
+        mapping = copy.deepcopy(new_rule["mapping"])
+        if not isinstance(mapping, dict):
+            raise TypeError("rule['mapping'] must be a dict[str, str]")
+
+        mapping, set_name, _placeholder_token = RuleGeneratorV2._find_next_set_variable(mapping)
+        new_rule["mapping"] = mapping
+
+        var_set = set(variable_list)
+        for key in ("pattern_ast", "rewrite_ast"):
+            ast = new_rule.get(key)
+            if not isinstance(ast, Node):
+                raise TypeError(f"rule['{key}'] must be an AST Node")
+            new_rule[key] = RuleGeneratorV2._merge_variable_list_in_ast(ast, var_set, set_name)
+
+        new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
+        new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
+        return new_rule
+
+    @staticmethod
     def variablize_literal(rule: Dict[str, object], literal: Union[str, numbers.Number]) -> Dict[str, object]:
         new_rule = copy.deepcopy(rule)
         mapping = copy.deepcopy(new_rule["mapping"])
@@ -298,6 +319,49 @@ class RuleGeneratorV2:
         mapping[next_external] = next_internal
         placeholder_token = f"__rv_{next_external}__"
         return mapping, next_external, placeholder_token
+
+    @staticmethod
+    def _find_next_set_variable(mapping: Dict[str, str]) -> Tuple[Dict[str, str], str, str]:
+        max_external = 0
+        max_internal = 0
+        for external_name, internal_name in mapping.items():
+            external_num = RuleGeneratorV2._suffix_int(external_name, "y")
+            if external_num is not None:
+                max_external = max(max_external, external_num)
+            internal_num = RuleGeneratorV2._suffix_int(internal_name, "SV")
+            if internal_num is not None:
+                max_internal = max(max_internal, internal_num)
+
+        next_external = f"y{max_external + 1}"
+        next_internal = f"SV{str(max_internal + 1).zfill(3)}"
+        mapping[next_external] = next_internal
+        placeholder_token = f"__rvs_{next_external}__"
+        return mapping, next_external, placeholder_token
+
+    @staticmethod
+    def _merge_variable_list_in_ast(ast: Node, variable_set: Set[str], set_name: str) -> Node:
+        for node in RuleGeneratorV2._walk(ast):
+            if isinstance(node, SelectNode):
+                ev_children = [c for c in node.children if isinstance(c, ElementVariableNode)]
+                if ev_children and all(c.name in variable_set for c in ev_children):
+                    if len(ev_children) == len(node.children):
+                        node.children = [SetVariableNode(set_name)]
+                continue
+
+            if isinstance(node, WhereNode):
+                if len(node.children) == 1 and isinstance(node.children[0], ElementVariableNode):
+                    if node.children[0].name in variable_set:
+                        node.children = [SetVariableNode(set_name)]
+                continue
+
+            if isinstance(node, LimitNode) and isinstance(node.limit, str) and node.limit in variable_set:
+                node.limit = set_name
+
+            if isinstance(node, OperatorNode) and node.name.lower() == "and":
+                ev_children = [c for c in node.children if isinstance(c, ElementVariableNode)]
+                if ev_children and all(c.name in variable_set for c in ev_children):
+                    node.children = [SetVariableNode(set_name)]
+        return ast
 
     @staticmethod
     def _replace_literal_in_ast(
