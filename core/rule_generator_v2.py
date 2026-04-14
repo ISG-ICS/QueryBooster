@@ -52,6 +52,7 @@ class RuleGeneratorV2:
         for placeholder, user_var in placeholder_mapping.items():
             sql = sql.replace(placeholder, user_var)
         sql = RuleGeneratorV2._normalize_placeholder_tokens(sql)
+        sql = RuleGeneratorV2._wrap_xy_identifiers(sql)
         return RuleGeneratorV2._extract_partial_sql(sql, scope)
 
     @staticmethod
@@ -365,6 +366,44 @@ class RuleGeneratorV2:
         out = RuleGeneratorV2._replace_wrapped_tokens(out, "__rvs_", "__", "<<", ">>")
         out = RuleGeneratorV2._replace_wrapped_tokens(out, "__rv_", "__", "<", ">")
         return out
+
+    @staticmethod
+    def _wrap_xy_identifiers(sql: str) -> str:
+        out: List[str] = []
+        i = 0
+        in_single_quote = False
+        while i < len(sql):
+            ch = sql[i]
+            if ch == "'":
+                in_single_quote = not in_single_quote
+                out.append(ch)
+                i += 1
+                continue
+            if in_single_quote:
+                out.append(ch)
+                i += 1
+                continue
+
+            if ch.isalpha() or ch == "_":
+                j = i + 1
+                while j < len(sql) and (sql[j].isalnum() or sql[j] == "_"):
+                    j += 1
+                token = sql[i:j]
+                prev_char = sql[i - 1] if i > 0 else ""
+                next_char = sql[j] if j < len(sql) else ""
+                if not (prev_char == "<" and next_char == ">") and RuleGeneratorV2._is_placeholder_name(token):
+                    if token.lower().startswith("y"):
+                        out.append(f"<<{token}>>")
+                    else:
+                        out.append(f"<{token}>")
+                else:
+                    out.append(token)
+                i = j
+                continue
+
+            out.append(ch)
+            i += 1
+        return "".join(out)
 
     @staticmethod
     def _replace_wrapped_tokens(

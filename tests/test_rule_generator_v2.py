@@ -265,4 +265,58 @@ def test_variablize_table_1():
     out = RuleGeneratorV2.variablize_table(rule, {"value": "employee", "name": "e1"})
     assert "FROM <x1>, employee AS e2" in out["pattern"] or "FROM <x1>, employee e2" in out["pattern"]
     assert "<x1>.id = e2.id" in out["pattern"]
+    assert ("FROM <x1>" in out["rewrite"]) or ("FROM x1" in out["rewrite"])
+
+
+def test_variablize_table_2():
+    rule = _build_rule(
+        """
+        SELECT <x1>.name, <x1>.age, e2.salary
+        FROM <x1>, employee AS e2
+        WHERE <x1>.id = e2.id
+          AND <x1>.age > 17
+          AND e2.salary > 35000
+        """,
+        """
+        SELECT <x1>.name, <x1>.age, <x1>.salary
+        FROM <x1>
+        WHERE <x1>.age > 17
+          AND <x1>.salary > 35000
+        """,
+    )
+    out = RuleGeneratorV2.variablize_table(rule, {"value": "employee", "name": "e2"})
+    assert "FROM <x1>, <x2>" in out["pattern"]
+    assert "<x1>.id = <x2>.id" in out["pattern"]
+    assert "<x2>.salary > 35000" in out["pattern"]
+    assert "FROM <x1>" in out["rewrite"]
+
+
+def test_variablize_table_3():
+    rule = _build_rule(
+        """
+        SELECT COUNT(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM blc_admin_permission adminpermi0_
+          INNER JOIN blc_admin_role_permission_xref allroles1_
+            ON adminpermi0_.admin_permission_id = allroles1_.admin_permission_id
+          INNER JOIN blc_admin_role adminrolei2_
+            ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE adminpermi0_.is_friendly = 1
+          AND adminrolei2_.admin_role_id = 1
+        """,
+        """
+        SELECT COUNT(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM blc_admin_permission AS adminpermi0_
+          INNER JOIN blc_admin_role_permission_xref AS allroles1_
+            ON adminpermi0_.admin_permission_id = allroles1_.admin_permission_id
+        WHERE allroles1_.admin_role_id = 1
+          AND adminpermi0_.is_friendly = 1
+        """,
+    )
+    out = RuleGeneratorV2.variablize_table(
+        rule, {"value": "blc_admin_permission", "name": "adminpermi0_"}
+    )
+    assert "FROM <x1>" in out["pattern"]
+    assert "JOIN blc_admin_role_permission_xref AS allroles1_" in out["pattern"]
+    assert "<x1>.admin_permission_id = allroles1_.admin_permission_id" in out["pattern"]
+    assert "<x1>.is_friendly = 1" in out["pattern"]
     assert "FROM <x1>" in out["rewrite"]
