@@ -26,6 +26,7 @@ from core.ast.node import (
     OperatorNode,
     OrderByItemNode,
     OrderByNode,
+    CompoundQueryNode,
     QueryNode,
     SelectNode,
     SubqueryNode,
@@ -250,17 +251,24 @@ class RuleParserV2:
     #
     @staticmethod
     def _substitute_rule_vars(
-        query: QueryNode, internal_to_external: Dict[str, str]
-    ) -> QueryNode:
+        query: Node, internal_to_external: Dict[str, str]
+    ) -> Node:
         out = RuleParserV2._as_rule_ast(query, internal_to_external)
-        if not isinstance(out, QueryNode):
-            raise TypeError("expected QueryNode after substituting rule variables on full query")
+        if not isinstance(out, (QueryNode, CompoundQueryNode)):
+            raise TypeError("expected QueryNode or CompoundQueryNode after substituting rule variables")
         return out
 
     # Slice a fully substituted query to the rule fragment for this scope (no variable-node pass).
     #
     @staticmethod
-    def _extract_rule_fragment(query: QueryNode, scope: Scope) -> Node:
+    def _extract_rule_fragment(query: Node, scope: Scope) -> Node:
+        if isinstance(query, CompoundQueryNode):
+            if scope != Scope.SELECT:
+                raise ValueError("Non-SELECT fragment scope is not supported for compound queries")
+            return query
+        if not isinstance(query, QueryNode):
+            raise TypeError("expected QueryNode or CompoundQueryNode while extracting rule fragment")
+
         frm = RuleParserV2._get_clause(query, NodeType.FROM)
         wh = RuleParserV2._get_clause(query, NodeType.WHERE)
         gb = RuleParserV2._get_clause(query, NodeType.GROUP_BY)
@@ -386,6 +394,14 @@ class RuleParserV2:
                 _limit=RuleParserV2._as_rule_ast(RuleParserV2._get_clause(q, NodeType.LIMIT), rev),
                 _offset=RuleParserV2._as_rule_ast(RuleParserV2._get_clause(q, NodeType.OFFSET), rev),
             )
+
+        if node.type == NodeType.COMPOUND_QUERY:
+            cq = node
+            if not isinstance(cq, CompoundQueryNode):
+                return node
+            left = RuleParserV2._substitute_placeholders(cq.left, rev)
+            right = RuleParserV2._substitute_placeholders(cq.right, rev)
+            return CompoundQueryNode(left, right, cq.is_all)
 
         if node.type == NodeType.SELECT:
             sn = node

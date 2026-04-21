@@ -401,5 +401,17 @@ def format_expression(node: Node):
         unit = node.unit.name.lower()
         return {'interval': [value, unit]}
     
+    elif node.type == NodeType.VAR:
+        return node.name
+
+    elif node.type == NodeType.VARSET:
+        return node.name
+
+    elif node.type == NodeType.QUERY:
+        return ast_to_json(node)
+
+    elif node.type == NodeType.COMPOUND_QUERY:
+        return compound_to_mosql_json(node)
+    
     else:
         raise ValueError(f"Unsupported node type in expression: {node.type}")
