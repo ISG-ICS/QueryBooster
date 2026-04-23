@@ -653,8 +653,8 @@ def test_rewrite_rule_subquery_to_join_1():
         select distinct empno, firstnme, lastname, phoneno
         from employee, department
         where employee.workdept = department.deptno 
-        and deptname = 'OPERATIONS'
-        and 1=1;
+        and 1=1
+        and deptname = 'OPERATIONS';
     '''
     rule_keys = ['subquery_to_join']
 
@@ -677,8 +677,8 @@ def test_rewrite_rule_subquery_to_join_2():
         select distinct empno, firstnme, lastname, phoneno
         from employee, department
         where employee.workdept = department.deptno 
-        and deptname = 'OPERATIONS'
-        and age > 17;
+        and age > 17
+        and deptname = 'OPERATIONS';
     '''
     rule_keys = ['subquery_to_join']
 
@@ -701,8 +701,8 @@ def test_rewrite_rule_subquery_to_join_3():
         select distinct e.empno, e.firstnme, e.lastname, e.phoneno
         from employee e, department d
         where e.workdept = d.deptno 
-        and d.deptname = 'OPERATIONS'
-        and e.age > 17;
+        and e.age > 17
+        and d.deptname = 'OPERATIONS';
     '''
     rule_keys = ['subquery_to_join']
 

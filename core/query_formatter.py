@@ -12,6 +12,7 @@ from core.ast.node import (
     HavingNode,
     OrderByNode,
     JoinNode,
+    LiteralNode,
     SubqueryNode,
 )
 from core.ast.enums import NodeType, JoinType, SortOrder
@@ -381,12 +382,10 @@ def format_expression(node: Node):
         if op_name == 'sub' and len(children) == 2 and children[0].type == NodeType.LITERAL and children[0].value == 0:
             return {'neg': format_expression(children[1])}
 
-        # Canonicalize commutative logical operators so formatted SQL is stable
-        # across equivalent ASTs (helps tests compare strings).
+        # Flatten left-associative AND/OR trees into the list form mo_sql_parsing expects.
         if op_name in ("and", "or"):
             flat = _flatten_logical(node, node.name.upper())
             rendered = [format_expression(c) for c in flat]
-            rendered.sort(key=lambda x: json.dumps(x, sort_keys=True, default=str))
             return {op_name: rendered}
         
         left = format_expression(children[0])
@@ -407,11 +406,10 @@ def format_expression(node: Node):
     
     elif node.type == NodeType.LIST:
         rendered = [format_expression(item) for item in node.children]
-        # Canonicalize IN-list ordering when possible.
-        try:
+        # Only canonicalize ordering when every element is a scalar literal so we
+        # don't reorder function calls, column references, or subqueries.
+        if all(isinstance(item, LiteralNode) for item in node.children):
             rendered.sort(key=lambda x: json.dumps(x, sort_keys=True, default=str))
-        except Exception:
-            pass
         return rendered
     
     elif node.type == NodeType.CASE:

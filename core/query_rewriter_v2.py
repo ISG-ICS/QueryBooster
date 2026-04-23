@@ -645,11 +645,6 @@ def _match_children_list(
         memo.update(snap)
         return False
 
-    # Recurse for remaining SVs in after
-    remaining_sv_indices = [i - sv_idx - 1 for i in sv_indices[1:]]
-    if remaining_sv_indices:
-        # handled by recursive pattern after SV
-        pass
     return True
 
 
