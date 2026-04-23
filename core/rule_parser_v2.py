@@ -379,9 +379,11 @@ class RuleParserV2:
             if not isinstance(lit, LiteralNode):
                 return node
             if isinstance(lit.value, str):
-                # If the entire literal value is an internal placeholder token, promote to var node
+                # If the entire literal value is an internal placeholder token, keep it as a
+                # string literal (rules like `'<s>'` should parse as LiteralNode('s'), not a
+                # variable node in expression position).
                 if lit.value in rev:
-                    return RuleParserV2._placeholder_varnode(lit.value, rev[lit.value])
+                    return LiteralNode(rev[lit.value])
                 # Otherwise substitute any embedded tokens (e.g. '%EV001%' to '%x%')
                 return LiteralNode(_replace_internal_in_string(lit.value))
             return LiteralNode(lit.value)

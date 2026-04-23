@@ -203,6 +203,11 @@ def _match_node(
         if not isinstance(q, LiteralNode):
             return False
         qv, pv = q.value, p.value
+        # RuleParserV2 may represent placeholders inside string literals like `'<s>'`
+        # as LiteralNode("s") (where "s" is a declared rule variable). In that case,
+        # treat it as a bindable placeholder rather than a concrete string.
+        if isinstance(pv, str) and _is_var_name(pv, mapping):
+            return _bind(pv, q, memo)
         if isinstance(qv, str) and isinstance(pv, str):
             return qv.lower() == pv.lower()
         return qv == pv
