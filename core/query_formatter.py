@@ -1,5 +1,4 @@
 import re
-import json
 import mo_sql_parsing as mosql
 from core.ast.node import (
     QueryNode,
@@ -406,10 +405,6 @@ def format_expression(node: Node):
     
     elif node.type == NodeType.LIST:
         rendered = [format_expression(item) for item in node.children]
-        # Only canonicalize ordering when every element is a scalar literal so we
-        # don't reorder function calls, column references, or subqueries.
-        if all(isinstance(item, LiteralNode) for item in node.children):
-            rendered.sort(key=lambda x: json.dumps(x, sort_keys=True, default=str))
         return rendered
     
     elif node.type == NodeType.CASE:

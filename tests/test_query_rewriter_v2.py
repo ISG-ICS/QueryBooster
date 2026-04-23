@@ -1122,7 +1122,7 @@ def test_partial_matching_base_case2():
         SELECT *
         FROM b
         WHERE
-        b.cl1 IN ('s3', 's1', 's2')
+        b.cl1 IN ('s1', 's2', 's3')
         '''
     rule_keys = ['merge_or_to_in']
     rules = [get_rule(k) for k in rule_keys]
@@ -1164,7 +1164,7 @@ def test_partial_matching1():
         FROM A a
         LEFT JOIN B b ON a.id = b.cid
         WHERE
-        b.cl1 IN ('s3', 's1', 's2')
+        b.cl1 IN ('s1', 's2', 's3')
         '''
     rule_keys = ['combine_or_to_in', 'merge_or_to_in']
     rules = [get_rule(k) for k in rule_keys]
