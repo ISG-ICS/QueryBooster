@@ -1,0 +1,1816 @@
+from core.query_formatter import QueryFormatter
+from core.query_parser import QueryParser
+from core.query_rewriter_v2 import QueryRewriterV2 as QueryRewriter
+from data.rules import get_rule_v2 as get_rule
+
+_PARSER = QueryParser()
+_FORMATTER = QueryFormatter()
+
+
+def parse(query: str):
+    return _PARSER.parse(query)
+
+
+def format(ast):
+    return _FORMATTER.format(ast)
+
+
+def test_match_rule_remove_cast_date_1():
+    rule = get_rule('remove_cast_date')
+    assert rule is not None
+    
+    # match twice
+    query = '''
+        SELECT  SUM(1),
+                CAST(state_name AS TEXT)
+          FROM  tweets 
+         WHERE  CAST(DATE_TRUNC('QUARTER', 
+                                CAST(created_at AS DATE)) 
+                AS DATE) IN 
+                    ((TIMESTAMP '2016-10-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-01-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-04-01 00:00:00.000'))
+           AND  (STRPOS(text, 'iphone') > 0)
+         GROUP  BY 2;
+    '''
+    memo = {}
+    assert QueryRewriter.match(parse(query), rule, memo)
+
+
+def test_match_rule_remove_cast_date_2():
+    rule = get_rule('remove_cast_date')
+    assert rule is not None
+
+    # match once
+    query = '''
+        SELECT  SUM(1),
+                CAST(state_name AS TEXT)
+          FROM  tweets 
+         WHERE  DATE_TRUNC('QUARTER', 
+                                CAST(created_at AS DATE)) 
+                IN 
+                    ((TIMESTAMP '2016-10-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-01-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-04-01 00:00:00.000'))
+           AND  (STRPOS(text, 'iphone') > 0)
+         GROUP  BY 2;
+    '''
+    memo = {}
+    assert QueryRewriter.match(parse(query), rule, memo)
+
+
+def test_match_rule_remove_cast_date_3():
+    rule = get_rule('remove_cast_date')
+    assert rule is not None
+
+    # no match
+    query = '''
+        SELECT  SUM(1),
+                CAST(state_name AS TEXT)
+          FROM  tweets 
+         WHERE  DATE_TRUNC('QUARTER', created_at) 
+                IN 
+                    ((TIMESTAMP '2016-10-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-01-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-04-01 00:00:00.000'))
+           AND  (STRPOS(text, 'iphone') > 0)
+         GROUP  BY 2;
+    '''
+    memo = {}
+    assert not QueryRewriter.match(parse(query), rule, memo)
+
+
+def test_match_rule_replace_strpos_lower_1():
+    rule = get_rule('replace_strpos_lower')
+    assert rule is not None
+    
+    # match
+    query = '''
+        SELECT  SUM(1),
+                CAST(state_name AS TEXT)
+          FROM  tweets 
+         WHERE  CAST(DATE_TRUNC('QUARTER', 
+                                CAST(created_at AS DATE)) 
+                AS DATE) IN 
+                    ((TIMESTAMP '2016-10-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-01-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-04-01 00:00:00.000'))
+           AND  (STRPOS(LOWER(text), 'iphone') > 0)
+         GROUP  BY 2;
+    '''
+    memo = {}
+    assert QueryRewriter.match(parse(query), rule, memo)
+
+
+def test_match_rule_replace_strpos_lower_2():
+    rule = get_rule('replace_strpos_lower')
+    assert rule is not None
+
+    # no match
+    query = '''
+        SELECT  SUM(1),
+                CAST(state_name AS TEXT)
+          FROM  tweets 
+         WHERE  DATE_TRUNC('QUARTER', 
+                                CAST(created_at AS DATE)) 
+                IN 
+                    ((TIMESTAMP '2016-10-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-01-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-04-01 00:00:00.000'))
+           AND  text ILIKE '%iphone%'
+         GROUP  BY 2;
+    '''
+    memo = {}
+    assert not QueryRewriter.match(parse(query), rule, memo)
+
+
+def test_match_rule_remove_self_join_1():
+    rule = get_rule('remove_self_join')
+    assert rule is not None
+    
+    # match
+    query = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e2.salary 
+        FROM employee e1, employee e2
+        WHERE e1.id = e2.id
+        AND e1.age > 17
+        AND e2.salary > 35000;
+    '''
+    memo = {}
+    assert QueryRewriter.match(parse(query), rule, memo)
+
+
+def test_match_rule_remove_self_join_2():
+    rule = get_rule('remove_self_join')
+    assert rule is not None
+    
+    # no match
+    query = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e1.salary 
+        FROM employee e1
+        WHERE e1.age > 17
+        AND e1.salary > 35000;
+    '''
+    memo = {}
+    assert not QueryRewriter.match(parse(query), rule, memo)
+
+
+def test_match_rule_remove_self_join_3():
+    rule = get_rule('remove_self_join')
+    assert rule is not None
+    
+    # match
+    query = '''
+        SELECT  e1.age 
+        FROM employee e1, employee e2
+        WHERE e1.id = e2.id
+        AND e1.age > 17;
+    '''
+    memo = {}
+    assert QueryRewriter.match(parse(query), rule, memo)
+
+
+def test_match_rule_remove_self_join_advance_1():
+    rule = get_rule('remove_self_join_advance')
+    assert rule is not None
+    
+    # match
+    query = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e2.salary 
+        FROM employee e1, employee e2
+        WHERE e1.id = e2.id
+        AND e1.age > 17
+        AND e2.salary > 35000;
+    '''
+    memo = {}
+    assert QueryRewriter.match(parse(query), rule, memo)
+
+
+def test_match_rule_subquery_to_join_1():
+    rule = get_rule('subquery_to_join')
+    assert rule is not None
+    
+    # match
+    query = '''
+        select empno, firstnme, lastname, phoneno
+        from employee
+        where workdept in
+            (select deptno
+                from department
+                where deptname = 'OPERATIONS')
+        and 1=1;
+    '''
+    memo = {}
+    assert QueryRewriter.match(parse(query), rule, memo)
+
+
+def test_match_rule_subquery_to_join_2():
+    rule = get_rule('subquery_to_join')
+    assert rule is not None
+    
+    # match
+    query = '''
+        select empno, firstnme, lastname, phoneno
+        from employee
+        where workdept in
+            (select deptno
+                from department
+                where deptname = 'OPERATIONS')
+        and age > 17;
+    '''
+    memo = {}
+    assert QueryRewriter.match(parse(query), rule, memo)
+
+
+def test_match_rule_subquery_to_join_3():
+    rule = get_rule('subquery_to_join')
+    assert rule is not None
+    
+    # match
+    query = '''
+        select e.empno, e.firstnme, e.lastname, e.phoneno
+        from employee e
+        where e.workdept in
+            (select d.deptno
+                from department d
+                where d.deptname = 'OPERATIONS')
+        and e.age > 17;
+    '''
+    memo = {}
+    assert QueryRewriter.match(parse(query), rule, memo)
+
+
+def test_match_rule_join_to_filter_1():
+    rule = get_rule('join_to_filter')
+    assert rule is not None
+    
+    # match
+    query = '''
+        SELECT *
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminrolei2_.admin_role_id = 1
+        AND 1=1;
+    '''
+    memo = {}
+    assert QueryRewriter.match(parse(query), rule, memo)
+
+
+def test_match_rule_join_to_filter_2():
+    rule = get_rule('join_to_filter')
+    assert rule is not None
+    
+    # match
+    query = '''
+        SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminpermi0_.is_friendy = 1
+            AND adminrolei2_.admin_role_id = 1;
+    '''
+    memo = {}
+    assert QueryRewriter.match(parse(query), rule, memo)
+
+
+def test_match_rule_test_rule_wetune_90():
+    rule = get_rule('test_rule_wetune_90')
+    assert rule is not None
+    
+    # match
+    query = '''
+        SELECT adminpermi0_.admin_permission_id AS admin_pe1_4_,
+            adminpermi0_.description AS descript2_4_,
+            adminpermi0_.is_friendly AS is_frien3_4_,
+            adminpermi0_.name AS name4_4_,
+            adminpermi0_.permission_type AS permissi5_4_
+        FROM blc_admin_permission adminpermi0_
+        INNER JOIN blc_admin_role_permission_xref allroles1_ ON adminpermi0_.admin_permission_id = allroles1_.admin_permission_id
+        INNER JOIN blc_admin_role adminrolei2_ ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE adminpermi0_.is_friendly = 1
+        AND adminrolei2_.admin_role_id = 1
+        ORDER  BY adminpermi0_.description ASC
+        LIMIT 50
+    '''
+    memo = {}
+    assert QueryRewriter.match(parse(query), rule, memo)
+
+
+def test_match_rule_test_rule_calcite_testPushMinThroughUnion():
+    rule = get_rule('test_rule_calcite_testPushMinThroughUnion')
+    assert rule is not None
+    
+    # match
+    query = '''
+        SELECT t.ENAME,
+            MIN(t.EMPNO)
+        FROM
+        (SELECT *
+        FROM EMP AS EMP
+        UNION ALL SELECT *
+        FROM EMP AS EMP) AS t
+        GROUP BY t.ENAME
+    '''
+    memo = {}
+    assert QueryRewriter.match(parse(query), rule, memo)
+
+
+def test_replace_rule_remove_cast_date():
+    rule = get_rule('remove_cast_date')
+    assert rule is not None
+    
+    # original query q0
+    q0 = '''
+        SELECT  SUM(1),
+                CAST(state_name AS TEXT)
+          FROM  tweets 
+         WHERE  CAST(DATE_TRUNC('QUARTER', 
+                                CAST(created_at AS DATE)) 
+                AS DATE) IN 
+                    ((TIMESTAMP '2016-10-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-01-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-04-01 00:00:00.000'))
+           AND  (STRPOS(text, 'iphone') > 0)
+         GROUP  BY 2;
+    '''
+    memo = {}
+    parsed_q0 = parse(q0)
+    assert QueryRewriter.match(parsed_q0, rule, memo)
+    parsed_q1 = QueryRewriter.replace(parsed_q0, rule, memo)
+
+    # 1st round rewritten query q1
+    q1 = '''
+        SELECT  SUM(1),
+                CAST(state_name AS TEXT)
+          FROM  tweets 
+         WHERE  DATE_TRUNC('QUARTER', 
+                                CAST(created_at AS DATE)) 
+                IN 
+                    ((TIMESTAMP '2016-10-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-01-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-04-01 00:00:00.000'))
+           AND  (STRPOS(text, 'iphone') > 0)
+         GROUP  BY 2;
+    '''
+    assert format(parse(q1)) == format(parsed_q1)
+    memo = {}
+    parsed_q1 = parse(q1)
+    assert QueryRewriter.match(parsed_q1, rule, memo)
+    parsed_q2 = QueryRewriter.replace(parsed_q1, rule, memo)
+
+    # 2nd round rewritten query q2
+    q2 = '''
+        SELECT  SUM(1),
+                CAST(state_name AS TEXT)
+          FROM  tweets 
+         WHERE  DATE_TRUNC('QUARTER', created_at) 
+                IN 
+                    ((TIMESTAMP '2016-10-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-01-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-04-01 00:00:00.000'))
+           AND  (STRPOS(text, 'iphone') > 0)
+         GROUP  BY 2;
+    '''
+    assert format(parse(q2)) == format(parsed_q2)
+
+
+def test_replace_rule_replace_strpos_lower():
+    rule = get_rule('replace_strpos_lower')
+    assert rule is not None
+    
+    # original query q0
+    q0 = '''
+        SELECT  SUM(1),
+                CAST(state_name AS TEXT)
+          FROM  tweets 
+         WHERE  CAST(DATE_TRUNC('QUARTER', 
+                                CAST(created_at AS DATE)) 
+                AS DATE) IN 
+                    ((TIMESTAMP '2016-10-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-01-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-04-01 00:00:00.000'))
+           AND  (STRPOS(LOWER(text), 'iphone') > 0)
+         GROUP  BY 2;
+    '''
+    parsed_q0 = parse(q0)
+    memo = {}
+    assert QueryRewriter.match(parsed_q0, rule, memo)
+    parsed_q1 = QueryRewriter.replace(parsed_q0, rule, memo)
+
+    # rewritten query q1
+    q1 = '''
+        SELECT  SUM(1),
+                CAST(state_name AS TEXT)
+          FROM  tweets 
+         WHERE  CAST(DATE_TRUNC('QUARTER', 
+                                CAST(created_at AS DATE)) 
+                AS DATE) IN 
+                    ((TIMESTAMP '2016-10-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-01-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-04-01 00:00:00.000'))
+           AND  ILIKE(text, '%iphone%')
+         GROUP  BY 2;
+    '''
+    assert format(parse(q1)) == format(parsed_q1)
+
+
+def test_replace_rule_remove_self_join():
+    rule = get_rule('remove_self_join')
+    assert rule is not None
+    
+    # original query q0
+    q0 = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e2.salary 
+        FROM employee e1, employee e2
+        WHERE e1.id = e2.id
+        AND e1.age > 17
+        AND e2.salary > 35000;
+    '''
+    parsed_q0 = parse(q0)
+    memo = {}
+    assert QueryRewriter.match(parsed_q0, rule, memo)
+    parsed_q1 = QueryRewriter.take_actions(parsed_q0, rule, memo)
+    parsed_q1 = QueryRewriter.replace(parsed_q0, rule, memo)
+
+    # rewritten query q1
+    q1 = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e1.salary 
+        FROM employee e1
+        WHERE 1=1
+        AND e1.age > 17
+        AND e1.salary > 35000;
+    '''
+    assert format(parse(q1)) == format(parsed_q1)
+
+
+def test_rewrite_rule_remove_max_distinct():
+    q0 = '''
+        SELECT A, MAX(DISTINCT (SELECT B FROM R WHERE C = 0)), D
+        FROM S;
+    '''
+    q1 = '''
+        SELECT A, MAX((SELECT B FROM R WHERE C = 0)), D
+        FROM S;
+    '''
+    rule_keys = ['remove_max_distinct']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_remove_cast_date():
+    q0 = '''
+        SELECT  SUM(1),
+                CAST(state_name AS TEXT)
+        FROM  tweets 
+        WHERE  CAST(DATE_TRUNC('QUARTER', 
+                                CAST(created_at AS DATE)) 
+                AS DATE) IN 
+                    ((TIMESTAMP '2016-10-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-01-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-04-01 00:00:00.000'))
+        AND  (STRPOS(text, 'iphone') > 0)
+        GROUP  BY 2;
+    '''
+    q1 = '''
+        SELECT  SUM(1),
+                CAST(state_name AS TEXT)
+        FROM  tweets 
+        WHERE  DATE_TRUNC('QUARTER', created_at) 
+                IN 
+                    ((TIMESTAMP '2016-10-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-01-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-04-01 00:00:00.000'))
+        AND  (STRPOS(text, 'iphone') > 0)
+        GROUP  BY 2;   
+    '''
+    rule_keys = ['remove_cast_date']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_replace_strpos_lower():
+    q0 = '''
+        SELECT  SUM(1),
+                CAST(state_name AS TEXT)
+        FROM  tweets 
+        WHERE  CAST(DATE_TRUNC('QUARTER', 
+                                CAST(created_at AS DATE)) 
+                AS DATE) IN 
+                    ((TIMESTAMP '2016-10-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-01-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-04-01 00:00:00.000'))
+        AND  (STRPOS(LOWER(text), 'iphone') > 0)
+        GROUP  BY 2;
+    '''
+    q1 = '''
+        SELECT  SUM(1),
+                CAST(state_name AS TEXT)
+        FROM  tweets 
+        WHERE  CAST(DATE_TRUNC('QUARTER', 
+                                CAST(created_at AS DATE)) 
+                AS DATE) IN 
+                    ((TIMESTAMP '2016-10-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-01-01 00:00:00.000'), 
+                    (TIMESTAMP '2017-04-01 00:00:00.000'))
+        AND text ILIKE '%iphone%'
+        GROUP  BY 2;
+    '''
+    rule_keys = ['replace_strpos_lower']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_remove_self_join():
+    q0 = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e2.salary 
+        FROM employee e1, employee e2
+        WHERE e1.id = e2.id
+        AND e1.age > 17
+        AND e2.salary > 35000;
+    '''
+    q1 = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e1.salary 
+        FROM employee e1
+        WHERE 1=1
+        AND e1.age > 17
+        AND e1.salary > 35000;
+    '''
+    rule_keys = ['remove_self_join']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_remove_self_join_2():
+    q0 = '''
+        SELECT e1.* 
+        FROM employee e1, employee e2
+        WHERE e1.id = e2.id
+        AND e1.age > 17;
+    '''
+    q1 = '''
+        SELECT e1.* 
+        FROM employee e1
+        WHERE 1=1
+        AND e1.age > 17;
+    '''
+    rule_keys = ['remove_self_join']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_remove_self_join_advance_1():
+    q0 = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e2.salary 
+        FROM employee e1, employee e2
+        WHERE e1.id = e2.id
+        AND e1.age > 17
+        AND e2.salary > 35000;
+    '''
+    q1 = '''
+        SELECT  e1.name, 
+                e1.age, 
+                e1.salary 
+        FROM employee e1
+        WHERE 1=1
+        AND e1.age > 17
+        AND e1.salary > 35000;
+    '''
+    rule_keys = ['remove_self_join_advance']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_subquery_to_join_1():
+    q0 = '''
+        select empno, firstnme, lastname, phoneno
+        from employee
+        where workdept in
+            (select deptno
+                from department
+                where deptname = 'OPERATIONS')
+        and 1=1;
+    '''
+    q1 = '''
+        select distinct empno, firstnme, lastname, phoneno
+        from employee, department
+        where employee.workdept = department.deptno 
+        and 1=1
+        and deptname = 'OPERATIONS';
+    '''
+    rule_keys = ['subquery_to_join']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_subquery_to_join_1():
+    q0 = '''
+        select empno, firstnme, lastname, phoneno
+        from employee
+        where workdept in
+            (select deptno
+                from department
+                where deptname = 'OPERATIONS')
+        and 1=1;
+    '''
+    q1 = '''
+        select distinct empno, firstnme, lastname, phoneno
+        from employee, department
+        where employee.workdept = department.deptno 
+        and deptname = 'OPERATIONS'
+        and 1=1;
+    '''
+    rule_keys = ['subquery_to_join']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_subquery_to_join_2():
+    q0 = '''
+        select empno, firstnme, lastname, phoneno
+        from employee
+        where workdept in
+            (select deptno
+                from department
+                where deptname = 'OPERATIONS')
+        and age > 17;
+    '''
+    q1 = '''
+        select distinct empno, firstnme, lastname, phoneno
+        from employee, department
+        where employee.workdept = department.deptno 
+        and deptname = 'OPERATIONS'
+        and age > 17;
+    '''
+    rule_keys = ['subquery_to_join']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_subquery_to_join_3():
+    q0 = '''
+        select e.empno, e.firstnme, e.lastname, e.phoneno
+        from employee e
+        where e.workdept in
+            (select d.deptno
+                from department d
+                where d.deptname = 'OPERATIONS')
+        and e.age > 17;
+    '''
+    q1 = '''
+        select distinct e.empno, e.firstnme, e.lastname, e.phoneno
+        from employee e, department d
+        where e.workdept = d.deptno 
+        and d.deptname = 'OPERATIONS'
+        and e.age > 17;
+    '''
+    rule_keys = ['subquery_to_join']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_join_to_filter_1():
+    q0 = '''
+        SELECT *
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminrolei2_.admin_role_id = 1
+        AND 1=1;
+    '''
+    q1 = '''
+        SELECT *
+        FROM   blc_admin_permission AS adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  allroles1_.admin_role_id = 1
+        AND 1=1;
+    '''
+    rule_keys = ['join_to_filter']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_join_to_filter_2():
+    q0 = '''
+        SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminrolei2_.admin_role_id = 1
+        AND    adminpermi0_.is_friendy = 1;
+    '''
+    q1 = '''
+        SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM   blc_admin_permission AS adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  allroles1_.admin_role_id = 1 
+        AND    adminpermi0_.is_friendy = 1;
+    '''
+    rule_keys = ['join_to_filter']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_join_to_filter_3():
+    q0 = '''
+        SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminpermi0_.is_friendy = 1 
+        AND    adminrolei2_.admin_role_id = 1;
+    '''
+    q1 = '''
+        SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM   blc_admin_permission AS adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  allroles1_.admin_role_id = 1 
+        AND    adminpermi0_.is_friendy = 1;
+    '''
+    rule_keys = ['join_to_filter']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_join_to_filter_advance_1():
+    q0 = '''
+        SELECT *
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminrolei2_.admin_role_id = 1
+        AND 1=1;
+    '''
+    q1 = '''
+        SELECT *
+        FROM   blc_admin_permission AS adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  allroles1_.admin_role_id = 1
+        AND 1=1;
+    '''
+    rule_keys = ['join_to_filter_advance']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_join_to_filter_advance_2():
+    q0 = '''
+        SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminrolei2_.admin_role_id = 1
+        AND    adminpermi0_.is_friendy = 1;
+    '''
+    q1 = '''
+        SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM   blc_admin_permission AS adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  allroles1_.admin_role_id = 1 
+        AND    adminpermi0_.is_friendy = 1;
+    '''
+    rule_keys = ['join_to_filter_advance']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_join_to_filter_advance_3():
+    q0 = '''
+        SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminpermi0_.is_friendy = 1 
+        AND    adminrolei2_.admin_role_id = 1;
+    '''
+    q1 = '''
+        SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM   blc_admin_permission AS adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  allroles1_.admin_role_id = 1 
+        AND    adminpermi0_.is_friendy = 1;
+    '''
+    rule_keys = ['join_to_filter_advance']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_join_to_filter_partial_1():
+    q0 = '''
+        SELECT *
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminrolei2_.admin_role_id = 1;
+    '''
+    q1 = '''
+        SELECT *
+        FROM   blc_admin_permission AS adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  allroles1_.admin_role_id = 1;
+    '''
+    rule_keys = ['join_to_filter_partial1']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_join_to_filter_partial_2():
+    q0 = '''
+        SELECT  adminpermi0_.admin_permission_id AS admin_pe1_4_,
+                adminpermi0_.description         AS descript2_4_,
+                adminpermi0_.is_friendly         AS is_frien3_4_,
+                adminpermi0_.name                AS name4_4_,
+                adminpermi0_.permission_type     AS permissi5_4_
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminpermi0_.is_friendly = 1
+            AND adminrolei2_.admin_role_id = 1
+        ORDER  BY adminpermi0_.description ASC
+        LIMIT  50;
+    '''
+    q1 = '''
+        SELECT  adminpermi0_.admin_permission_id AS admin_pe1_4_,
+                adminpermi0_.description         AS descript2_4_,
+                adminpermi0_.is_friendly         AS is_frien3_4_,
+                adminpermi0_.name                AS name4_4_,
+                adminpermi0_.permission_type     AS permissi5_4_
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  adminpermi0_.is_friendly = 1
+            AND allroles1_.admin_role_id = 1
+        ORDER  BY adminpermi0_.description ASC
+        LIMIT  50;
+    '''
+    rule_keys = ['join_to_filter_partial2']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_join_to_filter_partial_3():
+    q0 = '''
+        SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM   blc_admin_permission adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+            INNER JOIN blc_admin_role adminrolei2_
+                    ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE  adminpermi0_.is_friendly = 1
+            AND adminrolei2_.admin_role_id = 1;
+    '''
+    q1 = '''
+        SELECT Count(adminpermi0_.admin_permission_id) AS col_0_0_
+        FROM   blc_admin_permission AS adminpermi0_
+            INNER JOIN blc_admin_role_permission_xref AS allroles1_
+                    ON adminpermi0_.admin_permission_id =
+                        allroles1_.admin_permission_id
+        WHERE  allroles1_.admin_role_id = 1
+            AND adminpermi0_.is_friendly = 1;
+    '''
+    rule_keys = ['join_to_filter_partial3']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_remove_1useless_innerjoin():
+    q0 = '''
+        SELECT o_auth_applications.id
+        FROM   o_auth_applications
+            INNER JOIN authorizations
+                    ON o_auth_applications.id = authorizations.o_auth_application_id
+        WHERE  authorizations.user_id = 1465 
+    '''
+    q1 = '''
+        SELECT authorizations.o_auth_application_id 
+        FROM   authorizations
+        WHERE  authorizations.user_id = 1465 
+    '''
+    rule_keys = ['remove_1useless_innerjoin']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_test_rule_wetune_90():
+    q0 = '''
+        SELECT adminpermi0_.admin_permission_id AS admin_pe1_4_,
+            adminpermi0_.description AS descript2_4_,
+            adminpermi0_.is_friendly AS is_frien3_4_,
+            adminpermi0_.name AS name4_4_,
+            adminpermi0_.permission_type AS permissi5_4_
+        FROM blc_admin_permission adminpermi0_
+        INNER JOIN blc_admin_role_permission_xref allroles1_ ON adminpermi0_.admin_permission_id = allroles1_.admin_permission_id
+        INNER JOIN blc_admin_role adminrolei2_ ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE adminpermi0_.is_friendly = 1
+        AND adminrolei2_.admin_role_id = 1
+        ORDER  BY adminpermi0_.description ASC
+        LIMIT 50
+    '''
+    q1 = '''
+        SELECT adminpermi0_.admin_permission_id AS admin_pe1_4_,
+            adminpermi0_.description AS descript2_4_,
+            adminpermi0_.is_friendly AS is_frien3_4_,
+            adminpermi0_.name AS name4_4_,
+            adminpermi0_.permission_type AS permissi5_4_
+        FROM blc_admin_permission adminpermi0_
+        INNER JOIN blc_admin_role_permission_xref allroles1_ ON adminpermi0_.admin_permission_id = allroles1_.admin_permission_id
+        WHERE adminpermi0_.is_friendly = 1
+        AND allroles1_.admin_role_id = 1
+        ORDER  BY adminpermi0_.description ASC
+        LIMIT 50
+    '''
+    rule_keys = ['test_rule_wetune_90']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_query_rule_wetune_90():
+    q0 = '''
+        SELECT adminpermi0_.admin_permission_id AS admin_pe1_4_,
+            adminpermi0_.description AS descript2_4_,
+            adminpermi0_.is_friendly AS is_frien3_4_,
+            adminpermi0_.name AS name4_4_,
+            adminpermi0_.permission_type AS permissi5_4_
+        FROM blc_admin_permission adminpermi0_
+        INNER JOIN blc_admin_role_permission_xref allroles1_ ON adminpermi0_.admin_permission_id = allroles1_.admin_permission_id
+        INNER JOIN blc_admin_role adminrolei2_ ON allroles1_.admin_role_id = adminrolei2_.admin_role_id
+        WHERE adminpermi0_.is_friendly = 1
+        AND adminrolei2_.admin_role_id = 1
+        ORDER  BY adminpermi0_.description ASC
+        LIMIT 50
+    '''
+    q1 = '''
+        SELECT adminpermi0_.admin_permission_id AS admin_pe1_4_,
+            adminpermi0_.description AS descript2_4_,
+            adminpermi0_.is_friendly AS is_frien3_4_,
+            adminpermi0_.name AS name4_4_,
+            adminpermi0_.permission_type AS permissi5_4_
+        FROM blc_admin_permission adminpermi0_
+        INNER JOIN blc_admin_role_permission_xref allroles1_ ON adminpermi0_.admin_permission_id = allroles1_.admin_permission_id
+        WHERE adminpermi0_.is_friendly = 1
+        AND allroles1_.admin_role_id = 1
+        ORDER  BY adminpermi0_.description ASC
+        LIMIT 50
+    '''
+    rule_keys = ['query_rule_wetune_90']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_stackoverflow_1():
+    q0 = '''
+        SELECT DISTINCT my_table.foo, your_table.boo
+        FROM my_table, your_table
+        WHERE my_table.num = 1 OR your_table.num = 2
+        '''
+    q1 = '''
+        SELECT
+            my_table.foo,
+            your_table.boo
+        FROM
+            my_table,
+            your_table
+        WHERE
+            my_table.num = 1
+            OR your_table.num = 2
+        GROUP BY
+            my_table.foo,
+            your_table.boo
+            '''
+    rule_keys = ['stackoverflow_1', 'remove_self_join']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_partial_matching_base_case1():
+    q0 = '''
+        SELECT *
+        FROM A a
+        LEFT JOIN B b ON a.id = b.cid
+        WHERE
+        b.cl1 = 's1' OR b.cl1 ='s2'
+        '''
+    q1 = '''
+        SELECT *
+        FROM A a
+        LEFT JOIN B b ON a.id = b.cid
+        WHERE
+        b.cl1 IN ('s1', 's2')
+        '''
+    rule_keys = ['combine_or_to_in']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_partial_matching_base_case2():
+    q0 = '''
+        SELECT *
+        FROM b
+        WHERE
+        b.cl1 IN ('s1', 's2') OR b.cl1 ='s3'
+        '''
+    q1 = '''
+        SELECT *
+        FROM b
+        WHERE
+        b.cl1 IN ('s3', 's1', 's2')
+        '''
+    rule_keys = ['merge_or_to_in']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_partial_matching0(): 
+    q0 = '''
+        SELECT *
+        FROM A a
+        LEFT JOIN B b ON a.id = b.cid
+        WHERE
+        b.cl1 = 's1' OR b.cl1 = 's2' OR b.cl1 = 's3'
+        '''
+    q1 = '''
+        SELECT *
+        FROM A a
+        LEFT JOIN B b ON a.id = b.cid
+        WHERE
+        b.cl1 IN ('s1', 's2') OR b.cl1 = 's3'
+        '''
+    rule_keys = ['combine_or_to_in']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_partial_matching1(): 
+    q0 = '''
+        SELECT *
+        FROM A a
+        LEFT JOIN B b ON a.id = b.cid
+        WHERE
+        b.cl1 = 's1' OR b.cl1 = 's2' OR b.cl1 = 's3'
+        '''
+    
+    q1 = '''
+        SELECT *
+        FROM A a
+        LEFT JOIN B b ON a.id = b.cid
+        WHERE
+        b.cl1 IN ('s3', 's1', 's2')
+        '''
+    rule_keys = ['combine_or_to_in', 'merge_or_to_in']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_partial_matching4():
+    q0 = '''
+        select empno, firstname, lastname, phoneno
+        from employee
+        where workdept in
+            (select deptno
+                from department
+                where deptname = 'OPERATIONS')
+        and firstname like 'B%'
+        '''
+    q1 = '''
+        select distinct empno, firstname, lastname, phoneno
+        from employee, department
+        where employee.workdept = department.deptno
+        and deptname = 'OPERATIONS'
+        and firstname like 'B%'
+        '''
+    rule_keys = ['partial_subquery_to_join']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_partial_keeps_remaining_OR():
+    q0 = '''
+        SELECT entities.data
+        FROM entities
+        WHERE entities._id IN (SELECT index_users_email._id 
+                                FROM index_users_email
+                                WHERE index_users_email.key = 'test')
+        OR entities._id IN (SELECT index_users_profile_name._id 
+                                FROM index_users_profile_name
+                                WHERE index_users_profile_name.key = 'test')
+        '''
+    q1 = '''
+        SELECT entities.data
+        FROM entities
+        INNER JOIN index_users_email ON index_users_email._id = entities._id
+        WHERE index_users_email.key = 'test'
+        OR entities._id IN (SELECT index_users_profile_name._id 
+                            FROM index_users_profile_name
+                            WHERE index_users_profile_name.key = 'test')
+        '''
+
+    rule_keys = ['nested_clause_to_inner_join']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    print(_q1)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_partial_keeps_remaining_AND():
+    q0 = '''
+        SELECT Empno
+        FROM EMP
+        WHERE EMPNO > 10 
+        AND EMPNO <= 10
+        AND EMPNAME LIKE '%Jason%'
+        '''
+    q1 = '''
+        SELECT Empno
+        FROM EMP
+        WHERE FALSE
+        AND EMPNAME LIKE '%Jason%'
+        '''
+
+    rule_keys = ['contradiction_gt_lte']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    print(_q1)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_and_on_true():
+    q0 = '''
+        SELECT people.name
+        FROM people
+        WHERE 1 AND 1
+        '''
+    q1 = '''
+        SELECT people.name
+        FROM people
+        '''
+    rule_keys = ['and_on_true']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    print(_q1)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_multiple_and_on_true():
+    q0 = '''
+        SELECT name
+        FROM people
+        WHERE 1 = 1 AND 2 = 2
+        '''
+    q1 = '''
+        SELECT name
+        FROM people
+        '''
+    rule_keys = ['multiple_and_on_true']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    print(_q1)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_rewrite_rule_remove_where_true():
+    q0 = '''
+        SELECT *
+        FROM Emp
+        WHERE age > age - 2;
+        '''
+    q1 = '''
+        SELECT *
+        FROM Emp
+        '''
+
+    rule_keys = ['remove_where_true']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_skips_failed_partial():
+    q0 = '''
+        SELECT * 
+        FROM accounts 
+        WHERE LOWER(accounts.firstname) = LOWER('Sam') 
+            AND accounts.id IN (SELECT addresses.account_id 
+                                            FROM addresses 
+                                    WHERE LOWER(addresses.name) = LOWER('Street1'))         
+            AND accounts.id IN (SELECT alternate_ids.account_id 
+                                    FROM alternate_ids 
+                                    WHERE alternate_ids.alternate_id_glbl = '5'); 
+        '''
+    q1 = '''
+        SELECT * 
+        FROM accounts 
+        JOIN addresses ON accounts.id = addresses.account_id
+        JOIN alternate_ids ON accounts.id = alternate_ids.account_id
+        WHERE LOWER(accounts.firstname) = LOWER('Sam') 
+        AND LOWER(addresses.name) = LOWER('Street1') 
+        AND alternate_ids.alternate_id_glbl = '5';
+        '''
+
+    rule_keys = ['nested_clause_to_inner_join']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+
+    rule_keys = ['subquery_to_joins']
+    rules = [get_rule(k) for k in rule_keys]
+    _q2, _rewrite_path = QueryRewriter.rewrite(_q1, rules)
+    assert format(parse(q1)) == format(parse(_q2))
+
+
+def test_matching_order():
+    q0 = '''
+    SELECT entities.data FROM entities WHERE 
+    entities._id IN (SELECT index_users_email._id FROM index_users_email WHERE index_users_email.key = 'test')
+    OR 
+    entities._id in (SELECT index_users_profile_name._id FROM index_users_profile_name WHERE index_users_profile_name.key = 'test')
+    '''
+
+    q1 = '''
+    SELECT entities.data FROM entities INNER JOIN index_users_email ON index_users_email._id = entities._id
+    WHERE index_users_email.key = 'test'
+    UNION
+    SELECT entities.data FROM entities INNER JOIN index_users_profile_name ON index_users_profile_name._id = entities._id
+    WHERE index_users_profile_name.key = 'test'
+    '''
+    rule_keys = ['nested_clause_to_inner_join', 'multiple_or_to_union']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_no_over_matching():
+    q0 = '''
+    SELECT entities.data FROM entities WHERE 
+    entities._id IN (SELECT index_users_email._id FROM index_users_email WHERE index_users_email.key = 'test')
+    OR 
+    entities._id in (SELECT index_users_profile_name._id FROM index_users_profile_name WHERE index_users_profile_name.key = 'test')
+    '''
+    q1 = '''
+    SELECT
+        entities.data
+    FROM
+        entities
+    INNER JOIN index_users_email ON index_users_email._id = entities._id
+    WHERE
+        index_users_email.key = 'test'
+        OR entities._id IN (
+            SELECT
+                index_users_profile_name._id
+            FROM
+                index_users_profile_name
+            WHERE
+                index_users_profile_name.key = 'test'
+        )
+    '''
+    rule_keys = ['nested_clause_to_inner_join']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+def test_full_matching():
+    q0 = '''
+        SELECT entities.data FROM entities WHERE entities._id IN (SELECT index_users_email._id FROM index_users_email WHERE index_users_email.key = 'test')
+        UNION
+        SELECT entities.data FROM entities WHERE entities._id IN (SELECT index_users_profile_name._id FROM index_users_profile_name WHERE index_users_profile_name.key = 'test')
+        '''
+    q1 = '''
+        SELECT entities.data FROM entities INNER JOIN index_users_email ON index_users_email._id = entities._id WHERE index_users_email.key = 'test'
+        UNION
+        SELECT entities.data FROM entities INNER JOIN index_users_profile_name ON index_users_profile_name._id = entities._id WHERE index_users_profile_name.key = 'test'
+        '''
+    rule_keys = ['nested_clause_to_inner_join']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_over_partial_matching():
+    q0 = '''
+        SELECT * FROM table_name WHERE (table_name.title = 1 and table_name.grade = 2) OR (table_name.title = 2 and table_name.debt = 2 and table_name.grade = 3) OR (table_name.prog = 1 and table_name.title =1 and table_name.debt = 3)
+        '''
+    q1 = '''
+        SELECT * FROM table_name WHERE (table_name.title = 1 and table_name.grade = 2) OR (table_name.title = 2 and table_name.debt = 2 and table_name.grade = 3) OR (table_name.prog = 1 and table_name.title =1 and table_name.debt = 3)
+        '''
+    rule_keys = ['combine_3_or_to_in']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_aggregation_to_subquery():
+    q0 = '''
+SELECT 
+    t1.CPF,
+    DATE(t1.data) AS data,
+    CASE WHEN SUM(CASE WHEN t1.login_ok = true
+                       THEN 1
+                       ELSE 0
+                  END) >= 1
+         THEN true
+         ELSE false
+    END
+FROM db_risco.site_rn_login AS t1
+GROUP BY t1.CPF, DATE(t1.data)
+        '''
+    q1 = '''
+SELECT
+    t1.CPF,
+    t1.data    
+FROM (
+    SELECT 
+        CPF, 
+        DATE(data)
+    FROM db_risco.site_rn_login
+    WHERE login_ok = true
+) t1
+GROUP BY t1.CPF, t1.data
+        '''
+    
+    rule_keys = ['aggregation_to_filtered_subquery']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_spreadsheet_id_2():
+    q0 = '''
+SELECT * 
+FROM place 
+WHERE "select" = TRUE
+   OR exists (SELECT id 
+              FROM bookmark 
+              WHERE user IN (1,2,3,4) 
+                AND bookmark.place = place.id) 
+ LIMIT 10;
+        '''
+    q1 = '''
+SELECT * 
+FROM (
+    (SELECT * 
+    FROM place 
+    WHERE "select" = True 
+    LIMIT 10) 
+UNION 
+    (SELECT * 
+    FROM place 
+    WHERE EXISTS 
+        (SELECT 1 
+        FROM bookmark 
+        WHERE user IN (1, 2, 3, 4) 
+        AND bookmark.place = place.id) 
+    LIMIT 10))
+LIMIT 10
+        '''
+    
+    rule_keys = ['spreadsheet_id_2']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_spreadsheet_id_3():
+    q0 = '''
+SELECT EMPNO FROM EMP WHERE EMPNO > 10 AND EMPNO <= 10
+        '''
+    q1 = '''
+SELECT EMPNO FROM EMP WHERE FALSE
+        '''
+    
+    rule_keys = ['spreadsheet_id_3']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_spreadsheet_id_4():
+    q0 = '''SELECT entities.data FROM entities WHERE 
+  entities._id IN (SELECT index_users_email._id FROM index_users_email WHERE index_users_email.key = 'test')
+ OR 
+  entities._id in (SELECT index_users_profile_name._id FROM index_users_profile_name WHERE index_users_profile_name.key = 'test')
+        '''
+    q1 = '''SELECT entities.data FROM entities 
+WHERE entities._id IN 
+ ( SELECT index_users_email._id 
+   FROM index_users_email 
+   WHERE index_users_email.key = 'test'
+ )
+UNION
+SELECT entities.data FROM entities
+WHERE entities._id in 
+ ( SELECT index_users_profile_name._id 
+   FROM index_users_profile_name 
+   WHERE index_users_profile_name.key = 'test'
+ )'''
+    
+    rule_keys = ['spreadsheet_id_4']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+# Query rewrite for ID 5 is already tested in test_rewrite_skips_failed_partial
+    
+def test_rewrite_spreadsheet_id_6():
+    q0 = '''
+SELECT * 
+FROM
+    table_name 
+ WHERE
+    (table_name.title = 1 and table_name.grade = 2)
+ OR
+    (table_name.title = 2 and table_name.debt = 2 and table_name.grade = 3)
+ OR
+     (table_name.prog = 1 and table_name.title =1 and table_name.debt = 3)
+        '''
+    q1 = '''
+SELECT *
+FROM
+    table_name 
+ WHERE
+     1 = case
+           when table_name.title = 1 and table_name.grade = 2 then 1
+           when table_name.title = 2 and table_name.debt = 2 and table_name.grade = 3 then 1
+           when table_name.prog = 1 and table_name.title = 1 and table_name.debt = 3 then 1
+        else 0
+     end
+        '''
+    
+    rule_keys = ['spreadsheet_id_6']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_spreadsheet_id_7():
+    q0 = '''
+select * from 
+a
+left join b on a.id = b.cid 
+where 
+b.cl1 = 's1' 
+or 
+b.cl1 ='s2'
+or
+b.cl1 ='s3' 
+        '''
+    q1 = '''
+select * from 
+a 
+left join b on a.id = b.cid 
+where 
+b.cl1 in ('s1','s2','s3')
+        '''
+    
+    rule_keys = ['spreadsheet_id_7']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_spreadsheet_id_9():
+    q0 = '''
+SELECT DISTINCT my_table.foo
+FROM my_table
+WHERE my_table.num = 1;
+        '''
+    q1 = '''
+SELECT my_table.foo
+FROM my_table
+WHERE my_table.num = 1
+GROUP BY my_table.foo;
+        '''
+    
+    rule_keys = ['spreadsheet_id_9']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_spreadsheet_id_10():
+    q0 = '''
+SELECT table1.wpis_id
+FROM table1
+WHERE table1.etykieta_id IN (
+  SELECT table2.tag_id
+  FROM table2
+  WHERE table2.postac_id = 376476
+  );
+        '''
+    q1 = '''
+SELECT table1.wpis_id 
+FROM table1
+INNER JOIN table2 on table2.tag_id = table1.etykieta_id
+WHERE table2.postac_id = 376476
+        '''
+    
+    rule_keys = ['spreadsheet_id_10']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_spreadsheet_id_11():
+    q0 = '''
+SELECT historicoestatusrequisicion_id, requisicion_id, estatusrequisicion_id, 
+            comentario, fecha_estatus, usuario_id
+            FROM historicoestatusrequisicion hist1
+            WHERE requisicion_id IN
+            (
+            SELECT requisicion_id FROM historicoestatusrequisicion hist2
+            WHERE usuario_id = 27 AND estatusrequisicion_id = 1
+            )
+            ORDER BY requisicion_id, estatusrequisicion_id
+        '''
+    q1 = '''
+SELECT hist1.historicoestatusrequisicion_id, hist1.requisicion_id, hist1.estatusrequisicion_id, hist1.comentario, hist1.fecha_estatus, hist1.usuario_id
+            FROM historicoestatusrequisicion hist1
+            JOIN historicoestatusrequisicion hist2 ON hist2.requisicion_id = hist1.requisicion_id
+            WHERE hist2.usuario_id = 27 AND hist2.estatusrequisicion_id = 1
+            ORDER BY hist1.requisicion_id, hist1.estatusrequisicion_id
+        '''
+    
+    rule_keys = ['spreadsheet_id_11']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_spreadsheet_id_12():
+    q0 = '''
+SELECT po.id, 
+       SUM(grouped_items.total_quantity) AS order_total_quantity
+FROM purchase_orders po
+LEFT JOIN (
+  SELECT items.purchase_order_id, 
+  SUM(items.quantity) AS item_total
+  FROM items
+  GROUP BY items.purchase_order_id
+) grouped_items ON po.id = grouped_items.purchase_order_id
+WHERE po.shop_id = 195
+GROUP BY po.id
+        '''
+    q1 = '''
+SELECT po.id,
+       (
+           SELECT SUM(items.quantity)
+           FROM items
+           WHERE items.purchase_order_id = po.id
+           GROUP BY items.purchase_order_id
+       ) AS order_total_quantity
+FROM purchase_orders po
+WHERE shop_id = 195
+GROUP BY po.id
+        '''
+    
+    rule_keys = ['spreadsheet_id_12']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_spreadsheet_id_15():
+    q0 = '''
+SELECT *
+FROM users u
+WHERE u.id IN
+    (SELECT s1.user_id
+     FROM sessions s1
+     WHERE s1.user_id <> 1234
+       AND (s1.ip IN
+              (SELECT s2.ip
+               FROM sessions s2
+               WHERE s2.user_id = 1234
+               GROUP BY s2.ip)
+            OR s1.cookie_identifier IN
+              (SELECT s3.cookie_identifier
+               FROM sessions s3
+               WHERE s3.user_id = 1234
+               GROUP BY s3.cookie_identifier))
+     GROUP BY s1.user_id)
+        '''
+    q1 = '''
+SELECT *
+FROM users u
+WHERE EXISTS (
+    SELECT
+        NULL
+    FROM sessions s1
+    WHERE s1.user_id <> 1234
+    AND u.id = s1.user_id
+    AND EXISTS (
+        SELECT
+            NULL
+        FROM sessions s2
+        WHERE s2.user_id = 1234
+        AND (s1.ip = s2.ip
+          OR s1.cookie_identifier = s2.cookie_identifier
+            )
+        )
+    )
+        '''
+    
+    rule_keys = ['spreadsheet_id_15']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+# Query Rewriting for ID 17 is already tested in test_rewrite_aggregation_to_subquery
+
+def test_rewrite_spreadsheet_id_18():
+    q0 = '''
+SELECT DISTINCT ON (t.playerId) t.gzpId, t.pubCode, t.playerId,
+       COALESCE (p.preferenceValue,'en'),
+       s.segmentId 
+FROM userPlayerIdMap t LEFT JOIN
+     userPreferences p
+     ON t.gzpId  = p.gzpId LEFT JOIN
+     segment s
+     ON t.gzpId = s.gzpId 
+WHERE t.pubCode IN ('hyrmas','ayqioa','rj49as99') and
+      t.provider IN ('FCM','ONE_SIGNAL') and
+      s.segmentId IN (0,1,2,3,4,5,6) and
+      p.preferenceValue IN ('en','hi') 
+ORDER BY t.playerId desc;
+        '''
+    q1 = '''
+SELECT t.gzpId, t.pubCode, t.playerId,
+       COALESCE((SELECT p.preferenceValue
+                 FROM userPreferences p
+                 WHERE t.gzpId = p.gzpId AND
+                       p.preferenceValue IN ('en', 'hi')
+                 LIMIT 1
+                ), 'en'
+               ),
+       (SELECT s.segmentId 
+        FROM segment s
+        WHERE t.gzpId = s.gzpId AND
+              s.segmentId IN (0, 1, 2, 3, 4, 5, 6)
+        LIMIT 1
+       )
+FROM userPlayerIdMap t
+WHERE t.pubCode IN ('hyrmas', 'ayqioa', 'rj49as99') and
+      t.provider IN ('FCM', 'ONE_SIGNAL');
+        '''
+    
+    rule_keys = ['spreadsheet_id_18']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+def test_rewrite_spreadsheet_id_20():
+    q0 = '''
+SELECT * FROM (SELECT * FROM (SELECT NULL FROM EMP) WHERE N IS NULL) WHERE N IS NULL
+        '''
+    q1 = '''
+SELECT NULL FROM EMP
+        '''
+    
+    rule_keys = ['spreadsheet_id_20']
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+# TODO - TBI
+# 
+def test_rewrite_postgresql():
+    # PostgreSQL query
+    # 
+    q0 = '''
+        SELECT "tweets"."latitude" AS "latitude",
+               "tweets"."longitude" AS "longitude"
+          FROM "public"."tweets" "tweets"
+         WHERE (("tweets"."latitude" >= -90) AND ("tweets"."latitude" <= 80) 
+           AND ((("tweets"."longitude" >= -173.80000000000001) AND ("tweets"."longitude" <= 180)) OR ("tweets"."longitude" IS NULL)) 
+           AND (CAST((DATE_TRUNC( \'day\', CAST("tweets"."created_at" AS DATE) ) + (-EXTRACT(DOW FROM "tweets"."created_at") * INTERVAL \'1 DAY\')) AS DATE) 
+                = (TIMESTAMP \'2018-04-22 00:00:00.000\')) 
+           AND (STRPOS(CAST(LOWER(CAST(CAST("tweets"."text" AS TEXT) AS TEXT)) AS TEXT),CAST(\'microsoft\' AS TEXT)) > 0))
+           GROUP BY 1, 2
+    '''
+    q1 = '''
+        SELECT "tweets"."latitude" AS "latitude",
+               "tweets"."longitude" AS "longitude"
+          FROM "public"."tweets" "tweets"
+         WHERE (("tweets"."latitude" >= -90) AND ("tweets"."latitude" <= 80) 
+           AND ((("tweets"."longitude" >= -173.80000000000001) AND ("tweets"."longitude" <= 180)) OR ("tweets"."longitude" IS NULL)) 
+           AND ((DATE_TRUNC( \'day\', "tweets"."created_at" ) + (-EXTRACT(DOW FROM "tweets"."created_at") * INTERVAL \'1 DAY\')) 
+                = (TIMESTAMP \'2018-04-22 00:00:00.000\')) 
+           AND "tweets"."text" ILIKE \'%microsoft%\')
+           GROUP BY 1, 2
+    '''
+    rule_keys = ['remove_cast_date', 'remove_cast_text', 'replace_strpos_lower']
+
+    rules = [get_rule(k) for k in rule_keys]
+    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
+    assert format(parse(q1)) == format(parse(_q1))
+
+
+# TODO - TBI
+# 
+def test_rewrite_mysql():
+    # Rule 101 and 102
+    # MySQL query
+    # 
+    query = '''SELECT `tweets`.`latitude` AS `latitude`,
+                    `tweets`.`longitude` AS `longitude`
+               FROM `tweets`
+              WHERE ((ADDDATE(DATE_FORMAT(`tweets`.`created_at`, '%Y-%m-01 00:00:00'), INTERVAL 0 SECOND) = TIMESTAMP('2017-03-01 00:00:00'))
+                AND (LOCATE('iphone', LOWER(`tweets`.`text`)) > 0))
+              GROUP BY 1, 2'''

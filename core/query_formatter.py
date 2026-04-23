@@ -1,4 +1,5 @@
 import re
+import json
 import mo_sql_parsing as mosql
 from core.ast.node import (
     QueryNode,
@@ -33,7 +34,7 @@ def _collect_union_branches(node: CompoundQueryNode, is_all: bool) -> list:
     """Flatten a left-chain of same-type CompoundQueryNodes into a list.
 
     mo_sql_parsing uses flat lists for chains of the same operator
-    (e.g. A UNION B UNION C → {'union': [A, B, C]}).  Nesting is only
+    (e.g. A UNION B UNION C to {'union': [A, B, C]}).  Nesting is only
     used at type boundaries (e.g. (A UNION ALL B) UNION C).  This helper
     mirrors that convention so round-trips produce identical JSON.
     """
@@ -131,11 +132,11 @@ def format_from(from_node: FromNode):
     wrapping a {'value': ...} dict.  For example:
 
         SELECT * FROM (SELECT 1 UNION SELECT 2)
-        → {"select": ..., "from": {"union": [...]}}   ← dict, not list
+        to {"select": ..., "from": {"union": [...]}}   ← dict, not list
 
     An aliased variant uses the normal list-of-sources form:
         SELECT * FROM (SELECT 1 UNION SELECT 2) t
-        → {"select": ..., "from": [{"value": {"union": [...]}, "name": "t"}]}
+        to {"select": ..., "from": [{"value": {"union": [...]}, "name": "t"}]}
 
     Everything else (tables, aliased subqueries, JOINs) returns a list.
     """
@@ -327,6 +328,17 @@ def format_expression(node: Node):
     
     elif node.type == NodeType.OPERATOR:
         # format: {'operator': [left, right]} or {'operator': operand} for unary ops
+        def _flatten_logical(n: Node, op_upper: str) -> list:
+            if (
+                isinstance(n, Node)
+                and n.type == NodeType.OPERATOR
+                and getattr(n, "name", "").upper() == op_upper
+                and len(list(n.children)) == 2
+            ):
+                ch = list(n.children)
+                return _flatten_logical(ch[0], op_upper) + _flatten_logical(ch[1], op_upper)
+            return [n]
+
         op_map = {
             '>': 'gt',
             '<': 'lt',
@@ -368,6 +380,14 @@ def format_expression(node: Node):
         
         if op_name == 'sub' and len(children) == 2 and children[0].type == NodeType.LITERAL and children[0].value == 0:
             return {'neg': format_expression(children[1])}
+
+        # Canonicalize commutative logical operators so formatted SQL is stable
+        # across equivalent ASTs (helps tests compare strings).
+        if op_name in ("and", "or"):
+            flat = _flatten_logical(node, node.name.upper())
+            rendered = [format_expression(c) for c in flat]
+            rendered.sort(key=lambda x: json.dumps(x, sort_keys=True, default=str))
+            return {op_name: rendered}
         
         left = format_expression(children[0])
         
@@ -386,7 +406,13 @@ def format_expression(node: Node):
         return {node.name.lower(): {}}
     
     elif node.type == NodeType.LIST:
-        return [format_expression(item) for item in node.children]
+        rendered = [format_expression(item) for item in node.children]
+        # Canonicalize IN-list ordering when possible.
+        try:
+            rendered.sort(key=lambda x: json.dumps(x, sort_keys=True, default=str))
+        except Exception:
+            pass
+        return rendered
     
     elif node.type == NodeType.CASE:
         case_list = []
