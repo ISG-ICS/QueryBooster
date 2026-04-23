@@ -376,9 +376,10 @@ class RuleParserV2:
             lit = node
             if not isinstance(lit, LiteralNode):
                 return node
+            alias = _replace_internal_in_string(lit.alias) if isinstance(getattr(lit, "alias", None), str) else getattr(lit, "alias", None)
             if isinstance(lit.value, str):
-                return LiteralNode(_replace_internal_in_string(lit.value))
-            return LiteralNode(lit.value)
+                return LiteralNode(_replace_internal_in_string(lit.value), _alias=alias)
+            return LiteralNode(lit.value, _alias=alias)
 
         if node.type == NodeType.QUERY:
             q = node

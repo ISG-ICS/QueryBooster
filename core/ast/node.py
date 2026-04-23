@@ -101,18 +101,20 @@ class ColumnNode(Node):
 
 class LiteralNode(Node):
     """Literal value node"""
-    def __init__(self, _value: str|int|float|bool|datetime|None, **kwargs):
+    def __init__(self, _value: str|int|float|bool|datetime|None, _alias: Optional[str] = None, **kwargs):
         super().__init__(NodeType.LITERAL, **kwargs)
         self.value = _value
+        self.alias = _alias
 
     def __eq__(self, other):
         if not isinstance(other, LiteralNode):
             return False
         return (super().__eq__(other) and 
-                self.value == other.value)
+                self.value == other.value and
+                self.alias == other.alias)
     
     def __hash__(self):
-        return hash((super().__hash__(), self.value))
+        return hash((super().__hash__(), self.value, self.alias))
 
 class DataTypeNode(Node):
     """SQL data type node used in CAST expressions (e.g. TEXT, DATE, INTEGER)"""

@@ -104,19 +104,10 @@ def format_select(select_node: SelectNode) -> dict:
     
     items = []
     for child in children:
-        if child.type == NodeType.COLUMN:
-            if child.alias:
-                items.append({'name': child.alias, 'value': format_expression(child)})
-            else:
-                items.append({'value': format_expression(child)})
-        elif child.type == NodeType.FUNCTION:
-            func_expr = format_expression(child)
-            if hasattr(child, 'alias') and child.alias:
-                items.append({'name': child.alias, 'value': func_expr})
-            else:
-                items.append({'value': func_expr})
-        else:
-            items.append({'value': format_expression(child)})
+        item = {'value': format_expression(child)}
+        if hasattr(child, 'alias') and child.alias:
+            item['name'] = child.alias
+        items.append(item)
     
     select_key = 'select_distinct' if select_node.distinct else 'select'
     result[select_key] = items
