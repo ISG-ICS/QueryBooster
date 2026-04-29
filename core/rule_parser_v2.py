@@ -251,8 +251,8 @@ class RuleParserV2:
     #
     @staticmethod
     def _substitute_rule_vars(
-        query: QueryNode, internal_to_external: Dict[str, str]
-    ) -> QueryNode:
+        query: Node, internal_to_external: Dict[str, str]
+    ) -> Node:
         out = RuleParserV2._as_rule_ast(query, internal_to_external)
         if not isinstance(out, (QueryNode, CompoundQueryNode)):
             raise TypeError("expected QueryNode after substituting rule variables on full query")
@@ -379,9 +379,7 @@ class RuleParserV2:
             if not isinstance(lit, LiteralNode):
                 return node
             if isinstance(lit.value, str):
-                # If the entire literal value is an internal placeholder token, keep it as a
-                # string literal (rules like `'<s>'` should parse as LiteralNode('s'), not a
-                # variable node in expression position).
+                # If the entire literal value is an internal placeholder token, promote to var node
                 if lit.value in rev:
                     return LiteralNode(rev[lit.value])
                 # Otherwise substitute any embedded tokens (e.g. '%EV001%' to '%x%')

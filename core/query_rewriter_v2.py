@@ -233,6 +233,11 @@ def _match_node(
             if not isinstance(q.name, str) or q.name.lower() != p.name.lower():
                 return False
         if p.alias is not None:
+            # Pattern requires an alias (even if it's a variable). Do not match
+            # unaliased tables, otherwise the alias var would bind to None and
+            # rewrites expecting a real alias/identifier become nonsensical.
+            if q.alias is None:
+                return False
             if _is_var_name(p.alias, mapping):
                 if not _bind(p.alias, q.alias, memo):
                     return False
@@ -253,6 +258,10 @@ def _match_node(
             if not isinstance(q.name, str) or q.name.lower() != p.name.lower():
                 return False
         if p.parent_alias is not None:
+            # Pattern requires a qualifier (even if it's a variable). Do not match
+            # unqualified columns, otherwise the qualifier var would bind to None.
+            if q.parent_alias is None:
+                return False
             if _is_var_name(p.parent_alias, mapping):
                 if not _bind(p.parent_alias, q.parent_alias, memo):
                     return False
