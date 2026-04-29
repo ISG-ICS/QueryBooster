@@ -639,30 +639,6 @@ def test_rewrite_rule_subquery_to_join_1():
     assert format(parse(q1)) == format(parse(_q1))
 
 
-def test_rewrite_rule_subquery_to_join_1():
-    q0 = '''
-        select empno, firstnme, lastname, phoneno
-        from employee
-        where workdept in
-            (select deptno
-                from department
-                where deptname = 'OPERATIONS')
-        and 1=1;
-    '''
-    q1 = '''
-        select distinct empno, firstnme, lastname, phoneno
-        from employee, department
-        where employee.workdept = department.deptno 
-        and 1=1
-        and deptname = 'OPERATIONS';
-    '''
-    rule_keys = ['subquery_to_join']
-
-    rules = [get_rule(k) for k in rule_keys]
-    _q1, _rewrite_path = QueryRewriter.rewrite(q0, rules)
-    assert format(parse(q1)) == format(parse(_q1))
-
-
 def test_rewrite_rule_subquery_to_join_2():
     q0 = '''
         select empno, firstnme, lastname, phoneno

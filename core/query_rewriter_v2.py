@@ -1144,7 +1144,7 @@ class QueryRewriterV2:
         rewriting_path: list = []
 
         # Cycle detection: track canonical SQL strings seen so far
-        query_trace: set = {query}
+        query_trace: set[str] = set()
         cycle_found = False
 
         new_query = True

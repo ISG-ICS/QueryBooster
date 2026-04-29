@@ -766,6 +766,8 @@ def get_rule(key: str) -> dict:
 #
 def get_rule_v2(key: str) -> dict:
     rule = next(filter(lambda x: x['key'] == key, rules), None)
+    if rule is None:
+        raise ValueError(f"Rule {key} not found")
     result = RuleParserV2.parse(rule['pattern'], rule['rewrite'])
     # TODO: reuse v1 parse_actions?
     identity_mapping = json.dumps({k: k for k in result.mapping})
