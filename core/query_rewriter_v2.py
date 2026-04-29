@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import sqlparse
 
-from core.ast.enums import NodeType, JoinType, SortOrder
+from core.ast.enums import NodeType
 from core.ast.node import (
     CaseNode,
     ColumnNode,

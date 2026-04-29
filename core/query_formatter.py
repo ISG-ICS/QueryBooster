@@ -11,7 +11,6 @@ from core.ast.node import (
     HavingNode,
     OrderByNode,
     JoinNode,
-    LiteralNode,
     SubqueryNode,
 )
 from core.ast.enums import NodeType, JoinType, SortOrder
