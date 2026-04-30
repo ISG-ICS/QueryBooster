@@ -22,6 +22,7 @@ Memo dict produced by match():
 from __future__ import annotations
 
 import copy
+import logging
 import re
 from contextlib import contextmanager
 from collections import deque
@@ -31,6 +32,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import sqlparse
 
 from core.ast.enums import NodeType
+
+logger = logging.getLogger(__name__)
 from core.ast.node import (
     CaseNode,
     ColumnNode,
@@ -1123,6 +1126,49 @@ def _subst_val(field: Any, src: Any, tgt: Any) -> Any:
     return field
 
 
+def _rule_key(rule: dict) -> Any:
+    """Stable id for skipping a rule within one rewrite round."""
+    k = rule.get("key")
+    if k is not None:
+        return k
+    return rule.get("id")
+
+
+def _pick_applicable_rule(
+    query_ast: Node, rules: list, excluded: set,
+) -> Tuple[Optional[dict], dict]:
+    """First full root match, else first partial match; skip guardrailed rules.
+
+    Rules listed in ``excluded`` (by :func:`_rule_key`) are not returned. When
+    :func:`_should_skip_partial_and_application` applies, the rule key is added to
+    ``excluded`` and the search continues.
+    """
+    for rule in rules:
+        rk = _rule_key(rule)
+        if rk in excluded:
+            continue
+        memo: dict = {}
+        if (QueryRewriterV2.match(query_ast, rule, memo, MatchingMode.FULL_ONLY)
+                and memo.get("_rule_node") is query_ast):
+            if _should_skip_partial_and_application(rule, memo):
+                excluded.add(rk)
+                continue
+            return rule, memo
+
+    for rule in rules:
+        rk = _rule_key(rule)
+        if rk in excluded:
+            continue
+        memo = {}
+        if QueryRewriterV2.match(query_ast, rule, memo, MatchingMode.ALLOW_PARTIAL):
+            if _should_skip_partial_and_application(rule, memo):
+                excluded.add(rk)
+                continue
+            return rule, memo
+
+    return None, {}
+
+
 # ============================================================================
 # Public QueryRewriterV2 class
 # ============================================================================
@@ -1166,46 +1212,36 @@ class QueryRewriterV2:
             else:
                 query_trace.add(formatted)
 
-            rule_applied = None
-            memo_applied: dict = {}
-
-            # First pass: full match at query root
-            for rule in rules:
-                memo: dict = {}
-                if (QueryRewriterV2.match(query_ast, rule, memo, MatchingMode.FULL_ONLY)
-                        and memo.get("_rule_node") is query_ast):
-                    rule_applied = rule
-                    memo_applied = memo
+            # Pick and apply at most one rule per outer iteration. Skip guardrailed
+            # partial-AND matches and retry with the next rule; on apply failure, exclude
+            # that rule and try another (same query_ast) instead of ending the round.
+            excluded: set = set()
+            while True:
+                rule_applied, memo_applied = _pick_applicable_rule(query_ast, rules, excluded)
+                if rule_applied is None:
                     break
-
-            # Second pass: any match (including partial AND/OR and inner nodes)
-            if rule_applied is None:
-                for rule in rules:
-                    memo = {}
-                    if QueryRewriterV2.match(query_ast, rule, memo, MatchingMode.ALLOW_PARTIAL):
-                        rule_applied = rule
-                        memo_applied = memo
-                        break
-
-            if rule_applied is not None:
                 try:
-                    # Guardrail: avoid applying join-introducing rewrites when the rule only
-                    # matched a single conjunct inside a larger AND. In practice these rules
-                    # are intended to rewrite whole WHERE patterns (or OR branches); applying
-                    # them as a partial AND match can be order-dependent and may prevent
-                    # more appropriate rewrites from firing on the original structure.
-                    if _should_skip_partial_and_application(rule_applied, memo_applied):
-                        continue
-                    query_ast = QueryRewriterV2.take_actions(query_ast, rule_applied, memo_applied)
-                    query_ast = QueryRewriterV2.replace(query_ast, rule_applied, memo_applied)
+                    query_ast = QueryRewriterV2.take_actions(
+                        query_ast, rule_applied, memo_applied
+                    )
+                    query_ast = QueryRewriterV2.replace(
+                        query_ast, rule_applied, memo_applied
+                    )
                     new_formatted = formatter.format(query_ast)
                     rewriting_path.append([rule_applied["id"], new_formatted])
                     # Re-parse to normalise (mirrors old parse(format(...)))
                     query_ast = parser.parse(new_formatted)
                     if not cycle_found and iterate:
                         new_query = True
+                    break
                 except Exception as exc:
-                    print(f"Failed to rewrite with rule {rule_applied.get('key')}: {exc}")
+                    logger.warning(
+                        "Failed to rewrite with rule %s: %s",
+                        rule_applied.get("key", rule_applied.get("id")),
+                        exc,
+                        exc_info=True,
+                    )
+                    excluded.add(_rule_key(rule_applied))
 
         return formatter.format(query_ast), rewriting_path
 
