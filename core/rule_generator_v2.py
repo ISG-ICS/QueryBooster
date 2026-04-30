@@ -44,6 +44,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def varType(var: str) -> Optional[VarType]:
+        """Classify an internal variable name as ElementVariable, SetVariable, or None.
+
+        Looks at the prefix declared in ``VarTypesInfo`` (e.g. ``EV`` vs ``SV``) and returns the matching ``VarType`` enum, or ``None`` for non-variable strings.
+        """
         if var.startswith(VarTypesInfo[VarType.SetVariable]["internalBase"]):
             return VarType.SetVariable
         if var.startswith(VarTypesInfo[VarType.ElementVariable]["internalBase"]):
@@ -52,14 +56,26 @@ class RuleGeneratorV2:
 
     @staticmethod
     def parse_validate_single(query: str) -> Tuple[bool, str, int]:
+        """Validate a standalone rule query (used when only one half of a rule is being edited).
+
+        Returns ``(ok, message, error_index)`` where ``error_index`` is the character offset of the first parse error, or ``0`` on success.
+        """
         return RuleGeneratorV2._parse_validate_impl(query, None)
 
     @staticmethod
     def parse_validate(pattern: str, rewrite: str) -> Tuple[bool, str, int]:
+        """Validate a (pattern, rewrite) rule pair and return ``(ok, message, error_index)``.
+
+        Reports bracket mismatches, parser errors on either side, and rejects rules whose rewrite uses a variable that never appears in the pattern.
+        """
         return RuleGeneratorV2._parse_validate_impl(pattern, rewrite)
 
     @staticmethod
     def recommend_simple_rules(examples: List[Dict[str, str]]) -> List[Dict[str, object]]:
+        """Pick a small set of generalized rules that together cover every (q0, q1) example.
+
+        Generates candidate rules per example, fingerprints them, and greedy set-covers the still-uncovered examples, breaking ties toward fewer variables. Mirrors v1's ``recommend_simple_rules``.
+        """
         fingerprint_to_examples: Dict[str, Set[int]] = defaultdict(set)
         fingerprint_to_rule: Dict[str, Dict[str, object]] = {}
         example_candidates: List[List[Tuple[str, Dict[str, object]]]] = []
@@ -254,6 +270,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def generate_rule_graph(q0: str, q1: str) -> Dict[str, object]:
+        """Build the full BFS graph of generalizations rooted at the seed rule for ``q0 → q1``.
+
+        Each node's ``children`` list is populated with the rules reachable in one variabilization/merge/drop step; nodes with the same fingerprint are deduplicated, so the graph is a DAG, not a tree.
+        """
         seed_rule = RuleGeneratorV2.initialize_seed_rule(q0, q1)
         seed_fp = RuleGeneratorV2.fingerPrint(seed_rule)
         visited = {seed_fp: seed_rule}
@@ -281,6 +301,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def initialize_seed_rule(q0: str, q1: str) -> Dict[str, object]:
+        """Build the initial (un-generalized) rule dict for the rewrite pair ``q0 → q1``.
+
+        Parses both sides via ``RuleParserV2``, snapshots the source ASTs/SQL, and returns a fresh rule dict carrying ``pattern``, ``rewrite``, ``pattern_ast``, ``rewrite_ast``, ``mapping``, and empty ``constraints``/``actions``.
+        """
         parsed = RuleParserV2.parse(q0, q1)
         pattern = RuleGeneratorV2.deparse(copy.deepcopy(parsed.pattern_ast))
         rewrite = RuleGeneratorV2.deparse(copy.deepcopy(parsed.rewrite_ast))
@@ -309,6 +333,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def generate_general_rule(q0: str, q1: str) -> Dict[str, object]:
+        """Repeatedly apply every ``generalize_*`` step until the rule's fingerprint stops changing.
+
+        Returns the most general rule reachable from the seed by exhaustively variablizing tables/columns/literals/subtrees, merging variable lists, and dropping branches. Mirrors v1's ``generate_general_rule``.
+        """
         seed_rule = RuleGeneratorV2.initialize_seed_rule(q0, q1)
         general_rule = seed_rule
         visited_fingerprints: Set[str] = set()
@@ -322,6 +350,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def variablize_tables(rule: Dict[str, object]) -> List[Dict[str, object]]:
+        """Return one child rule per table that can still be replaced with a fresh element variable.
+
+        Each child is the result of substituting a single table reference with ``<x?>`` on both pattern and rewrite sides. Mirrors v1's ``variablize_tables``.
+        """
         pattern_ast = rule.get("pattern_ast")
         rewrite_ast = rule.get("rewrite_ast")
         if not isinstance(pattern_ast, Node) or not isinstance(rewrite_ast, Node):
@@ -330,6 +362,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def variablize_columns(rule: Dict[str, object]) -> List[Dict[str, object]]:
+        """Return one child rule per column that can still be replaced with a fresh element variable.
+
+        Each child substitutes one un-variablized column name with ``<x?>`` on both sides. Mirrors v1's ``variablize_columns``.
+        """
         pattern_ast = rule.get("pattern_ast")
         rewrite_ast = rule.get("rewrite_ast")
         if not isinstance(pattern_ast, Node) or not isinstance(rewrite_ast, Node):
@@ -338,6 +374,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def variablize_literals(rule: Dict[str, object]) -> List[Dict[str, object]]:
+        """Return one child rule per literal that can still be replaced with a fresh element variable.
+
+        Considers literals that recur within one side or are shared across both sides. Mirrors v1's ``variablize_literals``.
+        """
         pattern_ast = rule.get("pattern_ast")
         rewrite_ast = rule.get("rewrite_ast")
         if not isinstance(pattern_ast, Node) or not isinstance(rewrite_ast, Node):
@@ -346,6 +386,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def merge_variables(rule: Dict[str, object]) -> List[Dict[str, object]]:
+        """Return one child rule per element-variable list collapsible into a single set variable ``<<y?>>``.
+
+        Each candidate list is the intersection of an AND-chain or SELECT-list on both sides. Mirrors v1's ``merge_variables``.
+        """
         pattern_ast = rule.get("pattern_ast")
         rewrite_ast = rule.get("rewrite_ast")
         if not isinstance(pattern_ast, Node) or not isinstance(rewrite_ast, Node):
@@ -354,6 +398,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def drop_branches(rule: Dict[str, object]) -> List[Dict[str, object]]:
+        """Return one child rule per droppable branch (a clause or AND/OR conjunct that is fully variablized on both sides).
+
+        Mirrors v1's ``drop_branches``: the branch is removed from both pattern and rewrite, producing a strictly more general rule.
+        """
         pattern_ast = rule.get("pattern_ast")
         rewrite_ast = rule.get("rewrite_ast")
         if not isinstance(pattern_ast, Node) or not isinstance(rewrite_ast, Node):
@@ -362,6 +410,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def generalize_tables(rule: Dict[str, object]) -> Dict[str, object]:
+        """Return a new rule with every replaceable table variabilized in one pass.
+
+        Walks the candidate tables and applies ``variablize_table`` repeatedly. Returns a fresh dict; the input ``rule`` is not mutated. Mirrors v1's ``generalize_tables``.
+        """
         new_rule = copy.deepcopy(rule)
         pattern_ast = new_rule.get("pattern_ast")
         rewrite_ast = new_rule.get("rewrite_ast")
@@ -375,6 +427,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def generalize_columns(rule: Dict[str, object]) -> Dict[str, object]:
+        """Return a new rule with every replaceable column variabilized in one pass.
+
+        Returns a fresh dict; the input is not mutated. Mirrors v1's ``generalize_columns``.
+        """
         new_rule = copy.deepcopy(rule)
         pattern_ast = new_rule.get("pattern_ast")
         rewrite_ast = new_rule.get("rewrite_ast")
@@ -388,6 +444,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def generalize_literals(rule: Dict[str, object]) -> Dict[str, object]:
+        """Return a new rule with every replaceable literal variabilized in one pass.
+
+        Returns a fresh dict; the input is not mutated. Mirrors v1's ``generalize_literals``.
+        """
         new_rule = copy.deepcopy(rule)
         pattern_ast = new_rule.get("pattern_ast")
         rewrite_ast = new_rule.get("rewrite_ast")
@@ -401,6 +461,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def generalize_subtrees(rule: Dict[str, object]) -> Dict[str, object]:
+        """Return a new rule with every shared, fully-variablized subtree collapsed into a single element variable.
+
+        Returns a fresh dict; the input is not mutated. Mirrors v1's ``generalize_subtrees``.
+        """
         new_rule = copy.deepcopy(rule)
         pattern_ast = new_rule.get("pattern_ast")
         rewrite_ast = new_rule.get("rewrite_ast")
@@ -414,6 +478,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def generalize_variables(rule: Dict[str, object]) -> Dict[str, object]:
+        """Return a new rule with every mergeable element-variable list collapsed into a set variable.
+
+        Returns a fresh dict; the input is not mutated. Mirrors v1's ``generalize_variables``.
+        """
         new_rule = copy.deepcopy(rule)
         pattern_ast = new_rule.get("pattern_ast")
         rewrite_ast = new_rule.get("rewrite_ast")
@@ -428,6 +496,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def generalize_branches(rule: Dict[str, object]) -> Dict[str, object]:
+        """Return a new rule with every droppable branch removed in one pass.
+
+        Returns a fresh dict; the input is not mutated. Mirrors v1's ``generalize_branches``.
+        """
         new_rule = copy.deepcopy(rule)
         pattern_ast = new_rule.get("pattern_ast")
         rewrite_ast = new_rule.get("rewrite_ast")
@@ -442,6 +514,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def dereplaceVars(sql: str, mapping: Dict[str, str]) -> str:
+        """Substitute internal variable names back to user-facing markers (``EV001`` → ``<x>``, ``SV001`` → ``<<y>>``).
+
+        Iterates ``mapping`` (external-name → internal-name) and rewrites every occurrence in ``sql`` using the markers from ``VarTypesInfo``.
+        """
         out = sql
         for external_name, internal_name in mapping.items():
             var_type = RuleGeneratorV2.varType(internal_name)
@@ -454,6 +530,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def deparse(node: Node) -> str:
+        """Render a v2 AST node back into SQL text, including ``<x>``/``<<y>>`` placeholders.
+
+        Wraps a partial node into a full ``QueryNode`` for formatting, runs ``QueryFormatter``, fixes mo_sql_parsing's NATURAL JOIN quirk, then strips the synthetic SELECT/FROM/WHERE prefix to recover the original scope.
+        """
         working = copy.deepcopy(node)
         full_query, scope = RuleGeneratorV2._extend_to_full_query(working)
         full_query, placeholder_mapping = RuleGeneratorV2._encode_vars_for_format(full_query)
@@ -470,6 +550,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def columns(pattern_ast: Node, rewrite_ast: Node) -> List[str]:
+        """Return the deterministic, sorted set of un-variablized column names in ``pattern_ast``.
+
+        Variable-named and placeholder columns are excluded. ``rewrite_ast`` is accepted for v1 signature parity but ignored.
+        """
         del rewrite_ast  # kept for parity with v1 signature
         found: Set[str] = set()
         var_names = {
@@ -490,6 +574,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def literals(pattern_ast: Node, rewrite_ast: Node) -> List[Union[str, numbers.Number]]:
+        """Return literals worth variabilizing across the pattern and rewrite ASTs.
+
+        Includes any literal that recurs more than once on either side, plus any literal that appears on both sides. Mirrors v1's ``literals``.
+        """
         pattern_literals = RuleGeneratorV2._literal_counts(pattern_ast)
         rewrite_literals = RuleGeneratorV2._literal_counts(rewrite_ast)
 
@@ -502,6 +590,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def tables(pattern_ast: Node, rewrite_ast: Node) -> List[Dict[str, str]]:
+        """Return the deduplicated union of table references (``{"value", "name"}`` dicts) seen across both ASTs.
+
+        Each entry pairs a base table name with one alias; the order preserves pattern-side first appearance, then rewrite-side aliases not already seen. Mirrors v1's ``tables``.
+        """
         pattern_tables = RuleGeneratorV2._tables_of_ast(pattern_ast)
         rewrite_tables = RuleGeneratorV2._tables_of_ast(rewrite_ast)
 
@@ -538,6 +630,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def variable_lists(pattern_ast: Node, rewrite_ast: Node) -> List[List[str]]:
+        """Return element-variable name lists that appear in both pattern and rewrite (intersected pairwise).
+
+        Each returned list is the intersection of one pattern-side AND/SELECT chain with the first matching rewrite-side chain, suitable for collapsing into a set variable.
+        """
         pattern_lists = [set(v) for v in RuleGeneratorV2._variable_lists_of_ast(pattern_ast)]
         rewrite_lists = [set(v) for v in RuleGeneratorV2._variable_lists_of_ast(rewrite_ast)]
 
@@ -557,6 +653,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def subtrees(pattern_ast: Node, rewrite_ast: Node) -> List[Node]:
+        """Return subtrees that appear (structurally equal) in both pattern and rewrite, eligible to share an element variable.
+
+        Pairs are matched first-fit between the two sides' candidate lists. Mirrors v1's ``subtrees``.
+        """
         pattern_subtrees = RuleGeneratorV2._subtrees_of_ast(pattern_ast)
         rewrite_subtrees = RuleGeneratorV2._subtrees_of_ast(rewrite_ast)
         ans: List[Node] = []
@@ -571,6 +671,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def variablize_subtree(rule: Dict[str, object], subtree: Node) -> Dict[str, object]:
+        """Return a new rule where every occurrence of ``subtree`` (in both ASTs) is replaced by a fresh element variable.
+
+        Allocates the next available ``<x?>`` in the mapping and re-deparses both sides. The input ``rule`` is not mutated.
+        """
         new_rule = copy.deepcopy(rule)
         mapping = copy.deepcopy(new_rule["mapping"])
         if not isinstance(mapping, dict):
@@ -591,10 +695,18 @@ class RuleGeneratorV2:
 
     @staticmethod
     def variablize_subtrees(rule: Dict[str, object]) -> List[Dict[str, object]]:
+        """Return one child rule per subtree shared by pattern and rewrite that can be collapsed into an element variable.
+
+        Mirrors v1's ``variablize_subtrees``.
+        """
         return [RuleGeneratorV2.variablize_subtree(rule, subtree) for subtree in RuleGeneratorV2.subtrees(rule["pattern_ast"], rule["rewrite_ast"])]  # type: ignore[arg-type,index]
 
     @staticmethod
     def merge_variable_list(rule: Dict[str, object], variable_list: List[str]) -> Dict[str, object]:
+        """Return a new rule where the given element variables are collapsed into a single set variable ``<<y?>>``.
+
+        Allocates the next available set variable and rewrites both ASTs (and their deparsed forms) so consecutive members of ``variable_list`` share that one set variable. The input ``rule`` is not mutated.
+        """
         new_rule = copy.deepcopy(rule)
         mapping = copy.deepcopy(new_rule["mapping"])
         if not isinstance(mapping, dict):
@@ -616,6 +728,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def branches(pattern_ast: Node, rewrite_ast: Node) -> List[Dict[str, object]]:
+        """Return branch descriptors (clauses or AND/OR conjuncts) that exist on both sides and are fully variablized.
+
+        Each entry is a ``{"key": ..., "value": ...}`` dict suitable for ``drop_branch``. Pairs are matched first-fit; only matched branches are returned. Mirrors v1's ``branches``.
+        """
         pattern_branches = RuleGeneratorV2._branch_entries_of_ast(pattern_ast)
         rewrite_branches = RuleGeneratorV2._branch_entries_of_ast(rewrite_ast)
         out: List[Dict[str, object]] = []
@@ -655,6 +771,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def drop_branch(rule: Dict[str, object], branch: Dict[str, object]) -> Dict[str, object]:
+        """Return a new rule with ``branch`` removed from both pattern and rewrite ASTs.
+
+        ``branch`` is a descriptor produced by ``branches`` (e.g. ``{"key": "where", "value": ...}``). The input ``rule`` is not mutated.
+        """
         new_rule = copy.deepcopy(rule)
         for key in ("pattern_ast", "rewrite_ast"):
             ast = new_rule.get(key)
@@ -667,6 +787,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def fingerPrint(rule: Dict[str, object]) -> str:
+        """Return a stable fingerprint string for ``rule`` based on its deparsed pattern.
+
+        Variable indices are normalized so that two rules that differ only in variable numbering share a fingerprint. Used to deduplicate rules in the generalization graph.
+        """
         ast = rule.get("pattern_ast")
         if not isinstance(ast, Node):
             raise TypeError("rule['pattern_ast'] must be an AST Node")
@@ -686,8 +810,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def unify_variable_names(q0: str, q1: str) -> Tuple[str, str]:
-        # Unify placeholders by first appearance across q0 then q1:
-        # <x9> -> <x1>, <x10> -> <x2>, <<x9>> -> <<x1>>, etc.
+        """Renumber ``<x?>``/``<<x?>>`` placeholders in ``q0`` and ``q1`` consecutively in order of first appearance.
+
+        Returns the rewritten pair ``(q0', q1')``; e.g. ``<x9>`` and ``<x10>`` become ``<x1>`` and ``<x2>`` so two rules with equivalent placeholders compare equal.
+        """
         mapping: Dict[str, str] = {}
         counter = 1
 
@@ -753,6 +879,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def numberOfVariables(rule: Dict[str, object]) -> int:
+        """Return the count of declared variables in ``rule['mapping']``.
+
+        Used as a tie-breaker when picking the simplest rule among equivalents.
+        """
         mapping = rule.get("mapping")
         if not isinstance(mapping, dict):
             raise TypeError("rule['mapping'] must be a dict[str, str]")
@@ -905,6 +1035,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def variablize_literal(rule: Dict[str, object], literal: Union[str, numbers.Number]) -> Dict[str, object]:
+        """Return a new rule where every occurrence of ``literal`` (in both ASTs) is replaced by a fresh element variable.
+
+        Allocates the next available ``<x?>`` and re-deparses both sides. The input ``rule`` is not mutated. Mirrors v1's ``variablize_literal``.
+        """
         new_rule = copy.deepcopy(rule)
         mapping = copy.deepcopy(new_rule["mapping"])
         if not isinstance(mapping, dict):
@@ -925,6 +1059,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def variablize_column(rule: Dict[str, object], column: str) -> Dict[str, object]:
+        """Return a new rule where every occurrence of ``column`` (in both ASTs) is replaced by a fresh element variable.
+
+        Allocates the next available ``<x?>`` and re-deparses both sides. The input ``rule`` is not mutated. Mirrors v1's ``variablize_column``.
+        """
         new_rule = copy.deepcopy(rule)
         mapping = copy.deepcopy(new_rule["mapping"])
         if not isinstance(mapping, dict):
@@ -945,6 +1083,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def variablize_table(rule: Dict[str, object], table: Dict[str, str]) -> Dict[str, object]:
+        """Return a new rule where the named table (and its qualified column refs) is replaced by a fresh element variable.
+
+        ``table`` is a ``{"value": <name>, "name": <alias>}`` descriptor as produced by ``tables``. Both ASTs are rewritten and re-deparsed; the input ``rule`` is not mutated.
+        """
         new_rule = copy.deepcopy(rule)
         mapping = copy.deepcopy(new_rule["mapping"])
         if not isinstance(mapping, dict):
@@ -975,6 +1117,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _walk(node: Optional[Node]) -> Iterator[Node]:
+        """Pre-order yield every ``Node`` in the subtree rooted at ``node`` (including the node itself).
+
+        Safe to call with ``None``; non-Node children and missing ``children`` attributes are skipped.
+        """
         if node is None:
             return
         yield node
@@ -986,6 +1132,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _extend_to_full_query(node: Node) -> tuple[Node, Scope]:
+        """Wrap a partial AST node into a full ``QueryNode`` so the formatter can render it.
+
+        Returns ``(full_query, scope)`` where ``scope`` records what part of the synthetic ``SELECT * FROM t WHERE ...`` wrapper to strip back off after formatting. Mirrors v1's ``extendToFullASTJson``.
+        """
         if isinstance(node, CompoundQueryNode):
             return node, Scope.SELECT
         if isinstance(node, QueryNode):
@@ -1028,6 +1178,7 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _first_clause(query: QueryNode, node_type: NodeType) -> Optional[Node]:
+        """Return the first child of ``query`` whose ``.type`` matches ``node_type`` (or ``None`` if absent)."""
         for child in query.children:
             if child.type == node_type:
                 return child
@@ -1056,6 +1207,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _literal_counts(ast: Node) -> Dict[Union[str, numbers.Number], int]:
+        """Count how often each literal value appears in ``ast``, ignoring placeholder-named string literals.
+
+        String literals are normalized by stripping ``%`` so that ``'foo%'`` and ``'foo'`` collapse together, matching v1's LIKE-aware counting.
+        """
         counts: Dict[Union[str, numbers.Number], int] = {}
         for node in RuleGeneratorV2._walk(ast):
             if node.type != NodeType.LITERAL:
@@ -1072,6 +1227,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _tables_of_ast(ast: Node) -> List[Dict[str, str]]:
+        """Return ``{"value", "name"}`` descriptors for every concrete (non-placeholder) ``TableNode`` in ``ast``.
+
+        ``name`` is the alias when present, otherwise the table value. Tables whose name or alias is itself a placeholder are skipped.
+        """
         found: List[Dict[str, str]] = []
         for node in RuleGeneratorV2._walk(ast):
             if not isinstance(node, TableNode):
@@ -1088,6 +1247,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _find_next_element_variable(mapping: Dict[str, str]) -> Tuple[Dict[str, str], str, str]:
+        """Allocate the next unused element variable in ``mapping`` and return ``(updated_mapping, external_name, placeholder_token)``.
+
+        Mutates ``mapping`` in place by inserting the new ``x?`` → ``EV???`` entry. The placeholder token (``__rv_x?__``) is the parser-friendly form used when re-deparsing through mo_sql_parsing.
+        """
         max_external = 0
         max_internal = 0
         for external_name, internal_name in mapping.items():
@@ -1106,6 +1269,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _find_next_set_variable(mapping: Dict[str, str]) -> Tuple[Dict[str, str], str, str]:
+        """Allocate the next unused set variable in ``mapping`` and return ``(updated_mapping, set_name, placeholder_token)``.
+
+        Mutates ``mapping`` in place by inserting the new ``y?`` → ``SV???`` entry. The placeholder token (``__rvs_y?__``) is the parser-friendly form used when re-deparsing.
+        """
         max_external = 0
         max_internal = 0
         for external_name, internal_name in mapping.items():
@@ -1124,6 +1291,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _merge_variable_list_in_ast(ast: Node, variable_set: Set[str], set_name: str) -> Node:
+        """Collapse element variables in ``variable_set`` into a single ``SetVariableNode(set_name)`` wherever they appear in ``ast``.
+
+        Handles SELECT/GROUP BY lists, AND chains (flattened to mirror v1's flat ``{'and': [...]}``), single-WHERE predicates, JOIN ON conditions, and LIMIT placeholders. Mutates ``ast`` in place and returns it.
+        """
         def _process_and_chain(and_node: OperatorNode) -> Optional[Node]:
             # Flatten nested AND chains so that `(a AND b) AND c` is treated as
             # `[a, b, c]`, mirroring v1's flat `{'and': [...]}` representation.
@@ -1275,6 +1446,10 @@ class RuleGeneratorV2:
         external_name: str,
         placeholder_token: str,
     ) -> Node:
+        """Substitute every occurrence of ``literal`` in ``ast`` with the new variable.
+
+        String literals are rewritten in place (preserving any surrounding ``%`` LIKE wildcards) using ``placeholder_token``; numeric literal nodes are swapped wholesale for an ``ElementVariableNode(external_name)``. Mutates ``ast`` in place and returns it.
+        """
         for node in RuleGeneratorV2._walk(ast):
             if node.type != NodeType.LITERAL:
                 continue
@@ -1294,6 +1469,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _replace_column_in_ast(ast: Node, column: str, external_name: str) -> Node:
+        """Rename every ``ColumnNode`` whose ``name == column`` (and any non-DISTINCT ``SELECT *``) to ``external_name`` in ``ast``.
+
+        Mirrors v1's quirk where the first column variabilized also captures bare ``*`` in plain SELECT clauses, so they share a single variable. Mutates ``ast`` in place and returns it.
+        """
         # Mirror v1 behavior: every column variabilization also rewrites any
         # remaining `*` (all_columns dict) to the same variable. This causes the
         # first column processed to share its variable with `*`. v1 only does
@@ -1327,6 +1506,10 @@ class RuleGeneratorV2:
         target_name: str,
         placeholder_token: str,
     ) -> Node:
+        """Replace every matching ``TableNode`` (and its qualified column refs) with ``placeholder_token`` in ``ast``.
+
+        A bare-named reference to ``target_value`` is also matched even when its alias disagrees with ``target_name``, so a single variable can cover both an aliased outer reference and a bare-named reference inside a subquery. Mutates ``ast`` in place and returns it.
+        """
         # Mirror v1's `replaceTablesOfASTJson` special case: a bare-table
         # reference (no explicit alias, where alias == value) is also matched
         # when its value equals the target's value, even if `target_name`
@@ -1368,6 +1551,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _replace_node_reference(root: Node, target: Node, replacement: Node) -> None:
+        """Splice ``replacement`` in for ``target`` everywhere ``target`` appears as a child within ``root``.
+
+        Mutates the tree in place and re-syncs parent attribute aliases via ``_resync_parallel_attrs``. Raises ``ValueError`` if ``target`` is ``root`` itself, since the parent cannot rewire its own pointer.
+        """
         for node in RuleGeneratorV2._walk(root):
             children = getattr(node, "children", None)
             replaced_here = False
@@ -1388,6 +1575,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _resync_parallel_attrs(node: Node, target: Node, replacement: Node) -> None:
+        """Rewrite parallel attribute pointers on ``node`` (e.g. ``CaseNode.whens``, ``WhenThenNode.when/then``, ``JoinNode.on_condition``) so they reference ``replacement`` instead of ``target``.
+
+        Many AST nodes carry named attributes that mirror entries in ``children``; whenever children mutate, these parallel pointers must be re-synced or the formatter will read stale references.
+        """
         # Many AST nodes mirror children into named attributes (e.g. CaseNode.
         # whens / else_val, WhenThenNode.when/then, JoinNode.on_condition).
         # The formatter and other helpers read those attrs directly, so
@@ -1413,6 +1604,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _is_placeholder_name(name: str) -> bool:
+        """Return ``True`` when ``name`` is a generator-internal placeholder identifier.
+
+        Matches the parser-friendly tokens (``__rv_x?__``, ``__rvs_y?__``) and bare ``x?``/``y?`` external names. Used to filter out variabilized identifiers when scanning ASTs for concrete tables/columns/literals.
+        """
         lower = name.lower()
         if re.fullmatch(r"__rv_[xy]\d+__", lower):
             return True
@@ -1443,6 +1638,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _variable_lists_of_ast(ast: Node) -> List[List[str]]:
+        """Collect element-variable name lists from positions where v1 wraps a variable list (SELECT items, top-level AND chains, single-WHERE predicates, LIMIT, JOIN ON).
+
+        AND chains are flattened across their full left-associative depth so ``a AND b AND c`` yields a single 3-name list, mirroring v1's flat ``{'and': [...]}`` representation.
+        """
         # AND chains parse left-associatively in v2 (e.g. `a AND b AND c` →
         # `(a AND b) AND c`). v1 sees them as a flat `{'and': [a, b, c]}`.
         # We mirror v1 by collecting variable lists only at top-most AND
@@ -1517,6 +1716,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _subtrees_of_ast(ast: Node) -> List[Node]:
+        """Return deep copies of every fully-variablized subtree candidate inside ``ast``.
+
+        A subtree is included only if ``_is_subtree_candidate`` accepts it for its parent context, and duplicates are de-duped by deparsed (or structural) key.
+        """
         out: List[Node] = []
         seen: Set[str] = set()
 
@@ -1544,6 +1747,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _structural_key(node: Node) -> str:
+        """Return a stable string fingerprint of ``node`` based on its type, scalar attributes, and recursively-keyed children.
+
+        Used as a fallback dedup key in ``_subtrees_of_ast`` when ``deparse`` cannot render a node.
+        """
         parts: List[str] = [type(node).__name__]
         for attr in ("name", "value", "alias", "distinct", "parent_alias"):
             if hasattr(node, attr):
@@ -1561,6 +1768,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _is_subtree_candidate(node: Node, parent: Optional[Node] = None) -> bool:
+        """Return ``True`` when ``node`` is a position-aware subtree replaceable by an element variable.
+
+        Mirrors v1's ``isSubtree``: column/literal nodes only qualify in SELECT/GROUP BY/ORDER BY positions; set-variable nodes qualify under SELECT, single-WHERE, single-WHEN, or OR-chain parents; otherwise the node must have at least one variabilized child and no un-variabilized leaves.
+        """
         if isinstance(
             node,
             (
@@ -1674,6 +1885,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _flatten_and_terms(node: Node) -> List[Node]:
+        """Flatten a left-associative AND chain into a list of conjuncts.
+
+        Returns ``[node]`` unchanged for non-AND inputs, mirroring v1's flat ``{'and': [...]}`` view of arbitrarily nested ``a AND b AND c`` expressions.
+        """
         if isinstance(node, OperatorNode) and node.name.upper() == "AND":
             out: List[Node] = []
             for child in node.children:
@@ -1701,6 +1916,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _flatten_union_queries(node: Node) -> List[QueryNode]:
+        """Flatten a UNION (DISTINCT) tree into a list of leaf ``QueryNode`` arms.
+
+        Returns an empty list for UNION ALL (where set semantics differ) or non-Query roots; otherwise descends through nested ``CompoundQueryNode`` instances to gather all branches in left-to-right order.
+        """
         if isinstance(node, QueryNode):
             return [node]
         if not isinstance(node, CompoundQueryNode):
@@ -1738,6 +1957,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _branch_entries_of_ast(ast: Node) -> List[Tuple[Dict[str, object], object]]:
+        """Enumerate ``(public_descriptor, internal_target)`` pairs for every branch in ``ast`` that ``branches`` could potentially drop.
+
+        Handles full queries (per-clause entries with v1's SELECT/WHERE/FROM interaction rules), AND/OR chains (one entry per conjunct/disjunct), and equality RHS singletons. Public descriptors are the dicts surfaced by ``branches``; internal targets are the actual nodes used by ``_drop_branch_in_ast``.
+        """
         if isinstance(ast, QueryNode):
             out: List[Tuple[Dict[str, object], object]] = []
             select = RuleGeneratorV2._first_clause(ast, NodeType.SELECT)
@@ -1915,6 +2138,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _drop_branch_in_ast(ast: Node, branch: Dict[str, object]) -> Node:
+        """Return a new AST with the branch described by ``branch`` removed from ``ast``.
+
+        Handles AND/OR conjunct removal (collapsing single-survivor chains), eq-rhs unwrapping, and per-clause QueryNode trimming with v1's wrapper-unwrap rules (e.g. dropping a sole FROM that wraps a subquery returns the inner query). May return the original ``ast`` if no branch matches.
+        """
         if isinstance(ast, OperatorNode):
             key = branch.get("key")
             if key == "eq_rhs":
@@ -1993,6 +2220,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _replace_subtree_in_ast(ast: Node, subtree: Node, replacement: Node, parent: Optional[Node] = None) -> Node:
+        """Position-aware replacement of every occurrence of ``subtree`` inside ``ast`` with a deep copy of ``replacement``.
+
+        Only swaps a match when the current parent context would have collected it as a candidate (so a column ref inside a JOIN ON predicate is left alone even when the same column is replaced as a SELECT item). Mutates and returns ``ast``; ``replacement`` is deep-copied per substitution.
+        """
         # Mirror v1's position-aware subtree replacement. In v1 a SELECT item
         # is wrapped in a `{'value': ...}` dict so column-ref strings appearing
         # in JOIN/ON/WHERE clauses are never matched by a SELECT-item subtree.
@@ -2040,6 +2271,10 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _resync_join_attrs(join: JoinNode, had_on: bool, n_using: int) -> None:
+        """Re-sync ``JoinNode`` parallel pointers (``left_table``, ``right_table``, ``on_condition``, ``using``) from its current ``children`` list.
+
+        Caller passes the snapshot of whether the join had an ON clause and how many USING columns existed before the mutation; this method then partitions the post-mutation children accordingly. Mutates ``join`` in place.
+        """
         children = list(join.children)
         if len(children) < 2:
             return
