@@ -18,6 +18,7 @@ from core.ast.node import (
     HavingNode,
     JoinNode,
     LimitNode,
+    ListNode,
     LiteralNode,
     Node,
     OffsetNode,
@@ -297,11 +298,27 @@ class RuleGeneratorV2:
             "actions": "",
         }
 
+    RuleGeneralizations = (
+        "generalize_tables",
+        "generalize_columns",
+        "generalize_literals",
+        "generalize_subtrees",
+        "generalize_variables",
+        "generalize_branches",
+    )
+
     @staticmethod
     def generate_general_rule(q0: str, q1: str) -> Dict[str, object]:
-        from core.rule_generator import RuleGenerator
-
-        return RuleGenerator.generate_general_rule(q0, q1)
+        seed_rule = RuleGeneratorV2.initialize_seed_rule(q0, q1)
+        general_rule = seed_rule
+        visited_fingerprints: Set[str] = set()
+        rule_fingerprint = RuleGeneratorV2.fingerPrint(general_rule)
+        while rule_fingerprint not in visited_fingerprints:
+            visited_fingerprints.add(rule_fingerprint)
+            for generalization in RuleGeneratorV2.RuleGeneralizations:
+                general_rule = getattr(RuleGeneratorV2, generalization)(general_rule)
+            rule_fingerprint = RuleGeneratorV2.fingerPrint(general_rule)
+        return general_rule
 
     @staticmethod
     def _rule_after_literals(q0: str, q1: str) -> Dict[str, object]:
@@ -3118,8 +3135,29 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _replace_column_in_ast(ast: Node, column: str, external_name: str) -> Node:
+        # Mirror v1 behavior: every column variabilization also rewrites any
+        # remaining `*` (all_columns dict) to the same variable. This causes the
+        # first column processed to share its variable with `*`. v1 only does
+        # this for `*` inside a non-DISTINCT SELECT (mo_sql_parsing represents
+        # those as `{'all_columns': {}}`); a `*` under SELECT DISTINCT is a
+        # plain string in v1 and is only rewritten when column itself is `*`.
+        non_distinct_select_star_ids: Set[int] = set()
+        if column != "*":
+            for node in RuleGeneratorV2._walk(ast):
+                if isinstance(node, SelectNode) and not getattr(node, "distinct", False):
+                    for child in node.children:
+                        if isinstance(child, ColumnNode) and child.name == "*":
+                            non_distinct_select_star_ids.add(id(child))
         for node in RuleGeneratorV2._walk(ast):
-            if isinstance(node, ColumnNode) and node.name == column:
+            if not isinstance(node, ColumnNode):
+                continue
+            if node.name == column:
+                node.name = external_name
+            elif (
+                node.name == "*"
+                and column != "*"
+                and id(node) in non_distinct_select_star_ids
+            ):
                 node.name = external_name
         return ast
 
@@ -3198,6 +3236,8 @@ class RuleGeneratorV2:
         out: List[List[str]] = []
         for node in RuleGeneratorV2._walk(ast):
             if isinstance(node, SelectNode):
+                if getattr(node, "distinct", False):
+                    continue
                 names = []
                 for child in node.children:
                     if isinstance(child, ElementVariableNode):
@@ -3241,7 +3281,10 @@ class RuleGeneratorV2:
 
         def _visit(node: Node, parent: Optional[Node] = None) -> None:
             if RuleGeneratorV2._is_subtree_candidate(node, parent):
-                key = RuleGeneratorV2.deparse(node)
+                try:
+                    key = RuleGeneratorV2.deparse(node)
+                except Exception:
+                    key = RuleGeneratorV2._structural_key(node)
                 if key not in seen:
                     seen.add(key)
                     out.append(copy.deepcopy(node))
@@ -3259,6 +3302,23 @@ class RuleGeneratorV2:
         return out
 
     @staticmethod
+    def _structural_key(node: Node) -> str:
+        parts: List[str] = [type(node).__name__]
+        for attr in ("name", "value", "alias", "distinct", "parent_alias"):
+            if hasattr(node, attr):
+                parts.append(f"{attr}={getattr(node, attr)!r}")
+        children = getattr(node, "children", None) or []
+        if isinstance(children, (list, set)):
+            child_keys: List[str] = []
+            for child in list(children):
+                if isinstance(child, Node):
+                    child_keys.append(RuleGeneratorV2._structural_key(child))
+                else:
+                    child_keys.append(repr(child))
+            parts.append("(" + ",".join(child_keys) + ")")
+        return "|".join(parts)
+
+    @staticmethod
     def _is_subtree_candidate(node: Node, parent: Optional[Node] = None) -> bool:
         if isinstance(
             node,
@@ -3266,7 +3326,6 @@ class RuleGeneratorV2:
                 QueryNode,
                 CompoundQueryNode,
                 CaseNode,
-                FunctionNode,
                 SelectNode,
                 FromNode,
                 WhereNode,
@@ -3285,6 +3344,14 @@ class RuleGeneratorV2:
         if isinstance(node, ColumnNode):
             return isinstance(parent, SelectNode) and RuleGeneratorV2._node_is_fully_variablized_column(node)
 
+        if isinstance(node, LiteralNode):
+            if isinstance(parent, ListNode):
+                return False
+            value = getattr(node, "value", None)
+            if isinstance(value, str) and RuleGeneratorV2._is_placeholder_name(value):
+                return True
+            return False
+
         var_count = 0
         for child in getattr(node, "children", []) or []:
             if isinstance(child, (QueryNode, CompoundQueryNode, SelectNode, FromNode, WhereNode, JoinNode, SubqueryNode)):
@@ -3301,6 +3368,11 @@ class RuleGeneratorV2:
                         continue
                     return False
                 if isinstance(child, LiteralNode):
+                    value = getattr(child, "value", None)
+                    if isinstance(value, str):
+                        normalized = value.replace("%", "")
+                        if RuleGeneratorV2._is_placeholder_name(normalized):
+                            var_count += 1
                     continue
                 return False
         return var_count >= 1
@@ -3677,11 +3749,21 @@ class RuleGeneratorV2:
             order_by = RuleGeneratorV2._first_clause(ast, NodeType.ORDER_BY)
             limit = RuleGeneratorV2._first_clause(ast, NodeType.LIMIT)
             offset = RuleGeneratorV2._first_clause(ast, NodeType.OFFSET)
-            if select is not None and RuleGeneratorV2._is_branch_clause("select", select):
+            # Treat SELECT and SELECT DISTINCT as separate keys (mirrors v1 mo_sql_parsing
+            # which uses different keys 'select' vs 'select_distinct').
+            select_is_distinct = isinstance(select, SelectNode) and bool(getattr(select, "distinct", False))
+            plain_select = select if (select is not None and not select_is_distinct) else None
+            is_select_only_wrapper = (
+                select is not None
+                and from_clause is None
+                and where is None
+                and all(clause is None for clause in (group_by, having, order_by, limit, offset))
+            )
+            if select is not None and (
+                is_select_only_wrapper or RuleGeneratorV2._is_branch_clause("select", select)
+            ):
                 select_target: object = select
-                if from_clause is None and where is None and all(
-                    clause is None for clause in (group_by, having, order_by, limit, offset)
-                ):
+                if is_select_only_wrapper:
                     select_target = "__select_wrapper__"
                 if isinstance(select, SelectNode) and len(select.children) == 1:
                     child = select.children[0]
@@ -3693,9 +3775,17 @@ class RuleGeneratorV2:
                         out.append(({"key": "select", "value": None}, select_target))
                 else:
                     out.append(({"key": "select", "value": None}, select_target))
-            if from_clause is not None and RuleGeneratorV2._is_branch_clause("from", from_clause):
+            is_from_only_wrapper = (
+                from_clause is not None
+                and select is None
+                and where is None
+                and all(clause is None for clause in (group_by, having, order_by, limit, offset))
+            )
+            if from_clause is not None and (
+                is_from_only_wrapper or RuleGeneratorV2._is_branch_clause("from", from_clause)
+            ):
                 from_target: object = from_clause
-                if select is None:
+                if is_from_only_wrapper:
                     from_target = "__from_wrapper__"
                 if isinstance(from_clause, FromNode):
                     if any(isinstance(c, JoinNode) for c in from_clause.children):
@@ -3704,13 +3794,21 @@ class RuleGeneratorV2:
                         out.append(({"key": "from", "value": "table_sources"}, from_target))
                 else:
                     out.append(({"key": "from", "value": None}, from_target))
+            is_where_only_wrapper = (
+                where is not None
+                and select is None
+                and from_clause is None
+                and all(clause is None for clause in (group_by, having, order_by, limit, offset))
+            )
             if where is not None and (
-                RuleGeneratorV2._is_branch_clause("where", where) or (select is None and from_clause is None)
+                is_where_only_wrapper or RuleGeneratorV2._is_branch_clause("where", where)
             ):
                 where_target: object = where
-                if select is None and from_clause is None:
+                if is_where_only_wrapper:
                     where_target = "__where_wrapper__"
                 out.append(({"key": "where", "value": None}, where_target))
+            if group_by is not None and RuleGeneratorV2._is_branch_clause("group_by", group_by):
+                out.append(({"key": "group_by", "value": None}, group_by))
             if having is not None and RuleGeneratorV2._is_branch_clause("having", having):
                 out.append(({"key": "having", "value": None}, having))
             if order_by is not None and RuleGeneratorV2._is_branch_clause("order_by", order_by):
@@ -3720,18 +3818,13 @@ class RuleGeneratorV2:
             if offset is not None and RuleGeneratorV2._is_branch_clause("offset", offset):
                 out.append(({"key": "offset", "value": None}, offset))
 
-            keys = {b["key"] for b, _ in out}
-            if "select" in keys and "where" in keys:
+            # Mirror v1 special cases (select/where/from interactions). Note: v1 keys
+            # 'select' and 'select_distinct' are distinct, so DISTINCT selects do not
+            # count as 'select' for these rules.
+            if plain_select is not None and where is not None:
                 out = [entry for entry in out if entry[0]["key"] != "from"]
-            if "select" not in keys and "from" in keys:
+            if plain_select is None and from_clause is not None:
                 out = [entry for entry in out if entry[0]["key"] != "where"]
-            if (
-                "from" in {b["key"] for b, _ in out}
-                and select is None
-                and where is None
-                and any(clause is not None for clause in (group_by, having, order_by, limit, offset))
-            ):
-                out = [entry for entry in out if entry[0]["key"] != "from"]
             return out
 
         if isinstance(ast, OperatorNode) and ast.name.lower() in {"and", "or"}:
@@ -3752,13 +3845,15 @@ class RuleGeneratorV2:
     @staticmethod
     def _is_branch_clause(key: str, clause: Node) -> bool:
         if key == "select":
-            if isinstance(clause, SelectNode) and len(clause.children) == 1:
-                child = clause.children[0]
-                if isinstance(child, ColumnNode) and child.name == "*":
-                    return True
-                if isinstance(child, SetVariableNode):
-                    return True
-                return RuleGeneratorV2._is_branch_node(child)
+            if isinstance(clause, SelectNode):
+                if len(clause.children) == 1:
+                    child = clause.children[0]
+                    if isinstance(child, ColumnNode) and child.name == "*":
+                        return True
+                    if isinstance(child, SetVariableNode):
+                        return True
+                    return RuleGeneratorV2._is_branch_node(child)
+                return RuleGeneratorV2._is_branch_node(clause)
             return False
         if key == "from":
             if isinstance(clause, FromNode):
@@ -3780,9 +3875,28 @@ class RuleGeneratorV2:
                     if not RuleGeneratorV2._is_placeholder_name(child.name):
                         return False
                 elif isinstance(child, JoinNode):
-                    return False
+                    if not RuleGeneratorV2._is_branch_node(child):
+                        return False
                 else:
                     return False
+            return True
+        if isinstance(node, JoinNode):
+            # A JOIN counts as a branch source when all of its operands and
+            # the optional ON-condition contain nothing un-variablized.
+            for child in node.children:
+                if isinstance(child, TableNode):
+                    if not RuleGeneratorV2._is_placeholder_name(child.name):
+                        return False
+                else:
+                    if RuleGeneratorV2._tables_of_ast(copy.deepcopy(child)):
+                        return False
+                    cols = RuleGeneratorV2.columns(copy.deepcopy(child), copy.deepcopy(child))
+                    if cols and not (len(cols) == 1 and cols[0] == "*"):
+                        return False
+                    if RuleGeneratorV2._literal_counts(copy.deepcopy(child)):
+                        return False
+                    if RuleGeneratorV2._variable_lists_of_ast(copy.deepcopy(child)):
+                        return False
             return True
         if isinstance(node, WhereNode):
             predicates = list(node.children)
@@ -3841,7 +3955,23 @@ class RuleGeneratorV2:
                         return sel.children[0]
             return reduced
         if key == "from":
-            return RuleGeneratorV2._query_without_clause(ast, NodeType.FROM)
+            from_clause = RuleGeneratorV2._first_clause(ast, NodeType.FROM)
+            reduced = RuleGeneratorV2._query_without_clause(ast, NodeType.FROM)
+            # When FROM is the only clause and contains a single subquery,
+            # mirror v1 behavior of unwrapping `{from: <subquery>}` to the
+            # subquery's inner query.
+            if (
+                isinstance(reduced, QueryNode)
+                and len(reduced.children) == 0
+                and isinstance(from_clause, FromNode)
+                and len(from_clause.children) == 1
+            ):
+                source = next(iter(from_clause.children))
+                if isinstance(source, SubqueryNode):
+                    inner = next(iter(source.children), None)
+                    if isinstance(inner, Node):
+                        return inner
+            return reduced
         if key == "where":
             reduced = RuleGeneratorV2._query_without_clause(ast, NodeType.WHERE)
             # If this was a WHERE-scope wrapper, unwrap back to condition expression.
