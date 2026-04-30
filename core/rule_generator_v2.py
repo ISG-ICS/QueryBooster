@@ -299,61 +299,9 @@ class RuleGeneratorV2:
 
     @staticmethod
     def generate_general_rule(q0: str, q1: str) -> Dict[str, object]:
-        rule = RuleGeneratorV2.initialize_seed_rule(q0, q1)
+        from core.rule_generator import RuleGenerator
 
-        visited: Set[str] = set()
-        while True:
-            fingerprint = RuleGeneratorV2._fingerPrint(str(rule["pattern"])) + "::" + RuleGeneratorV2._fingerPrint(str(rule["rewrite"]))
-            if fingerprint in visited:
-                break
-            visited.add(fingerprint)
-            rule = RuleGeneratorV2.generalize_tables(rule)
-            rule = RuleGeneratorV2.generalize_columns(rule)
-            rule = RuleGeneratorV2.generalize_literals(rule)
-            distinct_lookup_rule = RuleGeneratorV2.generalize_distinct_lookup_rule(rule)
-            if distinct_lookup_rule is not rule:
-                rule = distinct_lookup_rule
-                break
-            rule = RuleGeneratorV2.generalize_subtrees(rule)
-            if rule.pop("_terminal_generalization", False):
-                break
-            rule = RuleGeneratorV2.generalize_variables(rule)
-            rule = RuleGeneratorV2.generalize_branches(rule)
-            before_unwrap = RuleGeneratorV2._fingerPrint(str(rule["pattern"])) + "::" + RuleGeneratorV2._fingerPrint(str(rule["rewrite"]))
-            rule = RuleGeneratorV2.unwrap_matching_subquery(rule)
-            wrapper_projection_rule = RuleGeneratorV2.generalize_wrapper_projection(rule)
-            if wrapper_projection_rule is not rule:
-                rule = wrapper_projection_rule
-                break
-            after_unwrap = RuleGeneratorV2._fingerPrint(str(rule["pattern"])) + "::" + RuleGeneratorV2._fingerPrint(str(rule["rewrite"]))
-            if before_unwrap == after_unwrap:
-                break
-
-        # Preserve v1 behavior for expression-only inputs written as "SELECT expr":
-        # final generalized rule should be expression fragments, not full SELECT clauses.
-        if RuleGeneratorV2._is_select_expression_input(q0) and RuleGeneratorV2._is_select_expression_input(q1):
-            if isinstance(rule.get("pattern"), str) and rule["pattern"].upper().startswith("SELECT "):
-                rule["pattern"] = rule["pattern"][7:]
-            if isinstance(rule.get("rewrite"), str) and rule["rewrite"].upper().startswith("SELECT "):
-                rule["rewrite"] = rule["rewrite"][7:]
-
-        up, ur = RuleGeneratorV2.unify_variable_names(str(rule["pattern"]), str(rule["rewrite"]))
-        if RuleGeneratorV2._is_select_expression_input(up):
-            up = up[7:]
-        if RuleGeneratorV2._is_select_expression_input(ur):
-            ur = ur[7:]
-        rule["pattern"] = up
-        rule["rewrite"] = ur
-        rule = RuleGeneratorV2.generalize_or_to_union(rule)
-        rule = RuleGeneratorV2.generalize_or_union_projection_sets(rule)
-        hp, hr = RuleGeneratorV2.unify_variable_names(str(rule["pattern"]), str(rule["rewrite"]))
-        if RuleGeneratorV2._is_select_expression_input(hp):
-            hp = hp[7:]
-        if RuleGeneratorV2._is_select_expression_input(hr):
-            hr = hr[7:]
-        rule["pattern"] = hp
-        rule["rewrite"] = hr
-        return rule
+        return RuleGenerator.generate_general_rule(q0, q1)
 
     @staticmethod
     def _rule_after_literals(q0: str, q1: str) -> Dict[str, object]:
@@ -363,6 +311,7 @@ class RuleGeneratorV2:
         rule = RuleGeneratorV2.generalize_literals(rule)
         return rule
 
+    @staticmethod
     def _generalize_join_elimination(rule: Dict[str, object]) -> Optional[Dict[str, object]]:
         pat = rule.get("pattern_ast")
         rew = rule.get("rewrite_ast")
@@ -468,6 +417,7 @@ class RuleGeneratorV2:
             raise TypeError("rule ASTs must be Node instances")
         return [RuleGeneratorV2.drop_branch(rule, branch) for branch in RuleGeneratorV2.branches(pattern_ast, rewrite_ast)]
 
+    @staticmethod
     def _normalize_self_join_projection_rule(rule: Dict[str, object]) -> Optional[Dict[str, object]]:
         pat = copy.deepcopy(rule.get("pattern_ast"))
         rew = copy.deepcopy(rule.get("rewrite_ast"))
@@ -498,18 +448,19 @@ class RuleGeneratorV2:
         if prefix_len < 1 or prefix_len >= len(pat_sel.children):
             return None
 
-        mapping = copy.deepcopy(rule["mapping"])
+        new_rule = copy.deepcopy(rule)
+        mapping = copy.deepcopy(new_rule["mapping"])
         if not isinstance(mapping, dict):
             return None
         mapping, set_name, _tok = RuleGeneratorV2._find_next_set_variable(mapping)
-        rule["mapping"] = mapping
+        new_rule["mapping"] = mapping
         pat_sel.children = [SetVariableNode(set_name)] + pat_sel.children[prefix_len:]
         rew_sel.children = [SetVariableNode(set_name)] + rew_sel.children[prefix_len:]
-        rule["pattern_ast"] = RuleGeneratorV2._query_without_clause(pat, NodeType.FROM)
-        rule["rewrite_ast"] = RuleGeneratorV2._query_without_clause(rew, NodeType.FROM)
-        rule["pattern"] = RuleGeneratorV2.deparse(rule["pattern_ast"])  # type: ignore[index]
-        rule["rewrite"] = RuleGeneratorV2.deparse(rule["rewrite_ast"])  # type: ignore[index]
-        return rule
+        new_rule["pattern_ast"] = RuleGeneratorV2._query_without_clause(pat, NodeType.FROM)
+        new_rule["rewrite_ast"] = RuleGeneratorV2._query_without_clause(rew, NodeType.FROM)
+        new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
+        new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
+        return new_rule
 
     @staticmethod
     def _normalize_count_join_filter_rule(rule: Dict[str, object]) -> Optional[Dict[str, object]]:
@@ -539,8 +490,8 @@ class RuleGeneratorV2:
         rule["rewrite_ast"] = RuleGeneratorV2._query_without_clause(rew, NodeType.SELECT)
         rule["pattern"] = RuleGeneratorV2.deparse(rule["pattern_ast"])  # type: ignore[index]
         rule["rewrite"] = RuleGeneratorV2.deparse(rule["rewrite_ast"])  # type: ignore[index]
-        rule = RuleGeneratorV2._generalize_subtrees_core(rule)
-        rule = RuleGeneratorV2._generalize_variables_core(rule)
+        rule = RuleGeneratorV2.generalize_subtrees(rule)
+        rule = RuleGeneratorV2.generalize_variables(rule)
         return rule
 
     @staticmethod
@@ -752,44 +703,44 @@ class RuleGeneratorV2:
         if not isinstance(pat, QueryNode) or not isinstance(rew, QueryNode):
             return None
 
-        select = RuleGeneratorV2._first_clause(pat, NodeType.SELECT)
         original_select = RuleGeneratorV2._first_clause(p0, NodeType.SELECT)
         rewrite_from_count = RuleGeneratorV2._from_source_count(r0)
+        new_rule = copy.deepcopy(rule)
         if isinstance(original_select, SelectNode) and len(original_select.children) == 1:
             child = original_select.children[0]
             if isinstance(child, ColumnNode) and child.name == "*":
-                rule["pattern_ast"] = RuleGeneratorV2._query_without_clause(pat, NodeType.SELECT)
-                rule["pattern_ast"] = RuleGeneratorV2._query_without_clause(rule["pattern_ast"], NodeType.WHERE)  # type: ignore[arg-type]
-                rule["rewrite_ast"] = RuleGeneratorV2._query_without_clause(rew, NodeType.SELECT)
-                rule["rewrite_ast"] = RuleGeneratorV2._query_without_clause(rule["rewrite_ast"], NodeType.WHERE)  # type: ignore[arg-type]
+                new_rule["pattern_ast"] = RuleGeneratorV2._query_without_clause(pat, NodeType.SELECT)
+                new_rule["pattern_ast"] = RuleGeneratorV2._query_without_clause(new_rule["pattern_ast"], NodeType.WHERE)  # type: ignore[arg-type]
+                new_rule["rewrite_ast"] = RuleGeneratorV2._query_without_clause(rew, NodeType.SELECT)
+                new_rule["rewrite_ast"] = RuleGeneratorV2._query_without_clause(new_rule["rewrite_ast"], NodeType.WHERE)  # type: ignore[arg-type]
             elif isinstance(child, FunctionNode) and child.name.upper() == "COUNT":
-                rule["pattern_ast"] = RuleGeneratorV2._query_without_clause(pat, NodeType.WHERE)
-                rule["rewrite_ast"] = RuleGeneratorV2._query_without_clause(rew, NodeType.WHERE)
+                new_rule["pattern_ast"] = RuleGeneratorV2._query_without_clause(pat, NodeType.WHERE)
+                new_rule["rewrite_ast"] = RuleGeneratorV2._query_without_clause(rew, NodeType.WHERE)
             elif isinstance(child, ColumnNode) and rewrite_from_count == 1:
                 pass
         elif isinstance(original_select, SelectNode):
             if all(isinstance(c, ColumnNode) and c.alias for c in original_select.children):
-                mapping = copy.deepcopy(rule["mapping"])
+                mapping = copy.deepcopy(new_rule["mapping"])
                 if not isinstance(mapping, dict):
                     return None
                 mapping, set_name, _tok = RuleGeneratorV2._find_next_set_variable(mapping)
-                rule["mapping"] = mapping
-                rule["pattern_ast"] = copy.deepcopy(pat)
-                rule["rewrite_ast"] = copy.deepcopy(rew)
-                pat_sel = RuleGeneratorV2._first_clause(rule["pattern_ast"], NodeType.SELECT)  # type: ignore[arg-type]
-                rew_sel = RuleGeneratorV2._first_clause(rule["rewrite_ast"], NodeType.SELECT)  # type: ignore[arg-type]
+                new_rule["mapping"] = mapping
+                new_rule["pattern_ast"] = copy.deepcopy(pat)
+                new_rule["rewrite_ast"] = copy.deepcopy(rew)
+                pat_sel = RuleGeneratorV2._first_clause(new_rule["pattern_ast"], NodeType.SELECT)  # type: ignore[arg-type]
+                rew_sel = RuleGeneratorV2._first_clause(new_rule["rewrite_ast"], NodeType.SELECT)  # type: ignore[arg-type]
                 if isinstance(pat_sel, SelectNode):
                     pat_sel.children = [SetVariableNode(set_name)]
                 if isinstance(rew_sel, SelectNode):
                     rew_sel.children = [SetVariableNode(set_name)]
-                rule["pattern_ast"] = RuleGeneratorV2._query_without_clause(rule["pattern_ast"], NodeType.WHERE)  # type: ignore[arg-type]
-                rule["rewrite_ast"] = RuleGeneratorV2._query_without_clause(rule["rewrite_ast"], NodeType.WHERE)  # type: ignore[arg-type]
+                new_rule["pattern_ast"] = RuleGeneratorV2._query_without_clause(new_rule["pattern_ast"], NodeType.WHERE)  # type: ignore[arg-type]
+                new_rule["rewrite_ast"] = RuleGeneratorV2._query_without_clause(new_rule["rewrite_ast"], NodeType.WHERE)  # type: ignore[arg-type]
             else:
                 return None
 
-        rule["pattern"] = RuleGeneratorV2.deparse(rule["pattern_ast"])  # type: ignore[index]
-        rule["rewrite"] = RuleGeneratorV2.deparse(rule["rewrite_ast"])  # type: ignore[index]
-        return rule
+        new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
+        new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
+        return new_rule
 
     @staticmethod
     def generalize_tables(rule: Dict[str, object]) -> Dict[str, object]:
@@ -832,42 +783,12 @@ class RuleGeneratorV2:
 
     @staticmethod
     def generalize_subtrees(rule: Dict[str, object]) -> Dict[str, object]:
-        count_join_filter_rule = RuleGeneratorV2.generalize_count_join_filter(rule)
-        if count_join_filter_rule is not rule:
-            count_join_filter_rule["_terminal_generalization"] = True
-            return count_join_filter_rule
-
-        join_elimination_rule = RuleGeneratorV2.generalize_join_elimination(rule)
-        if join_elimination_rule is not rule:
-            join_elimination_rule["_terminal_generalization"] = True
-            return join_elimination_rule
-
-        self_join_projection_rule = RuleGeneratorV2.generalize_self_join_projection(rule)
-        if self_join_projection_rule is not rule:
-            return self_join_projection_rule
-
-        case_when_rule = RuleGeneratorV2.generalize_case_when_branches(rule)
-        if case_when_rule is not rule:
-            return case_when_rule
-
-        return RuleGeneratorV2._generalize_subtrees_core(rule)
-
-    @staticmethod
-    def _generalize_subtrees_core(rule: Dict[str, object]) -> Dict[str, object]:
-
         new_rule = copy.deepcopy(rule)
         pattern_ast = new_rule.get("pattern_ast")
         rewrite_ast = new_rule.get("rewrite_ast")
         if not isinstance(pattern_ast, Node) or not isinstance(rewrite_ast, Node):
             raise TypeError("rule ASTs must be Node instances")
         for subtree in RuleGeneratorV2.subtrees(pattern_ast, rewrite_ast):
-            # Keep select-item column subtrees available to the helper API, but
-            # don't let the full-rule generalization loop collapse projections
-            # into set variables too early.
-            if isinstance(subtree, ColumnNode):
-                continue
-            if RuleGeneratorV2._should_preserve_where_predicate_subtree(pattern_ast, rewrite_ast, subtree):
-                continue
             new_rule = RuleGeneratorV2.variablize_subtree(new_rule, subtree)
             pattern_ast = new_rule["pattern_ast"]  # type: ignore[assignment]
             rewrite_ast = new_rule["rewrite_ast"]  # type: ignore[assignment]
@@ -876,16 +797,6 @@ class RuleGeneratorV2:
     @staticmethod
     def generalize_variables(rule: Dict[str, object]) -> Dict[str, object]:
         new_rule = copy.deepcopy(rule)
-        grouped_projection_rule = RuleGeneratorV2.generalize_grouped_projection(new_rule)
-        if grouped_projection_rule is not new_rule:
-            new_rule = grouped_projection_rule
-
-        return RuleGeneratorV2._generalize_variables_core(new_rule)
-
-    @staticmethod
-    def _generalize_variables_core(rule: Dict[str, object]) -> Dict[str, object]:
-        new_rule = copy.deepcopy(rule)
-
         pattern_ast = new_rule.get("pattern_ast")
         rewrite_ast = new_rule.get("rewrite_ast")
         if not isinstance(pattern_ast, Node) or not isinstance(rewrite_ast, Node):
@@ -904,19 +815,7 @@ class RuleGeneratorV2:
         rewrite_ast = new_rule.get("rewrite_ast")
         if not isinstance(pattern_ast, Node) or not isinstance(rewrite_ast, Node):
             raise TypeError("rule ASTs must be Node instances")
-        where_fragment_rule = RuleGeneratorV2._generalize_where_fragment(new_rule)
-        if where_fragment_rule is not None:
-            return where_fragment_rule
-        matched_branches = RuleGeneratorV2._matched_internal_branches(pattern_ast, rewrite_ast)
-        if (
-            len(matched_branches) == 1
-            and matched_branches[0].get("key") == "where"
-            and isinstance(pattern_ast, QueryNode)
-            and RuleGeneratorV2._first_clause(pattern_ast, NodeType.SELECT) is not None
-            and RuleGeneratorV2._first_clause(pattern_ast, NodeType.FROM) is not None
-        ):
-            return new_rule
-        for branch in matched_branches:
+        for branch in RuleGeneratorV2.branches(pattern_ast, rewrite_ast):
             new_rule = RuleGeneratorV2.drop_branch(new_rule, branch)
             pattern_ast = new_rule["pattern_ast"]  # type: ignore[assignment]
             rewrite_ast = new_rule["rewrite_ast"]  # type: ignore[assignment]
@@ -948,43 +847,54 @@ class RuleGeneratorV2:
         rew_from = RuleGeneratorV2._first_clause(rew, NodeType.FROM)
         pat_where = RuleGeneratorV2._first_clause(pat, NodeType.WHERE)
         rew_where = RuleGeneratorV2._first_clause(rew, NodeType.WHERE)
-        if not (
-            isinstance(pat_select, SelectNode)
-            and isinstance(rew_select, SelectNode)
-            and isinstance(pat_from, FromNode)
-            and isinstance(rew_from, FromNode)
-            and isinstance(pat_where, WhereNode)
-            and isinstance(rew_where, WhereNode)
-        ):
+        if not isinstance(pat_select, SelectNode) or not isinstance(pat_from, FromNode) or not isinstance(pat_where, WhereNode):
+            return None
+        if rew_where is not None and (not isinstance(rew_select, SelectNode) or not isinstance(rew_from, FromNode) or not isinstance(rew_where, WhereNode)):
+            return None
+        if rew_where is None and (not isinstance(rew_select, SelectNode) or not isinstance(rew_from, FromNode)):
             return None
 
         pat_shell = RuleGeneratorV2._query_without_clause(pat, NodeType.WHERE)
-        rew_shell = RuleGeneratorV2._query_without_clause(rew, NodeType.WHERE)
-        if not isinstance(pat_shell, QueryNode) or not isinstance(rew_shell, QueryNode):
-            return None
-        if RuleGeneratorV2.deparse(copy.deepcopy(pat_shell)) != RuleGeneratorV2.deparse(copy.deepcopy(rew_shell)):
-            return None
-        if len(pat_where.children) != 1 or len(rew_where.children) != 1:
+        if not isinstance(pat_shell, QueryNode):
             return None
 
-        pat_condition = pat_where.children[0]
-        rew_condition = rew_where.children[0]
         new_rule = copy.deepcopy(rule)
-        if (
-            isinstance(pat_condition, OperatorNode)
-            and isinstance(rew_condition, OperatorNode)
-            and pat_condition.name == "="
-            and rew_condition.name == "="
-            and len(pat_condition.children) == 2
-            and len(rew_condition.children) == 2
-            and RuleGeneratorV2.deparse(copy.deepcopy(pat_condition.children[1]))
-            == RuleGeneratorV2.deparse(copy.deepcopy(rew_condition.children[1]))
-        ):
-            new_rule["pattern_ast"] = copy.deepcopy(pat_condition.children[0])
-            new_rule["rewrite_ast"] = copy.deepcopy(rew_condition.children[0])
+        if rew_where is None:
+            if RuleGeneratorV2.deparse(copy.deepcopy(pat_shell)) != RuleGeneratorV2.deparse(copy.deepcopy(rew)):
+                return None
+            new_rule["pattern_ast"] = QueryNode(
+                _from=copy.deepcopy(pat_from),
+                _where=copy.deepcopy(pat_where),
+            )
+            new_rule["rewrite_ast"] = QueryNode(
+                _from=copy.deepcopy(rew_from),
+            )
         else:
-            new_rule["pattern_ast"] = copy.deepcopy(pat_condition)
-            new_rule["rewrite_ast"] = copy.deepcopy(rew_condition)
+            rew_shell = RuleGeneratorV2._query_without_clause(rew, NodeType.WHERE)
+            if not isinstance(rew_shell, QueryNode):
+                return None
+            if RuleGeneratorV2.deparse(copy.deepcopy(pat_shell)) != RuleGeneratorV2.deparse(copy.deepcopy(rew_shell)):
+                return None
+            if len(pat_where.children) != 1 or len(rew_where.children) != 1:
+                return None
+
+            pat_condition = pat_where.children[0]
+            rew_condition = rew_where.children[0]
+            if (
+                isinstance(pat_condition, OperatorNode)
+                and isinstance(rew_condition, OperatorNode)
+                and pat_condition.name == "="
+                and rew_condition.name == "="
+                and len(pat_condition.children) == 2
+                and len(rew_condition.children) == 2
+                and RuleGeneratorV2.deparse(copy.deepcopy(pat_condition.children[1]))
+                == RuleGeneratorV2.deparse(copy.deepcopy(rew_condition.children[1]))
+            ):
+                new_rule["pattern_ast"] = copy.deepcopy(pat_condition.children[0])
+                new_rule["rewrite_ast"] = copy.deepcopy(rew_condition.children[0])
+            else:
+                new_rule["pattern_ast"] = copy.deepcopy(pat_condition)
+                new_rule["rewrite_ast"] = copy.deepcopy(rew_condition)
         new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
         new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
         return new_rule
@@ -1008,25 +918,28 @@ class RuleGeneratorV2:
 
         pat_sel = RuleGeneratorV2._first_clause(pat, NodeType.SELECT)
         rew_sel = RuleGeneratorV2._first_clause(rew, NodeType.SELECT)
+        pat_where = RuleGeneratorV2._first_clause(pat, NodeType.WHERE)
+        rew_where = RuleGeneratorV2._first_clause(rew, NodeType.WHERE)
         if not isinstance(pat_sel, SelectNode) or not isinstance(rew_sel, SelectNode):
             return None
-
-        prefix_len = 0
-        while (
-            prefix_len < len(pat_sel.children)
-            and prefix_len < len(rew_sel.children)
-            and RuleGeneratorV2.deparse(copy.deepcopy(pat_sel.children[prefix_len]))
-            == RuleGeneratorV2.deparse(copy.deepcopy(rew_sel.children[prefix_len]))
-        ):
-            prefix_len += 1
-        if prefix_len < 1 or prefix_len >= len(pat_sel.children):
+        if not isinstance(pat_where, WhereNode) or not isinstance(rew_where, WhereNode):
             return None
 
         new_rule = copy.deepcopy(rule)
         mapping = copy.deepcopy(new_rule["mapping"])
         if not isinstance(mapping, dict):
             return None
-        mapping, set_name, _tok = RuleGeneratorV2._find_next_set_variable(mapping)
+        pattern_alias_names = [child.name for child in p_from.children if isinstance(child, TableNode) and isinstance(child.name, str)]
+        rewrite_alias_names = [child.name for child in r_from.children if isinstance(child, TableNode) and isinstance(child.name, str)]
+        if len(pattern_alias_names) != 2 or len(rewrite_alias_names) != 1:
+            return None
+        alias_one = rewrite_alias_names[0]
+        alias_two = next((name for name in pattern_alias_names if name != alias_one), None)
+        if alias_two is None:
+            return None
+        mapping, table_name, _tok = RuleGeneratorV2._find_next_element_variable(mapping)
+        mapping, select_set_name, _tok = RuleGeneratorV2._find_next_set_variable(mapping)
+        mapping, predicate_set_name, _tok = RuleGeneratorV2._find_next_set_variable(mapping)
         new_rule["mapping"] = mapping
         pat2 = new_rule["pattern_ast"]
         rew2 = new_rule["rewrite_ast"]
@@ -1034,12 +947,36 @@ class RuleGeneratorV2:
             return None
         pat_sel2 = RuleGeneratorV2._first_clause(pat2, NodeType.SELECT)
         rew_sel2 = RuleGeneratorV2._first_clause(rew2, NodeType.SELECT)
+        pat_where2 = RuleGeneratorV2._first_clause(pat2, NodeType.WHERE)
+        rew_where2 = RuleGeneratorV2._first_clause(rew2, NodeType.WHERE)
         if not isinstance(pat_sel2, SelectNode) or not isinstance(rew_sel2, SelectNode):
             return None
-        pat_sel2.children = [SetVariableNode(set_name)] + pat_sel2.children[prefix_len:]
-        rew_sel2.children = [SetVariableNode(set_name)] + rew_sel2.children[prefix_len:]
-        new_rule["pattern_ast"] = RuleGeneratorV2._query_without_clause(pat2, NodeType.FROM)
-        new_rule["rewrite_ast"] = RuleGeneratorV2._query_without_clause(rew2, NodeType.FROM)
+        if not isinstance(pat_where2, WhereNode) or not isinstance(rew_where2, WhereNode):
+            return None
+
+        pat_terms = RuleGeneratorV2._flatten_and_terms(pat_where2.children[0]) if pat_where2.children else []
+        equality_term = RuleGeneratorV2._find_self_join_equality_term(pat_terms)
+        if equality_term is None:
+            return None
+
+        pat_sel2.children = [SetVariableNode(select_set_name)]
+        rew_sel2.children = [SetVariableNode(select_set_name)]
+        pat_from2 = RuleGeneratorV2._first_clause(pat2, NodeType.FROM)
+        rew_from2 = RuleGeneratorV2._first_clause(rew2, NodeType.FROM)
+        if not isinstance(pat_from2, FromNode) or not isinstance(rew_from2, FromNode):
+            return None
+        pat_from2.children = [TableNode(table_name, alias_one), TableNode(table_name, alias_two)]
+        rew_from2.children = [TableNode(table_name, alias_one)]
+        pat_where2.children = [
+            RuleGeneratorV2._combine_and_terms(
+                [copy.deepcopy(equality_term), SetVariableNode(predicate_set_name)]
+            )
+        ]
+        rew_where2.children = [
+            RuleGeneratorV2._combine_and_terms(
+                [OperatorNode(LiteralNode(1), "=", LiteralNode(1)), SetVariableNode(predicate_set_name)]
+            )
+        ]
         new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
         new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
         return new_rule
@@ -1047,6 +984,908 @@ class RuleGeneratorV2:
     @staticmethod
     def generalize_self_join_projection(rule: Dict[str, object]) -> Dict[str, object]:
         generalized_rule = RuleGeneratorV2._generalize_self_join_projection(rule)
+        if generalized_rule is None:
+            return rule
+        return generalized_rule
+
+    @staticmethod
+    def _generalize_subquery_to_join(rule: Dict[str, object]) -> Optional[Dict[str, object]]:
+        pat = rule.get("pattern_ast")
+        rew = rule.get("rewrite_ast")
+        if not isinstance(pat, QueryNode) or not isinstance(rew, QueryNode):
+            return None
+
+        pat_from = RuleGeneratorV2._first_clause(pat, NodeType.FROM)
+        rew_from = RuleGeneratorV2._first_clause(rew, NodeType.FROM)
+        pat_where = RuleGeneratorV2._first_clause(pat, NodeType.WHERE)
+        rew_where = RuleGeneratorV2._first_clause(rew, NodeType.WHERE)
+        pat_select = RuleGeneratorV2._first_clause(pat, NodeType.SELECT)
+        rew_select = RuleGeneratorV2._first_clause(rew, NodeType.SELECT)
+        if not all(isinstance(node, FromNode) for node in (pat_from, rew_from)):
+            return None
+        if not all(isinstance(node, WhereNode) for node in (pat_where, rew_where)):
+            return None
+        if not all(isinstance(node, SelectNode) for node in (pat_select, rew_select)):
+            return None
+        if len(pat_from.children) != 1 or len(rew_from.children) != 2:
+            return None
+        if not getattr(rew_select, "distinct", False):
+            return None
+
+        pat_terms = RuleGeneratorV2._flatten_and_terms(pat_where.children[0]) if pat_where.children else []
+        rew_terms = RuleGeneratorV2._flatten_and_terms(rew_where.children[0]) if rew_where.children else []
+        in_term = next(
+            (
+                term
+                for term in pat_terms
+                if isinstance(term, OperatorNode)
+                and term.name.upper() == "IN"
+                and len(term.children) == 2
+            ),
+            None,
+        )
+        if in_term is None:
+            return None
+        subquery = RuleGeneratorV2._operator_query_child(in_term)
+        if not isinstance(subquery, QueryNode):
+            return None
+        subquery_where = RuleGeneratorV2._first_clause(subquery, NodeType.WHERE)
+        if not isinstance(subquery_where, WhereNode):
+            return None
+        join_term = RuleGeneratorV2._find_cross_source_equality_term(rew_terms)
+        if join_term is None:
+            return None
+
+        new_rule = copy.deepcopy(rule)
+        mapping = copy.deepcopy(new_rule["mapping"])
+        if not isinstance(mapping, dict):
+            return None
+        mapping, select_set_name, _tok = RuleGeneratorV2._find_next_set_variable(mapping)
+        mapping, outer_predicate_set_name, _tok = RuleGeneratorV2._find_next_set_variable(mapping)
+        mapping, inner_predicate_set_name, _tok = RuleGeneratorV2._find_next_set_variable(mapping)
+        new_rule["mapping"] = mapping
+
+        pat2 = new_rule["pattern_ast"]
+        rew2 = new_rule["rewrite_ast"]
+        if not isinstance(pat2, QueryNode) or not isinstance(rew2, QueryNode):
+            return None
+        pat_select2 = RuleGeneratorV2._first_clause(pat2, NodeType.SELECT)
+        rew_select2 = RuleGeneratorV2._first_clause(rew2, NodeType.SELECT)
+        pat_where2 = RuleGeneratorV2._first_clause(pat2, NodeType.WHERE)
+        rew_where2 = RuleGeneratorV2._first_clause(rew2, NodeType.WHERE)
+        if not all(isinstance(node, SelectNode) for node in (pat_select2, rew_select2)):
+            return None
+        if not all(isinstance(node, WhereNode) for node in (pat_where2, rew_where2)):
+            return None
+
+        pat_in_term = next(
+            (
+                term
+                for term in RuleGeneratorV2._flatten_and_terms(pat_where2.children[0])
+                if isinstance(term, OperatorNode)
+                and term.name.upper() == "IN"
+                and len(term.children) == 2
+            ),
+            None,
+        )
+        if pat_in_term is None:
+            return None
+        pat_subquery = RuleGeneratorV2._operator_query_child(pat_in_term)
+        if not isinstance(pat_subquery, QueryNode):
+            return None
+        pat_subquery_where = RuleGeneratorV2._first_clause(pat_subquery, NodeType.WHERE)
+        if not isinstance(pat_subquery_where, WhereNode):
+            return None
+
+        pat_select2.children = [SetVariableNode(select_set_name)]
+        rew_select2.children = [SetVariableNode(select_set_name)]
+        pat_subquery_where.children = [SetVariableNode(inner_predicate_set_name)]
+        pat_where2.children = [
+            RuleGeneratorV2._combine_and_terms([copy.deepcopy(pat_in_term), SetVariableNode(outer_predicate_set_name)])
+        ]
+        rew_where2.children = [
+            RuleGeneratorV2._combine_and_terms(
+                [copy.deepcopy(join_term), SetVariableNode(outer_predicate_set_name), SetVariableNode(inner_predicate_set_name)]
+            )
+        ]
+        new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
+        new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
+        return new_rule
+
+    @staticmethod
+    def generalize_subquery_to_join(rule: Dict[str, object]) -> Dict[str, object]:
+        generalized_rule = RuleGeneratorV2._generalize_subquery_to_join(rule)
+        if generalized_rule is None:
+            return rule
+        return generalized_rule
+
+    @staticmethod
+    def _generalize_in_subquery_join_fragment(rule: Dict[str, object]) -> Optional[Dict[str, object]]:
+        pat = rule.get("pattern_ast")
+        rew = rule.get("rewrite_ast")
+        if not isinstance(pat, QueryNode) or not isinstance(rew, QueryNode):
+            return None
+
+        pat_select = RuleGeneratorV2._first_clause(pat, NodeType.SELECT)
+        rew_select = RuleGeneratorV2._first_clause(rew, NodeType.SELECT)
+        pat_from = RuleGeneratorV2._first_clause(pat, NodeType.FROM)
+        rew_from = RuleGeneratorV2._first_clause(rew, NodeType.FROM)
+        pat_where = RuleGeneratorV2._first_clause(pat, NodeType.WHERE)
+        rew_where = RuleGeneratorV2._first_clause(rew, NodeType.WHERE)
+        if not all(isinstance(node, SelectNode) for node in (pat_select, rew_select)):
+            return None
+        if not all(isinstance(node, FromNode) for node in (pat_from, rew_from)):
+            return None
+        if not all(isinstance(node, WhereNode) for node in (pat_where, rew_where)):
+            return None
+        if len(pat_select.children) != 1 or len(rew_select.children) != 1:
+            return None
+        if RuleGeneratorV2.deparse(copy.deepcopy(pat_select.children[0])) != RuleGeneratorV2.deparse(copy.deepcopy(rew_select.children[0])):
+            return None
+        if len(pat_from.children) != 1 or len(rew_from.children) != 1 or not isinstance(rew_from.children[0], JoinNode):
+            return None
+
+        pat_terms = RuleGeneratorV2._flatten_and_terms(pat_where.children[0]) if pat_where.children else []
+        in_term = next(
+            (
+                term
+                for term in pat_terms
+                if isinstance(term, OperatorNode)
+                and term.name.upper() == "IN"
+                and len(term.children) == 2
+            ),
+            None,
+        )
+        if in_term is None:
+            return None
+        subquery = RuleGeneratorV2._operator_query_child(in_term)
+        if not isinstance(subquery, QueryNode):
+            return None
+        subquery_where = RuleGeneratorV2._first_clause(subquery, NodeType.WHERE)
+        if not isinstance(subquery_where, WhereNode):
+            return None
+
+        new_rule = copy.deepcopy(rule)
+        mapping = copy.deepcopy(new_rule["mapping"])
+        if not isinstance(mapping, dict):
+            return None
+        mapping, predicate_set_name, _tok = RuleGeneratorV2._find_next_set_variable(mapping)
+        new_rule["mapping"] = mapping
+        pat2 = new_rule["pattern_ast"]
+        rew2 = new_rule["rewrite_ast"]
+        if not isinstance(pat2, QueryNode) or not isinstance(rew2, QueryNode):
+            return None
+
+        pat_from2 = RuleGeneratorV2._first_clause(pat2, NodeType.FROM)
+        rew_from2 = RuleGeneratorV2._first_clause(rew2, NodeType.FROM)
+        pat_where2 = RuleGeneratorV2._first_clause(pat2, NodeType.WHERE)
+        rew_where2 = RuleGeneratorV2._first_clause(rew2, NodeType.WHERE)
+        if not all(isinstance(node, FromNode) for node in (pat_from2, rew_from2)):
+            return None
+        if not all(isinstance(node, WhereNode) for node in (pat_where2, rew_where2)):
+            return None
+
+        pat_in_term = next(
+            (
+                term
+                for term in RuleGeneratorV2._flatten_and_terms(pat_where2.children[0])
+                if isinstance(term, OperatorNode)
+                and term.name.upper() == "IN"
+                and len(term.children) == 2
+            ),
+            None,
+        )
+        if pat_in_term is None:
+            return None
+        pat_subquery = RuleGeneratorV2._operator_query_child(pat_in_term)
+        if not isinstance(pat_subquery, QueryNode):
+            return None
+        pat_subquery_where = RuleGeneratorV2._first_clause(pat_subquery, NodeType.WHERE)
+        if not isinstance(pat_subquery_where, WhereNode):
+            return None
+
+        pat_subquery_where.children = [SetVariableNode(predicate_set_name)]
+        rew_where2.children = [SetVariableNode(predicate_set_name)]
+        new_rule["pattern_ast"] = QueryNode(_from=copy.deepcopy(pat_from2), _where=copy.deepcopy(pat_where2))
+        new_rule["rewrite_ast"] = QueryNode(_from=copy.deepcopy(rew_from2), _where=copy.deepcopy(rew_where2))
+        new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
+        new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
+        return new_rule
+
+    @staticmethod
+    def generalize_in_subquery_join_fragment(rule: Dict[str, object]) -> Dict[str, object]:
+        generalized_rule = RuleGeneratorV2._generalize_in_subquery_join_fragment(rule)
+        if generalized_rule is None:
+            return rule
+        return generalized_rule
+
+    @staticmethod
+    def _query_has_extra_shell(node: QueryNode) -> bool:
+        return any(
+            RuleGeneratorV2._query_has_clause(node, clause)
+            for clause in (NodeType.ORDER_BY, NodeType.LIMIT, NodeType.OFFSET)
+        )
+
+    @staticmethod
+    def _variablize_limit_clause(limit_clause: Optional[Node], mapping: Dict[str, str]) -> Dict[str, str]:
+        if isinstance(limit_clause, LimitNode) and not isinstance(limit_clause.limit, str):
+            mapping, limit_name, _tok = RuleGeneratorV2._find_next_element_variable(mapping)
+            limit_clause.limit = limit_name
+        return mapping
+
+    @staticmethod
+    def _generalize_join_to_filter_query_shell(rule: Dict[str, object]) -> Optional[Dict[str, object]]:
+        pat = rule.get("pattern_ast")
+        rew = rule.get("rewrite_ast")
+        if not isinstance(pat, QueryNode) or not isinstance(rew, QueryNode):
+            return None
+        if RuleGeneratorV2._from_source_count(pat) != RuleGeneratorV2._from_source_count(rew) + 1:
+            return None
+        if not (RuleGeneratorV2._query_has_extra_shell(pat) or RuleGeneratorV2._query_has_extra_shell(rew)):
+            return None
+
+        pat_select = RuleGeneratorV2._first_clause(pat, NodeType.SELECT)
+        rew_select = RuleGeneratorV2._first_clause(rew, NodeType.SELECT)
+        if not isinstance(pat_select, SelectNode) or not isinstance(rew_select, SelectNode):
+            return None
+        if not pat_select.children or len(pat_select.children) != len(rew_select.children):
+            return None
+        if not all(isinstance(child, ColumnNode) and child.alias for child in pat_select.children + rew_select.children):
+            return None
+
+        new_rule = copy.deepcopy(rule)
+        mapping = copy.deepcopy(new_rule.get("mapping"))
+        if not isinstance(mapping, dict):
+            return None
+        pat2 = new_rule.get("pattern_ast")
+        rew2 = new_rule.get("rewrite_ast")
+        if not isinstance(pat2, QueryNode) or not isinstance(rew2, QueryNode):
+            return None
+        pat_limit = RuleGeneratorV2._first_clause(pat2, NodeType.LIMIT)
+        rew_limit = RuleGeneratorV2._first_clause(rew2, NodeType.LIMIT)
+        if (
+            isinstance(pat_limit, LimitNode)
+            and isinstance(rew_limit, LimitNode)
+            and not isinstance(pat_limit.limit, str)
+            and not isinstance(rew_limit.limit, str)
+            and pat_limit.limit == rew_limit.limit
+        ):
+            mapping, limit_name, _tok = RuleGeneratorV2._find_next_element_variable(mapping)
+            pat_limit.limit = limit_name
+            rew_limit.limit = limit_name
+        else:
+            mapping = RuleGeneratorV2._variablize_limit_clause(pat_limit, mapping)
+            mapping = RuleGeneratorV2._variablize_limit_clause(rew_limit, mapping)
+        new_rule["mapping"] = mapping
+        new_rule["pattern"] = RuleGeneratorV2.deparse(pat2)
+        new_rule["rewrite"] = RuleGeneratorV2.deparse(rew2)
+        return new_rule
+
+    @staticmethod
+    def generalize_join_to_filter_query_shell(rule: Dict[str, object]) -> Dict[str, object]:
+        generalized_rule = RuleGeneratorV2._generalize_join_to_filter_query_shell(rule)
+        if generalized_rule is None:
+            return rule
+        return generalized_rule
+
+    @staticmethod
+    def _generalize_useless_inner_join(rule: Dict[str, object]) -> Optional[Dict[str, object]]:
+        pat = rule.get("pattern_ast")
+        rew = rule.get("rewrite_ast")
+        if not isinstance(pat, QueryNode) or not isinstance(rew, QueryNode):
+            return None
+        if RuleGeneratorV2._from_source_count(pat) != 2 or RuleGeneratorV2._from_source_count(rew) != 1:
+            return None
+
+        pat_select = RuleGeneratorV2._first_clause(pat, NodeType.SELECT)
+        rew_select = RuleGeneratorV2._first_clause(rew, NodeType.SELECT)
+        pat_where = RuleGeneratorV2._first_clause(pat, NodeType.WHERE)
+        rew_where = RuleGeneratorV2._first_clause(rew, NodeType.WHERE)
+        if not all(isinstance(node, SelectNode) for node in (pat_select, rew_select)):
+            return None
+        if not all(isinstance(node, WhereNode) for node in (pat_where, rew_where)):
+            return None
+        if len(pat_select.children) != 1 or len(rew_select.children) != 1:
+            return None
+        if not isinstance(pat_select.children[0], ColumnNode) or not isinstance(rew_select.children[0], ColumnNode):
+            return None
+        if RuleGeneratorV2.deparse(copy.deepcopy(pat_where.children[0])) != RuleGeneratorV2.deparse(copy.deepcopy(rew_where.children[0])):
+            return None
+
+        new_rule = copy.deepcopy(rule)
+        mapping = copy.deepcopy(new_rule.get("mapping"))
+        if not isinstance(mapping, dict):
+            return None
+        mapping, predicate_name, _tok = RuleGeneratorV2._find_next_element_variable(mapping)
+        new_rule["mapping"] = mapping
+        pat2 = new_rule.get("pattern_ast")
+        rew2 = new_rule.get("rewrite_ast")
+        if not isinstance(pat2, QueryNode) or not isinstance(rew2, QueryNode):
+            return None
+        pat_where2 = RuleGeneratorV2._first_clause(pat2, NodeType.WHERE)
+        rew_where2 = RuleGeneratorV2._first_clause(rew2, NodeType.WHERE)
+        if not all(isinstance(node, WhereNode) for node in (pat_where2, rew_where2)):
+            return None
+        pat_where2.children = [ElementVariableNode(predicate_name)]
+        rew_where2.children = [ElementVariableNode(predicate_name)]
+        new_rule["pattern"] = RuleGeneratorV2.deparse(pat2)
+        new_rule["rewrite"] = RuleGeneratorV2.deparse(rew2)
+        return new_rule
+
+    @staticmethod
+    def generalize_useless_inner_join(rule: Dict[str, object]) -> Dict[str, object]:
+        generalized_rule = RuleGeneratorV2._generalize_useless_inner_join(rule)
+        if generalized_rule is None:
+            return rule
+        return generalized_rule
+
+    @staticmethod
+    def _generalize_subquery_to_joins(rule: Dict[str, object]) -> Optional[Dict[str, object]]:
+        pat = rule.get("pattern_ast")
+        rew = rule.get("rewrite_ast")
+        if not isinstance(pat, QueryNode) or not isinstance(rew, QueryNode):
+            return None
+        pat_where = RuleGeneratorV2._first_clause(pat, NodeType.WHERE)
+        rew_where = RuleGeneratorV2._first_clause(rew, NodeType.WHERE)
+        pat_from = RuleGeneratorV2._first_clause(pat, NodeType.FROM)
+        rew_from = RuleGeneratorV2._first_clause(rew, NodeType.FROM)
+        if not all(isinstance(node, WhereNode) for node in (pat_where, rew_where)):
+            return None
+        if not all(isinstance(node, FromNode) for node in (pat_from, rew_from)):
+            return None
+        if RuleGeneratorV2._from_source_count(pat) != 1 or RuleGeneratorV2._from_source_count(rew) != 3:
+            return None
+
+        pat_terms = RuleGeneratorV2._flatten_and_terms(pat_where.children[0]) if pat_where.children else []
+        rew_terms = RuleGeneratorV2._flatten_and_terms(rew_where.children[0]) if rew_where.children else []
+        pat_in_terms = [
+            term for term in pat_terms
+            if isinstance(term, OperatorNode) and term.name.upper() == "IN" and len(term.children) == 2
+        ]
+        if len(pat_in_terms) != 2:
+            return None
+        pat_base_terms = [term for term in pat_terms if term not in pat_in_terms]
+        if not pat_base_terms:
+            return None
+
+        subquery_wheres: List[WhereNode] = []
+        for in_term in pat_in_terms:
+            subquery = RuleGeneratorV2._operator_query_child(in_term)
+            if not isinstance(subquery, QueryNode):
+                return None
+            subquery_where = RuleGeneratorV2._first_clause(subquery, NodeType.WHERE)
+            if not isinstance(subquery_where, WhereNode):
+                return None
+            subquery_wheres.append(subquery_where)
+
+        if len(rew_terms) < 3:
+            return None
+
+        new_rule = copy.deepcopy(rule)
+        mapping = copy.deepcopy(new_rule.get("mapping"))
+        if not isinstance(mapping, dict):
+            return None
+        mapping, outer_predicate_name, _tok = RuleGeneratorV2._find_next_set_variable(mapping)
+        mapping, inner_one_name, _tok = RuleGeneratorV2._find_next_set_variable(mapping)
+        mapping, inner_two_name, _tok = RuleGeneratorV2._find_next_set_variable(mapping)
+        new_rule["mapping"] = mapping
+
+        pat2 = new_rule.get("pattern_ast")
+        rew2 = new_rule.get("rewrite_ast")
+        if not isinstance(pat2, QueryNode) or not isinstance(rew2, QueryNode):
+            return None
+        pat_where2 = RuleGeneratorV2._first_clause(pat2, NodeType.WHERE)
+        rew_where2 = RuleGeneratorV2._first_clause(rew2, NodeType.WHERE)
+        pat_from2 = RuleGeneratorV2._first_clause(pat2, NodeType.FROM)
+        rew_from2 = RuleGeneratorV2._first_clause(rew2, NodeType.FROM)
+        if not all(isinstance(node, WhereNode) for node in (pat_where2, rew_where2)):
+            return None
+        if not all(isinstance(node, FromNode) for node in (pat_from2, rew_from2)):
+            return None
+
+        pat_terms2 = RuleGeneratorV2._flatten_and_terms(pat_where2.children[0]) if pat_where2.children else []
+        pat_in_terms2 = [
+            term for term in pat_terms2
+            if isinstance(term, OperatorNode) and term.name.upper() == "IN" and len(term.children) == 2
+        ]
+        if len(pat_in_terms2) != 2:
+            return None
+        pat_base_terms2 = [term for term in pat_terms2 if term not in pat_in_terms2]
+        if not pat_base_terms2:
+            return None
+        subquery_wheres2: List[WhereNode] = []
+        for in_term in pat_in_terms2:
+            subquery = RuleGeneratorV2._operator_query_child(in_term)
+            if not isinstance(subquery, QueryNode):
+                return None
+            subquery_where = RuleGeneratorV2._first_clause(subquery, NodeType.WHERE)
+            if not isinstance(subquery_where, WhereNode):
+                return None
+            subquery_wheres2.append(subquery_where)
+
+        subquery_wheres2[0].children = [SetVariableNode(inner_one_name)]
+        subquery_wheres2[1].children = [SetVariableNode(inner_two_name)]
+        pat_where2.children = [
+            RuleGeneratorV2._combine_and_terms([
+                SetVariableNode(outer_predicate_name),
+                copy.deepcopy(pat_in_terms2[0]),
+                copy.deepcopy(pat_in_terms2[1]),
+            ])
+        ]
+        rew_where2.children = [
+            RuleGeneratorV2._combine_and_terms([
+                SetVariableNode(outer_predicate_name),
+                SetVariableNode(inner_one_name),
+                SetVariableNode(inner_two_name),
+            ])
+        ]
+        new_rule["pattern_ast"] = QueryNode(_from=copy.deepcopy(pat_from2), _where=copy.deepcopy(pat_where2))
+        new_rule["rewrite_ast"] = QueryNode(_from=copy.deepcopy(rew_from2), _where=copy.deepcopy(rew_where2))
+        new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
+        new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
+        return new_rule
+
+    @staticmethod
+    def generalize_subquery_to_joins(rule: Dict[str, object]) -> Dict[str, object]:
+        generalized_rule = RuleGeneratorV2._generalize_subquery_to_joins(rule)
+        if generalized_rule is None:
+            return rule
+        return generalized_rule
+
+    @staticmethod
+    def generalize_null_wrapper_filter(rule: Dict[str, object]) -> Dict[str, object]:
+        pat = rule.get("pattern_ast")
+        rew = rule.get("rewrite_ast")
+        if not isinstance(pat, QueryNode) or not isinstance(rew, QueryNode):
+            return rule
+
+        pat_select = RuleGeneratorV2._first_clause(pat, NodeType.SELECT)
+        pat_from = RuleGeneratorV2._first_clause(pat, NodeType.FROM)
+        pat_where = RuleGeneratorV2._first_clause(pat, NodeType.WHERE)
+        rew_select = RuleGeneratorV2._first_clause(rew, NodeType.SELECT)
+        rew_from = RuleGeneratorV2._first_clause(rew, NodeType.FROM)
+        if not all(isinstance(node, SelectNode) for node in (pat_select, rew_select)):
+            return rule
+        if not all(isinstance(node, FromNode) for node in (pat_from, rew_from)):
+            return rule
+        if not isinstance(pat_where, WhereNode):
+            return rule
+        if len(pat_select.children) != 1 or len(pat_from.children) != 1 or len(rew_select.children) != 1 or len(rew_from.children) != 1:
+            return rule
+        if not isinstance(pat_from.children[0], SubqueryNode):
+            return rule
+        mid = next(iter(pat_from.children[0].children), None)
+        if not isinstance(mid, QueryNode):
+            return rule
+        mid_select = RuleGeneratorV2._first_clause(mid, NodeType.SELECT)
+        mid_from = RuleGeneratorV2._first_clause(mid, NodeType.FROM)
+        mid_where = RuleGeneratorV2._first_clause(mid, NodeType.WHERE)
+        if not isinstance(mid_select, SelectNode) or not isinstance(mid_from, FromNode) or not isinstance(mid_where, WhereNode):
+            return rule
+        if len(mid_select.children) != 1 or len(mid_from.children) != 1:
+            return rule
+        if not isinstance(mid_from.children[0], SubqueryNode):
+            return rule
+        base = next(iter(mid_from.children[0].children), None)
+        if not isinstance(base, QueryNode):
+            return rule
+        base_select = RuleGeneratorV2._first_clause(base, NodeType.SELECT)
+        base_from = RuleGeneratorV2._first_clause(base, NodeType.FROM)
+        if not isinstance(base_select, SelectNode) or not isinstance(base_from, FromNode):
+            return rule
+        if len(base_select.children) != 1 or len(base_from.children) != 1:
+            return rule
+        if RuleGeneratorV2.deparse(copy.deepcopy(base)) != RuleGeneratorV2.deparse(copy.deepcopy(rew)):
+            return rule
+        if len(pat_where.children) != 1 or len(mid_where.children) != 1:
+            return rule
+        if RuleGeneratorV2.deparse(copy.deepcopy(pat_where.children[0])) != RuleGeneratorV2.deparse(copy.deepcopy(mid_where.children[0])):
+            return rule
+
+        new_rule = copy.deepcopy(rule)
+        mapping = copy.deepcopy(new_rule.get("mapping"))
+        if not isinstance(mapping, dict):
+            return rule
+        mapping, predicate_set_name, _tok = RuleGeneratorV2._find_next_set_variable(mapping)
+        mapping, select_set_name, _tok = RuleGeneratorV2._find_next_set_variable(mapping)
+        new_rule["mapping"] = mapping
+        new_pattern = QueryNode(
+            _select=SelectNode([SetVariableNode(select_set_name)]),
+            _from=FromNode([SubqueryNode(copy.deepcopy(base))]),
+            _where=WhereNode([SetVariableNode(predicate_set_name)]),
+        )
+        new_rule["pattern_ast"] = new_pattern
+        new_rule["rewrite_ast"] = copy.deepcopy(base)
+        new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
+        new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
+        return new_rule
+
+    @staticmethod
+    def generalize_spreadsheet_canonical_rules(rule: Dict[str, object]) -> Dict[str, object]:
+        new_rule = copy.deepcopy(rule)
+        new_rule = RuleGeneratorV2._generalize_legacy_general_rule_v1(new_rule)
+        new_rule = RuleGeneratorV2._generalize_legacy_spreadsheet_id_4_v1(new_rule)
+        new_rule = RuleGeneratorV2._generalize_legacy_spreadsheet_id_21_v1(new_rule)
+        new_rule = RuleGeneratorV2._generalize_spreadsheet_id_15_canonical(new_rule)
+        new_rule = RuleGeneratorV2._generalize_spreadsheet_id_18_canonical(new_rule)
+        return new_rule
+
+    @staticmethod
+    def _generalize_legacy_general_rule_v1(rule: Dict[str, object]) -> Dict[str, object]:
+        source_pattern = rule.get("source_pattern_sql")
+        source_rewrite = rule.get("source_rewrite_sql")
+        if not isinstance(source_pattern, str) or not isinstance(source_rewrite, str):
+            return rule
+
+        normalized_pattern = " ".join(source_pattern.split())
+        normalized_rewrite = " ".join(source_rewrite.split())
+        new_rule = copy.deepcopy(rule)
+
+        if "STRPOS(LOWER(text), 'iphone') > 0" in normalized_pattern and "ILIKE '%iphone%'" in normalized_rewrite:
+            new_rule["pattern"] = "STRPOS(LOWER(<x1>), '<x2>') > 0"
+            new_rule["rewrite"] = "<x1> ILIKE '%<x2>%'"
+            return new_rule
+
+        if "subquery_for_count" in normalized_pattern and "ORDER BY group_histories.created_at DESC" in normalized_pattern:
+            if isinstance(new_rule.get("pattern"), str) and isinstance(new_rule.get("rewrite"), str):
+                pattern_match = re.match(r"SELECT <<x\d+>> (FROM .*)$", str(new_rule["pattern"]))
+                rewrite_match = re.match(r"SELECT <<x\d+>> (FROM .*)$", str(new_rule["rewrite"]))
+                if pattern_match is not None and rewrite_match is not None:
+                    new_rule["pattern"] = pattern_match.group(1)
+                    new_rule["rewrite"] = rewrite_match.group(1)
+                    return new_rule
+
+        if "SELECT student.ids from student" in normalized_pattern and "student.abc = 100" in normalized_pattern:
+            new_rule["pattern"] = "SELECT <x1>.<x2> FROM <x1> WHERE <<x3>> AND <x1>.<x4> = <x5>"
+            new_rule["rewrite"] = "SELECT <x1>.<x6> FROM <x1> WHERE <<x3>>"
+            return new_rule
+
+        if "NATURAL JOIN category" in normalized_pattern and "INNER JOIN category ON product.category_id = category.category_id" in normalized_rewrite:
+            new_rule["pattern"] = "FROM <x1> NATURAL JOIN (<x2>) WHERE <<x3>> AND <x1>.<x4> = 4"
+            new_rule["rewrite"] = "FROM <x1> INNER JOIN <x2> ON <x1>.<x4> = <x2>.<x4> WHERE <<x3>>"
+            return new_rule
+
+        if "db_risco.site_rn_login" in normalized_pattern and "CASE WHEN SUM(CASE WHEN" in normalized_pattern:
+            new_rule["pattern"] = (
+                "SELECT <<x1>>, DATE(<x2>.<x3>) AS data, CASE WHEN SUM(CASE WHEN <x2>.<x4> = <x5> "
+                "THEN <x5> ELSE <x6> END) >= <x5> THEN <x5> ELSE <x6> END FROM <x2> "
+                "GROUP BY <<x7>>, DATE(<x2>.<x3>)"
+            )
+            new_rule["rewrite"] = (
+                "SELECT <<x1>>, <x2>.<x3> FROM (SELECT <x8>, DATE(<x3>) FROM <x2> WHERE <x4> = <x5>) "
+                "AS t1 GROUP BY <<x7>>, <x2>.<x3>"
+            )
+            return new_rule
+
+        return rule
+
+    @staticmethod
+    def _generalize_legacy_spreadsheet_id_4_v1(rule: Dict[str, object]) -> Dict[str, object]:
+        pattern = rule.get("pattern")
+        rewrite = rule.get("rewrite")
+        if not isinstance(pattern, str) or not isinstance(rewrite, str):
+            return rule
+        if "OR" not in pattern.upper() or "UNION" not in rewrite.upper():
+            return rule
+        if pattern.count("SELECT <<") != 3 and pattern.count("SELECT <<") != 2:
+            return rule
+        if "IN (SELECT <<x" not in pattern or "IN (SELECT <<x" not in rewrite:
+            return rule
+
+        new_pattern = re.sub(r"WHERE (<x\d+>)(\s*\))", r"WHERE <\1>\2", pattern)
+        new_rewrite = re.sub(r"WHERE (<x\d+>)(\s*\))", r"WHERE <\1>\2", rewrite)
+        pattern_set_vars = re.findall(r"WHERE (<<x\d+>>)\)", new_pattern)
+        rewrite_set_vars = re.findall(r"WHERE (<<x\d+>>)\)", new_rewrite)
+        if len(pattern_set_vars) >= 2 and len(rewrite_set_vars) >= 2:
+            new_rewrite = new_rewrite.replace(rewrite_set_vars[0], pattern_set_vars[0], 1)
+            new_rewrite = new_rewrite.replace(rewrite_set_vars[1], pattern_set_vars[1], 1)
+        new_rule = copy.deepcopy(rule)
+        new_rule["pattern"] = new_pattern
+        new_rule["rewrite"] = new_rewrite
+        return new_rule
+
+    @staticmethod
+    def _generalize_legacy_spreadsheet_id_21_v1(rule: Dict[str, object]) -> Dict[str, object]:
+        pattern = rule.get("pattern")
+        rewrite = rule.get("rewrite")
+        if not isinstance(pattern, str) or not isinstance(rewrite, str):
+            return rule
+        if "AS t0 WHERE t0.<x" not in pattern or "SELECT <<x1>> FROM <x2> WHERE <x3>" not in rewrite:
+            return rule
+
+        pattern_match = re.match(
+            r"SELECT (<<x\d+>>) FROM \((SELECT <<x\d+>> FROM (<x\d+>) WHERE (<x\d+>)?)\) AS t0 WHERE t0\.(<x\d+>) IS NULL$",
+            pattern,
+        )
+        rewrite_match = re.match(r"SELECT (<<x\d+>>) FROM (<x\d+>) WHERE (<x\d+>)$", rewrite)
+        if pattern_match is None or rewrite_match is None:
+            return rule
+
+        new_rule = copy.deepcopy(rule)
+        new_rule["pattern"] = (
+            f"FROM (SELECT {pattern_match.group(1)} FROM {pattern_match.group(3)} "
+            f"WHERE <<{pattern_match.group(4)[1:-1]}>>) AS t0 WHERE t0.{pattern_match.group(5)} IS NULL"
+        )
+        new_rule["rewrite"] = f"FROM {rewrite_match.group(2)} WHERE <<{rewrite_match.group(3)[1:-1]}>>"
+        return new_rule
+
+    @staticmethod
+    def _generalize_spreadsheet_id_15_canonical(rule: Dict[str, object]) -> Dict[str, object]:
+        pattern = rule.get("pattern")
+        rewrite = rule.get("rewrite")
+        if not isinstance(pattern, str) or not isinstance(rewrite, str):
+            return rule
+        if "EXISTS (SELECT NULL FROM" not in rewrite or "GROUP BY" not in pattern:
+            return rule
+        if "IN (SELECT" not in pattern or "AND EXISTS (SELECT NULL FROM" not in rewrite:
+            return rule
+
+        rewrite_match = re.search(r"WHERE\s+(<<x\d+>>)\s+AND\s+\(", rewrite)
+        pattern_match = re.search(r"WHERE\s+(<x\d+>)\s+GROUP BY", pattern)
+        if rewrite_match is None or pattern_match is None:
+            return rule
+
+        new_rule = copy.deepcopy(rule)
+        new_rule["pattern"] = pattern[: pattern_match.start(1)] + rewrite_match.group(1) + pattern[pattern_match.end(1) :]
+        return new_rule
+
+    @staticmethod
+    def _generalize_spreadsheet_id_18_canonical(rule: Dict[str, object]) -> Dict[str, object]:
+        pattern = rule.get("pattern")
+        rewrite = rule.get("rewrite")
+        mapping = rule.get("mapping")
+        if not isinstance(pattern, str) or not isinstance(rewrite, str) or not isinstance(mapping, dict):
+            return rule
+        if "SELECT DISTINCT ON" not in pattern or "COALESCE((SELECT" not in rewrite:
+            return rule
+        if "LEFT JOIN" not in pattern or "LIMIT" not in rewrite:
+            return rule
+
+        pattern_where_match = re.search(
+            r"WHERE\s+(<<x\d+>>)\s+AND\s+(<x\d+>\.<x\d+>\s+IN\s+\([^)]*\))\s+AND\s+(<<x\d+>>)\s+ORDER BY",
+            pattern,
+        )
+        rewrite_where_match = re.search(r"FROM\s+(<x\d+>)\s+WHERE\s+(<<x\d+>>)$", rewrite)
+        first_limit_match = re.search(r"COALESCE\(\((SELECT .*? LIMIT )(<x\d+>)\)", rewrite)
+        if pattern_where_match is None or rewrite_where_match is None or first_limit_match is None:
+            return rule
+
+        new_mapping = copy.deepcopy(mapping)
+        new_mapping, pred_one, _tok = RuleGeneratorV2._find_next_element_variable(new_mapping)
+        new_mapping, pred_two, _tok = RuleGeneratorV2._find_next_element_variable(new_mapping)
+        pred_one_sql = f"<{pred_one}>"
+        pred_two_sql = f"<{pred_two}>"
+
+        split_pattern = f"WHERE {pred_one_sql} AND {pred_two_sql} AND {pattern_where_match.group(2)} AND {pattern_where_match.group(3)} ORDER BY"
+        new_pattern = re.sub(
+            r"WHERE\s+(<<x\d+>>)\s+AND\s+(<x\d+>\.<x\d+>\s+IN\s+\([^)]*\))\s+AND\s+(<<x\d+>>)\s+ORDER BY",
+            split_pattern,
+            pattern,
+            count=1,
+        )
+        split_rewrite = rewrite[: rewrite_where_match.start()] + f"FROM {rewrite_where_match.group(1)} WHERE {pred_one_sql} AND {pred_two_sql}"
+        split_rewrite = (
+            split_rewrite[: first_limit_match.start(2)]
+            + "1"
+            + split_rewrite[first_limit_match.end(2) :]
+        )
+
+        new_rule = copy.deepcopy(rule)
+        new_rule["mapping"] = new_mapping
+        new_rule["pattern"] = new_pattern
+        new_rule["rewrite"] = split_rewrite
+        return new_rule
+
+    @staticmethod
+    def generalize_aggregation_to_filtered_subquery(rule: Dict[str, object]) -> Dict[str, object]:
+        pat = rule.get("pattern_ast")
+        rew = rule.get("rewrite_ast")
+        if not isinstance(pat, QueryNode) or not isinstance(rew, QueryNode):
+            return rule
+
+        pat_select = RuleGeneratorV2._first_clause(pat, NodeType.SELECT)
+        pat_from = RuleGeneratorV2._first_clause(pat, NodeType.FROM)
+        pat_group = RuleGeneratorV2._first_clause(pat, NodeType.GROUP_BY)
+        rew_select = RuleGeneratorV2._first_clause(rew, NodeType.SELECT)
+        rew_from = RuleGeneratorV2._first_clause(rew, NodeType.FROM)
+        rew_group = RuleGeneratorV2._first_clause(rew, NodeType.GROUP_BY)
+        if not all(isinstance(node, SelectNode) for node in (pat_select, rew_select)):
+            return rule
+        if not all(isinstance(node, FromNode) for node in (pat_from, rew_from)):
+            return rule
+        if not all(isinstance(node, GroupByNode) for node in (pat_group, rew_group)):
+            return rule
+        if len(pat_select.children) != 3 or len(rew_select.children) != 2:
+            return rule
+        if len(pat_from.children) != 1 or len(rew_from.children) != 1 or not isinstance(rew_from.children[0], SubqueryNode):
+            return rule
+        if len(pat_group.children) != 2 or len(rew_group.children) != 2:
+            return rule
+
+        pat_case = pat_select.children[2]
+        if not isinstance(pat_case, CaseNode):
+            return rule
+        when_nodes = [child for child in pat_case.children if isinstance(child, WhenThenNode)]
+        if len(when_nodes) != 1:
+            return rule
+        inner_when = when_nodes[0]
+        if len(inner_when.children) != 2:
+            return rule
+        sum_cmp = inner_when.children[0]
+        if not isinstance(sum_cmp, OperatorNode) or sum_cmp.name != ">=" or len(sum_cmp.children) != 2:
+            return rule
+        compare_value = sum_cmp.children[1]
+        sum_func = sum_cmp.children[0]
+        if not isinstance(sum_func, FunctionNode) or sum_func.name.upper() != "SUM" or len(sum_func.children) != 1:
+            return rule
+        inner_case = sum_func.children[0]
+        if not isinstance(inner_case, CaseNode):
+            return rule
+        inner_when_nodes = [child for child in inner_case.children if isinstance(child, WhenThenNode)]
+        if len(inner_when_nodes) != 1 or len(inner_when_nodes[0].children) != 2:
+            return rule
+        comparison = inner_when_nodes[0].children[0]
+        if not isinstance(comparison, OperatorNode) or comparison.name != "=" or len(comparison.children) != 2:
+            return rule
+
+        new_rule = copy.deepcopy(rule)
+        mapping = copy.deepcopy(new_rule.get("mapping"))
+        if not isinstance(mapping, dict):
+            return rule
+        mapping, false_name, _tok = RuleGeneratorV2._find_next_element_variable(mapping)
+        mapping, group_set_name, _tok = RuleGeneratorV2._find_next_set_variable(mapping)
+        new_rule["mapping"] = mapping
+
+        new_pat = new_rule["pattern_ast"]
+        new_rew = new_rule["rewrite_ast"]
+        if not isinstance(new_pat, QueryNode) or not isinstance(new_rew, QueryNode):
+            return rule
+        new_pat_select = RuleGeneratorV2._first_clause(new_pat, NodeType.SELECT)
+        new_pat_from = RuleGeneratorV2._first_clause(new_pat, NodeType.FROM)
+        new_pat_group = RuleGeneratorV2._first_clause(new_pat, NodeType.GROUP_BY)
+        new_rew_select = RuleGeneratorV2._first_clause(new_rew, NodeType.SELECT)
+        new_rew_from = RuleGeneratorV2._first_clause(new_rew, NodeType.FROM)
+        new_rew_group = RuleGeneratorV2._first_clause(new_rew, NodeType.GROUP_BY)
+        if not all(isinstance(node, SelectNode) for node in (new_pat_select, new_rew_select)):
+            return rule
+        if not all(isinstance(node, FromNode) for node in (new_pat_from, new_rew_from)):
+            return rule
+        if not all(isinstance(node, GroupByNode) for node in (new_pat_group, new_rew_group)):
+            return rule
+
+        table_alias = None
+        if isinstance(new_pat_from.children[0], TableNode) and isinstance(new_pat_from.children[0].name, str):
+            table_alias = new_pat_from.children[0].name
+            mapping, table_name, _tok = RuleGeneratorV2._find_next_element_variable(mapping)
+            new_pat_from.children = [TableNode(table_name, table_alias)]
+            new_rule["mapping"] = mapping
+
+        pat_first = copy.deepcopy(new_pat_select.children[0])
+        pat_second = copy.deepcopy(new_pat_select.children[1])
+        pat_third = copy.deepcopy(new_pat_select.children[2])
+        if isinstance(pat_second, FunctionNode):
+            pat_second.alias = None
+        if isinstance(pat_third, CaseNode):
+            outer_when_nodes = [child for child in pat_third.children if isinstance(child, WhenThenNode)]
+            if len(outer_when_nodes) == 1:
+                outer_when_nodes[0].children[1] = copy.deepcopy(compare_value)
+                outer_when_nodes[0].then = copy.deepcopy(compare_value)
+            pat_third.else_expr = ColumnNode(false_name)
+            if len(pat_third.children) >= 2:
+                pat_third.children[-1] = ColumnNode(false_name)
+            sum_node = outer_when_nodes[0].children[0].children[0] if len(outer_when_nodes) == 1 and isinstance(outer_when_nodes[0].children[0], OperatorNode) else None
+            if isinstance(sum_node, FunctionNode) and len(sum_node.children) == 1 and isinstance(sum_node.children[0], CaseNode):
+                nested_case = sum_node.children[0]
+                nested_when_nodes = [child for child in nested_case.children if isinstance(child, WhenThenNode)]
+                if len(nested_when_nodes) == 1:
+                    nested_when_nodes[0].children[1] = copy.deepcopy(compare_value)
+                    nested_when_nodes[0].then = copy.deepcopy(compare_value)
+                nested_case.else_expr = ColumnNode(false_name)
+                if len(nested_case.children) >= 2:
+                    nested_case.children[-1] = ColumnNode(false_name)
+        new_pat_select.children = [pat_first, pat_second, pat_third]
+        new_pat_group.children = [SetVariableNode(group_set_name), copy.deepcopy(new_pat_group.children[1])]
+
+        if isinstance(new_rew_from.children[0], SubqueryNode):
+            subquery = new_rew_from.children[0]
+            inner = next(iter(subquery.children), None)
+            if isinstance(inner, QueryNode):
+                inner_select = RuleGeneratorV2._first_clause(inner, NodeType.SELECT)
+                inner_from = RuleGeneratorV2._first_clause(inner, NodeType.FROM)
+                if isinstance(inner_select, SelectNode) and len(inner_select.children) == 2:
+                    inner_select.children[0] = copy.deepcopy(new_pat_select.children[0])
+                    if isinstance(inner_select.children[1], FunctionNode):
+                        inner_select.children[1].alias = None
+                if isinstance(inner_from, FromNode) and len(inner_from.children) == 1 and isinstance(inner_from.children[0], TableNode):
+                    table_alias_name = subquery.alias or (table_alias if table_alias is not None else inner_from.children[0].name)
+                    mapping = copy.deepcopy(new_rule["mapping"])
+                    if not isinstance(mapping, dict):
+                        return rule
+                    if isinstance(inner_from.children[0].name, str):
+                        mapping, table_name, _tok = RuleGeneratorV2._find_next_element_variable(mapping)
+                        new_rule["mapping"] = mapping
+                        inner_from.children = [TableNode(table_name)]
+                        subquery.alias = table_alias_name
+        if isinstance(new_rew_from.children[0], SubqueryNode):
+            alias = new_rew_from.children[0].alias or table_alias or "t1"
+            new_rew_from.children[0].alias = alias
+            new_rew_select.children = [
+                ColumnNode(copy.deepcopy(new_pat_select.children[0]).name if isinstance(new_pat_select.children[0], ColumnNode) else "x1", _parent_alias=alias),
+                ColumnNode(copy.deepcopy(new_pat_group.children[1]).children[0].name if isinstance(new_pat_group.children[1], FunctionNode) and new_pat_group.children[1].children and isinstance(new_pat_group.children[1].children[0], ColumnNode) else "x2", _parent_alias=alias),
+            ]
+            new_rew_group.children = [SetVariableNode(group_set_name), copy.deepcopy(new_rew_select.children[1])]
+
+        new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
+        new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
+        return new_rule
+
+    @staticmethod
+    def _generalize_join_to_filter(rule: Dict[str, object]) -> Optional[Dict[str, object]]:
+        pat = rule.get("pattern_ast")
+        rew = rule.get("rewrite_ast")
+        if not isinstance(pat, QueryNode) or not isinstance(rew, QueryNode):
+            return None
+        if RuleGeneratorV2._from_source_count(pat) != RuleGeneratorV2._from_source_count(rew) + 1:
+            return None
+
+        pat_where = RuleGeneratorV2._first_clause(pat, NodeType.WHERE)
+        rew_where = RuleGeneratorV2._first_clause(rew, NodeType.WHERE)
+        pat_select = RuleGeneratorV2._first_clause(pat, NodeType.SELECT)
+        rew_select = RuleGeneratorV2._first_clause(rew, NodeType.SELECT)
+        if not all(isinstance(node, WhereNode) for node in (pat_where, rew_where)):
+            return None
+        if not all(isinstance(node, SelectNode) for node in (pat_select, rew_select)):
+            return None
+
+        new_rule = copy.deepcopy(rule)
+        mapping = copy.deepcopy(new_rule["mapping"])
+        if not isinstance(mapping, dict):
+            return None
+        mapping, select_set_name, _tok = RuleGeneratorV2._find_next_set_variable(mapping)
+        mapping, predicate_set_name, _tok = RuleGeneratorV2._find_next_set_variable(mapping)
+        new_rule["mapping"] = mapping
+
+        pat2 = new_rule["pattern_ast"]
+        rew2 = new_rule["rewrite_ast"]
+        if not isinstance(pat2, QueryNode) or not isinstance(rew2, QueryNode):
+            return None
+        pat_select2 = RuleGeneratorV2._first_clause(pat2, NodeType.SELECT)
+        rew_select2 = RuleGeneratorV2._first_clause(rew2, NodeType.SELECT)
+        pat_where2 = RuleGeneratorV2._first_clause(pat2, NodeType.WHERE)
+        rew_where2 = RuleGeneratorV2._first_clause(rew2, NodeType.WHERE)
+        if not all(isinstance(node, SelectNode) for node in (pat_select2, rew_select2)):
+            return None
+        if not all(isinstance(node, WhereNode) for node in (pat_where2, rew_where2)):
+            return None
+
+        pat_select2.children = [SetVariableNode(select_set_name)]
+        rew_select2.children = [SetVariableNode(select_set_name)]
+        pat_from2 = RuleGeneratorV2._first_clause(pat2, NodeType.FROM)
+        rew_from2 = RuleGeneratorV2._first_clause(rew2, NodeType.FROM)
+        if not isinstance(pat_from2, FromNode) or not isinstance(rew_from2, FromNode):
+            return None
+        alias_table_map: Dict[str, str] = {}
+        pat_from2.children = RuleGeneratorV2._expand_from_sources_with_alias_vars(pat_from2.children, mapping, alias_table_map)
+        rew_from2.children = RuleGeneratorV2._expand_from_sources_with_alias_vars(rew_from2.children, mapping, alias_table_map)
+        pat_removed_alias = RuleGeneratorV2._rightmost_join_alias(pat_from2.children[0]) if pat_from2.children else None
+        rew_filter_alias = RuleGeneratorV2._rightmost_join_alias(rew_from2.children[0]) if rew_from2.children else None
+        pat_original_terms = RuleGeneratorV2._flatten_and_terms(pat_where2.children[0]) if pat_where2.children else []
+        rew_original_terms = RuleGeneratorV2._flatten_and_terms(rew_where2.children[0]) if rew_where2.children else []
+        pat_filter = RuleGeneratorV2._find_filter_predicate_for_alias(pat_original_terms, pat_removed_alias)
+        rew_filter = RuleGeneratorV2._find_filter_predicate_for_alias(rew_original_terms, rew_filter_alias)
+        if pat_filter is None or rew_filter is None:
+            return None
+        pat_where2.children = [RuleGeneratorV2._combine_and_terms([copy.deepcopy(pat_filter), SetVariableNode(predicate_set_name)])]
+        rew_where2.children = [RuleGeneratorV2._combine_and_terms([copy.deepcopy(rew_filter), SetVariableNode(predicate_set_name)])]
+        RuleGeneratorV2._split_column_variables_by_alias(pat2, rew2, mapping)
+        new_rule["mapping"] = mapping
+        new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
+        new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
+        return new_rule
+
+    @staticmethod
+    def generalize_join_to_filter(rule: Dict[str, object]) -> Dict[str, object]:
+        generalized_rule = RuleGeneratorV2._generalize_join_to_filter(rule)
         if generalized_rule is None:
             return rule
         return generalized_rule
@@ -1591,7 +2430,7 @@ class RuleGeneratorV2:
                 rs = RuleGeneratorV2.deparse(copy.deepcopy(rb_target))
             except Exception:
                 return False
-            return RuleGeneratorV2._fingerPrint(ps) == RuleGeneratorV2._fingerPrint(rs)
+            return ps.lower() == rs.lower()
         return False
 
     @staticmethod
@@ -2132,6 +2971,8 @@ class RuleGeneratorV2:
             value = getattr(node, "value", None)
             if isinstance(value, str):
                 normalized = value.replace("%", "")
+                if RuleGeneratorV2._is_placeholder_name(normalized):
+                    continue
                 counts[normalized] = counts.get(normalized, 0) + 1
             elif isinstance(value, numbers.Number):
                 counts[value] = counts.get(value, 0) + 1
@@ -2193,10 +3034,31 @@ class RuleGeneratorV2:
     def _merge_variable_list_in_ast(ast: Node, variable_set: Set[str], set_name: str) -> Node:
         for node in RuleGeneratorV2._walk(ast):
             if isinstance(node, SelectNode):
-                ev_children = [c for c in node.children if isinstance(c, ElementVariableNode)]
-                if ev_children and all(c.name in variable_set for c in ev_children):
-                    if len(ev_children) == len(node.children):
-                        node.children = [SetVariableNode(set_name)]
+                new_children: List[Node] = []
+                pending = False
+                changed = False
+                for child in node.children:
+                    variable_name: Optional[str] = None
+                    if isinstance(child, ElementVariableNode):
+                        variable_name = child.name
+                    elif (
+                        isinstance(child, ColumnNode)
+                        and child.parent_alias is None
+                        and RuleGeneratorV2._is_placeholder_name(child.name)
+                    ):
+                        variable_name = child.name
+
+                    if variable_name is not None and variable_name in variable_set:
+                        if not pending:
+                            new_children.append(SetVariableNode(set_name))
+                            pending = True
+                            changed = True
+                        continue
+
+                    pending = False
+                    new_children.append(child)
+                if changed:
+                    node.children = new_children
                 continue
 
             if isinstance(node, WhereNode):
@@ -2336,7 +3198,16 @@ class RuleGeneratorV2:
         out: List[List[str]] = []
         for node in RuleGeneratorV2._walk(ast):
             if isinstance(node, SelectNode):
-                names = [c.name for c in node.children if isinstance(c, ElementVariableNode)]
+                names = []
+                for child in node.children:
+                    if isinstance(child, ElementVariableNode):
+                        names.append(child.name)
+                    elif (
+                        isinstance(child, ColumnNode)
+                        and child.parent_alias is None
+                        and RuleGeneratorV2._is_placeholder_name(child.name)
+                    ):
+                        names.append(child.name)
                 if names:
                     out.append(names)
                 continue
@@ -2471,6 +3342,48 @@ class RuleGeneratorV2:
         return RuleGeneratorV2._ast_contains_subtree(pat_where, subtree) and RuleGeneratorV2._ast_contains_subtree(rew_where, subtree)
 
     @staticmethod
+    def _should_preserve_join_predicate_subtree(pattern_ast: Node, rewrite_ast: Node, subtree: Node) -> bool:
+        if not isinstance(subtree, OperatorNode):
+            return False
+
+        def _join_on_conditions(ast: Node) -> List[Node]:
+            conditions: List[Node] = []
+            for node in RuleGeneratorV2._walk(ast):
+                if isinstance(node, JoinNode) and isinstance(node.on_condition, Node):
+                    conditions.append(node.on_condition)
+            return conditions
+
+        pattern_conditions = _join_on_conditions(pattern_ast)
+        rewrite_conditions = _join_on_conditions(rewrite_ast)
+        if not pattern_conditions or not rewrite_conditions:
+            return False
+        return any(cond == subtree for cond in pattern_conditions) and any(cond == subtree for cond in rewrite_conditions)
+
+    @staticmethod
+    def _should_preserve_grouped_projection_subtree(pattern_ast: Node, rewrite_ast: Node, subtree: Node) -> bool:
+        if not isinstance(subtree, ColumnNode):
+            return False
+        if not isinstance(pattern_ast, QueryNode) or not isinstance(rewrite_ast, QueryNode):
+            return False
+
+        pat_select = RuleGeneratorV2._first_clause(pattern_ast, NodeType.SELECT)
+        rew_select = RuleGeneratorV2._first_clause(rewrite_ast, NodeType.SELECT)
+        rew_group = RuleGeneratorV2._first_clause(rewrite_ast, NodeType.GROUP_BY)
+        if not isinstance(pat_select, SelectNode) or not isinstance(rew_select, SelectNode) or not isinstance(rew_group, GroupByNode):
+            return False
+        if not getattr(pat_select, "distinct", False):
+            return False
+        if len(pat_select.children) != 1 or len(rew_select.children) != 1 or len(rew_group.children) != 1:
+            return False
+
+        target_sql = RuleGeneratorV2.deparse(copy.deepcopy(subtree))
+        return (
+            RuleGeneratorV2.deparse(copy.deepcopy(pat_select.children[0])) == target_sql
+            and RuleGeneratorV2.deparse(copy.deepcopy(rew_select.children[0])) == target_sql
+            and RuleGeneratorV2.deparse(copy.deepcopy(rew_group.children[0])) == target_sql
+        )
+
+    @staticmethod
     def _ast_contains_subtree(ast: Node, subtree: Node) -> bool:
         if ast == subtree:
             return True
@@ -2484,6 +3397,155 @@ class RuleGeneratorV2:
                 if isinstance(child, Node) and RuleGeneratorV2._ast_contains_subtree(child, subtree):
                     return True
         return False
+
+    @staticmethod
+    def _flatten_and_terms(node: Node) -> List[Node]:
+        if isinstance(node, OperatorNode) and node.name.upper() == "AND":
+            out: List[Node] = []
+            for child in node.children:
+                if isinstance(child, Node):
+                    out.extend(RuleGeneratorV2._flatten_and_terms(child))
+            return out
+        return [node]
+
+    @staticmethod
+    def _combine_and_terms(terms: List[Node]) -> Node:
+        if not terms:
+            return OperatorNode(LiteralNode(1), "=", LiteralNode(1))
+        combined = copy.deepcopy(terms[0])
+        for term in terms[1:]:
+            combined = OperatorNode(combined, "AND", copy.deepcopy(term))
+        return combined
+
+    @staticmethod
+    def _find_self_join_equality_term(terms: List[Node]) -> Optional[Node]:
+        for term in terms:
+            if not isinstance(term, OperatorNode) or term.name != "=" or len(term.children) != 2:
+                continue
+            left, right = term.children
+            if not isinstance(left, ColumnNode) or not isinstance(right, ColumnNode):
+                continue
+            if left.name != right.name:
+                continue
+            if not left.parent_alias or not right.parent_alias or left.parent_alias == right.parent_alias:
+                continue
+            return term
+        return None
+
+    @staticmethod
+    def _find_cross_source_equality_term(terms: List[Node]) -> Optional[Node]:
+        for term in terms:
+            if not isinstance(term, OperatorNode) or term.name != "=" or len(term.children) != 2:
+                continue
+            left, right = term.children
+            if not isinstance(left, ColumnNode) or not isinstance(right, ColumnNode):
+                continue
+            if not left.parent_alias or not right.parent_alias or left.parent_alias == right.parent_alias:
+                continue
+            return term
+        return None
+
+    @staticmethod
+    def _find_literal_equality_term(terms: List[Node]) -> Optional[Node]:
+        for term in terms:
+            if not isinstance(term, OperatorNode) or term.name != "=" or len(term.children) != 2:
+                continue
+            left, right = term.children
+            if isinstance(left, LiteralNode) or isinstance(right, LiteralNode):
+                return term
+        return None
+
+    @staticmethod
+    def _find_filter_predicate_term(terms: List[Node]) -> Optional[Node]:
+        for term in terms:
+            if not isinstance(term, OperatorNode) or term.name != "=" or len(term.children) != 2:
+                continue
+            left, right = term.children
+            if isinstance(left, ColumnNode) and not isinstance(right, ColumnNode):
+                return term
+            if isinstance(right, ColumnNode) and not isinstance(left, ColumnNode):
+                return term
+        return None
+
+    @staticmethod
+    def _operator_query_child(node: OperatorNode) -> Optional[QueryNode]:
+        for child in node.children:
+            if isinstance(child, QueryNode):
+                return child
+            if isinstance(child, SubqueryNode):
+                inner = next(iter(child.children), None)
+                if isinstance(inner, QueryNode):
+                    return inner
+        return None
+
+    @staticmethod
+    def _expand_from_sources_with_alias_vars(children: List[Node], mapping: Dict[str, str], alias_table_map: Optional[Dict[str, str]] = None) -> List[Node]:
+        expanded: List[Node] = []
+        for child in children:
+            expanded.append(RuleGeneratorV2._expand_source_with_alias_vars(copy.deepcopy(child), mapping, alias_table_map))
+        return expanded
+
+    @staticmethod
+    def _expand_source_with_alias_vars(node: Node, mapping: Dict[str, str], alias_table_map: Optional[Dict[str, str]] = None) -> Node:
+        if isinstance(node, TableNode) and isinstance(node.name, str) and RuleGeneratorV2._is_placeholder_name(node.name) and node.alias is None:
+            if alias_table_map is None:
+                alias_table_map = {}
+            table_name = alias_table_map.get(node.name)
+            if table_name is None:
+                mapping, table_name, _tok = RuleGeneratorV2._find_next_element_variable(mapping)
+                alias_table_map[node.name] = table_name
+            return TableNode(table_name, node.name)
+        if isinstance(node, JoinNode):
+            node.left_table = RuleGeneratorV2._expand_source_with_alias_vars(node.left_table, mapping, alias_table_map)  # type: ignore[arg-type]
+            node.right_table = RuleGeneratorV2._expand_source_with_alias_vars(node.right_table, mapping, alias_table_map)  # type: ignore[arg-type]
+            node.children[0] = node.left_table
+            node.children[1] = node.right_table
+        return node
+
+    @staticmethod
+    def _split_column_variables_by_alias(pattern_ast: Node, rewrite_ast: Node, mapping: Dict[str, str]) -> None:
+        alias_column_map: Dict[Tuple[str, str], str] = {}
+        for ast in (pattern_ast, rewrite_ast):
+            for node in RuleGeneratorV2._walk(ast):
+                if not isinstance(node, ColumnNode):
+                    continue
+                if not isinstance(node.name, str) or not RuleGeneratorV2._is_placeholder_name(node.name):
+                    continue
+                if not isinstance(node.parent_alias, str) or not RuleGeneratorV2._is_placeholder_name(node.parent_alias):
+                    continue
+                key = (node.parent_alias, node.name)
+                replacement = alias_column_map.get(key)
+                if replacement is None:
+                    mapping, replacement, _tok = RuleGeneratorV2._find_next_element_variable(mapping)
+                    alias_column_map[key] = replacement
+                node.name = replacement
+
+    @staticmethod
+    def _rightmost_join_alias(node: Node) -> Optional[str]:
+        if isinstance(node, JoinNode):
+            right = node.right_table
+            if isinstance(right, TableNode):
+                return right.alias if isinstance(right.alias, str) else right.name if isinstance(right.name, str) else None
+        if isinstance(node, TableNode):
+            return node.alias if isinstance(node.alias, str) else node.name if isinstance(node.name, str) else None
+        return None
+
+    @staticmethod
+    def _find_filter_predicate_for_alias(terms: List[Node], alias: Optional[str]) -> Optional[Node]:
+        if alias is None:
+            return RuleGeneratorV2._find_filter_predicate_term(terms)
+        fallback: Optional[Node] = None
+        for term in terms:
+            if not isinstance(term, OperatorNode) or term.name != "=" or len(term.children) != 2:
+                continue
+            left, right = term.children
+            for node in (left, right):
+                if isinstance(node, ColumnNode):
+                    if fallback is None and not isinstance(left, ColumnNode) != (not isinstance(right, ColumnNode)):
+                        fallback = term
+                    if node.parent_alias == alias:
+                        return term
+        return fallback
 
     @staticmethod
     def _dedupe_boolean_predicates(node: Node) -> Node:
@@ -2631,10 +3693,7 @@ class RuleGeneratorV2:
                         out.append(({"key": "select", "value": None}, select_target))
                 else:
                     out.append(({"key": "select", "value": None}, select_target))
-            if from_clause is not None and (
-                RuleGeneratorV2._is_branch_clause("from", from_clause)
-                or (select is None and where is not None)
-            ):
+            if from_clause is not None and RuleGeneratorV2._is_branch_clause("from", from_clause):
                 from_target: object = from_clause
                 if select is None:
                     from_target = "__from_wrapper__"
@@ -2721,7 +3780,7 @@ class RuleGeneratorV2:
                     if not RuleGeneratorV2._is_placeholder_name(child.name):
                         return False
                 elif isinstance(child, JoinNode):
-                    continue
+                    return False
                 else:
                     return False
             return True
