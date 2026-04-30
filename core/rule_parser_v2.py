@@ -255,7 +255,9 @@ class RuleParserV2:
     ) -> Node:
         out = RuleParserV2._as_rule_ast(query, internal_to_external)
         if not isinstance(out, (QueryNode, CompoundQueryNode)):
-            raise TypeError("expected QueryNode after substituting rule variables on full query")
+            raise TypeError(
+                "expected QueryNode or CompoundQueryNode after substituting rule variables on full query"
+            )
         return out
 
     # Slice a fully substituted query to the rule fragment for this scope (no variable-node pass).
