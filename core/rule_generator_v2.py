@@ -620,6 +620,9 @@ class RuleGeneratorV2:
     def _replace_setvars_in_ast(ast: Node, replacements: Dict[str, str]) -> Node:
         if isinstance(ast, SetVariableNode) and ast.name in replacements:
             return ElementVariableNode(replacements[ast.name])
+        if isinstance(ast, JoinNode):
+            had_on = ast.on_condition is not None
+            n_using = len(ast.using) if ast.using else 0
         children = getattr(ast, "children", None)
         if isinstance(children, list):
             for idx, child in enumerate(children):
@@ -634,9 +637,7 @@ class RuleGeneratorV2:
                     new_children.add(child)  # type: ignore[arg-type]
             ast.children = new_children
         if isinstance(ast, JoinNode):
-            ast.left_table = ast.children[0]  # type: ignore[assignment]
-            ast.right_table = ast.children[1]  # type: ignore[assignment]
-            ast.on_condition = ast.children[2] if len(ast.children) > 2 else None  # type: ignore[assignment]
+            RuleGeneratorV2._resync_join_attrs(ast, had_on, n_using)
         elif isinstance(ast, UnaryOperatorNode):
             ast.operand = ast.children[0]
         elif isinstance(ast, CompoundQueryNode):
@@ -2244,6 +2245,10 @@ class RuleGeneratorV2:
         sql = QueryFormatter().format(full_query)
         for placeholder, user_var in placeholder_mapping.items():
             sql = sql.replace(placeholder, user_var)
+        # mo_sql_parsing renders NATURAL JOIN as `, NATURAL JOIN(<table>)`
+        # (extra leading comma, no space before paren). Mirror v1's
+        # dereplaceVars fix-up here.
+        sql = re.sub(r",\s*NATURAL\s+JOIN\s*\(", " NATURAL JOIN (", sql)
         sql = RuleGeneratorV2._normalize_placeholder_tokens(sql)
         sql = RuleGeneratorV2._wrap_xy_identifiers(sql)
         return RuleGeneratorV2._extract_partial_sql(sql, scope)
@@ -2265,7 +2270,8 @@ class RuleGeneratorV2:
                     and not RuleGeneratorV2._is_placeholder_name(node.name)
                 ):
                     found.add(node.name)
-        return list(found)
+        # Sort deterministically so generalize_columns is hash-seed independent.
+        return sorted(found)
 
     @staticmethod
     def literals(pattern_ast: Node, rewrite_ast: Node) -> List[Union[str, numbers.Number]]:
@@ -3049,8 +3055,56 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _merge_variable_list_in_ast(ast: Node, variable_set: Set[str], set_name: str) -> Node:
-        for node in RuleGeneratorV2._walk(ast):
-            if isinstance(node, SelectNode):
+        def _process_and_chain(and_node: OperatorNode) -> Optional[Node]:
+            # Flatten nested AND chains so that `(a AND b) AND c` is treated as
+            # `[a, b, c]`, mirroring v1's flat `{'and': [...]}` representation.
+            flat: List[Node] = []
+
+            def _flatten(n: Node) -> None:
+                if isinstance(n, OperatorNode) and n.name.lower() == "and":
+                    for child in n.children:
+                        if isinstance(child, Node):
+                            _flatten(child)
+                    return
+                flat.append(n)
+
+            _flatten(and_node)
+
+            flat_var_names = {c.name for c in flat if isinstance(c, ElementVariableNode)}
+            if not variable_set.issubset(flat_var_names):
+                return None
+
+            new_children: List[Node] = []
+            pending = False
+            for child in flat:
+                if isinstance(child, ElementVariableNode) and child.name in variable_set:
+                    if not pending:
+                        new_children.append(SetVariableNode(set_name))
+                        pending = True
+                    continue
+                new_children.append(child)
+
+            if len(new_children) == 1:
+                return new_children[0]
+            result: Node = new_children[0]
+            for child in new_children[1:]:
+                result = OperatorNode(result, "AND", child)
+            return result
+
+        def _is_inside_and(parent: Optional[Node]) -> bool:
+            return (
+                parent is not None
+                and isinstance(parent, OperatorNode)
+                and parent.name.lower() == "and"
+            )
+
+        def _visit(node: Node, parent: Optional[Node]) -> Node:
+            if isinstance(node, (SelectNode, GroupByNode)):
+                # v1 collects variable lists only from SELECT/AND, but its
+                # `replaceVariableListsOfASTJson` walks *every* list and
+                # collapses any subset match. Mirror that for GROUP BY so a
+                # singleton merged on the SELECT side also collapses the same
+                # column ref in the GROUP BY clause.
                 new_children: List[Node] = []
                 pending = False
                 changed = False
@@ -3076,13 +3130,14 @@ class RuleGeneratorV2:
                     new_children.append(child)
                 if changed:
                     node.children = new_children
-                continue
+                return node
 
             if isinstance(node, WhereNode):
                 if len(node.children) == 1 and isinstance(node.children[0], ElementVariableNode):
                     if node.children[0].name in variable_set:
                         node.children = [SetVariableNode(set_name)]
-                continue
+                        return node
+                # Otherwise fall through and recurse into children.
 
             if isinstance(node, JoinNode) and node.on_condition is not None:
                 oc = node.on_condition
@@ -3091,23 +3146,58 @@ class RuleGeneratorV2:
                     node.on_condition = replacement
                     if len(node.children) > 2:
                         node.children[2] = replacement
-                continue
+                    return node
 
             if isinstance(node, LimitNode) and isinstance(node.limit, str) and node.limit in variable_set:
                 node.limit = set_name
+                return node
 
-            if isinstance(node, OperatorNode) and node.name.lower() == "and":
-                new_children: List[Node] = []
-                changed = False
-                for child in node.children:
-                    if isinstance(child, ElementVariableNode) and child.name in variable_set:
-                        new_children.append(SetVariableNode(set_name))
-                        changed = True
+            if (
+                isinstance(node, OperatorNode)
+                and node.name.lower() == "and"
+                and not _is_inside_and(parent)
+            ):
+                replaced = _process_and_chain(node)
+                if replaced is not None:
+                    return replaced
+
+            if isinstance(node, JoinNode):
+                had_on = node.on_condition is not None
+                n_using = len(node.using) if node.using else 0
+            children = getattr(node, "children", None)
+            if isinstance(children, list):
+                for idx, child in enumerate(children):
+                    if isinstance(child, Node):
+                        new_child = _visit(child, node)
+                        if new_child is not child:
+                            children[idx] = new_child
+                            RuleGeneratorV2._resync_parallel_attrs(node, child, new_child)
+            elif isinstance(children, set):
+                new_set: Set[Node] = set()
+                replacements: List[Tuple[Node, Node]] = []
+                for child in children:
+                    if isinstance(child, Node):
+                        new_child = _visit(child, node)
+                        new_set.add(new_child)
+                        if new_child is not child:
+                            replacements.append((child, new_child))
                     else:
-                        new_children.append(child)
-                if changed:
-                    node.children = new_children
-        return ast
+                        new_set.add(child)  # type: ignore[arg-type]
+                node.children = new_set
+                for old, new in replacements:
+                    RuleGeneratorV2._resync_parallel_attrs(node, old, new)
+
+            if isinstance(node, JoinNode):
+                RuleGeneratorV2._resync_join_attrs(node, had_on, n_using)
+            elif isinstance(node, UnaryOperatorNode):
+                node.operand = node.children[0]
+            elif isinstance(node, CompoundQueryNode):
+                node.left = node.children[0]
+                node.right = node.children[1]
+
+            return node
+
+        return _visit(ast, None)
 
     @staticmethod
     def _replace_literal_in_ast(
@@ -3168,12 +3258,20 @@ class RuleGeneratorV2:
         target_name: str,
         placeholder_token: str,
     ) -> Node:
+        # Mirror v1's `replaceTablesOfASTJson` special case: a bare-table
+        # reference (no explicit alias, where alias == value) is also matched
+        # when its value equals the target's value, even if `target_name`
+        # disagrees. This lets a single table variable cover both an aliased
+        # outer reference and a bare-named reference (e.g. inside a subquery)
+        # of the same underlying table.
         match_aliases: Set[str] = set()
         for node in RuleGeneratorV2._walk(ast):
             if not isinstance(node, TableNode):
                 continue
             current_alias = node.alias if isinstance(node.alias, str) else node.name
-            if node.name == target_value and current_alias == target_name:
+            if node.name == target_value and (
+                current_alias == target_name or current_alias == node.name
+            ):
                 match_aliases.add(current_alias)
                 node.name = placeholder_token
                 node.alias = None
@@ -3181,8 +3279,21 @@ class RuleGeneratorV2:
         if not match_aliases:
             return ast
 
+        # Column refs may use either the alias (`t1.col`) or the table value
+        # (`schema.table.col`); both should pick up the same variable. v1 also
+        # rewrites column refs whose prefix matches `target_name` even when no
+        # actual `TableNode` carries that alias (e.g. a subquery aliased the
+        # same name as the underlying table on the other side of the rule).
         for node in RuleGeneratorV2._walk(ast):
-            if isinstance(node, ColumnNode) and isinstance(node.parent_alias, str) and node.parent_alias in match_aliases:
+            if (
+                isinstance(node, ColumnNode)
+                and isinstance(node.parent_alias, str)
+                and (
+                    node.parent_alias in match_aliases
+                    or node.parent_alias == target_value
+                    or node.parent_alias == target_name
+                )
+            ):
                 node.parent_alias = placeholder_token
         return ast
 
@@ -3190,16 +3301,46 @@ class RuleGeneratorV2:
     def _replace_node_reference(root: Node, target: Node, replacement: Node) -> None:
         for node in RuleGeneratorV2._walk(root):
             children = getattr(node, "children", None)
+            replaced_here = False
             if isinstance(children, list):
                 for idx, child in enumerate(children):
                     if child is target:
                         children[idx] = replacement
+                        replaced_here = True
             elif isinstance(children, set):
                 if target in children:
                     children.remove(target)
                     children.add(replacement)
+                    replaced_here = True
+            if replaced_here:
+                RuleGeneratorV2._resync_parallel_attrs(node, target, replacement)
         if root is target:
             raise ValueError("Cannot replace root node directly; expected nested target.")
+
+    @staticmethod
+    def _resync_parallel_attrs(node: Node, target: Node, replacement: Node) -> None:
+        # Many AST nodes mirror children into named attributes (e.g. CaseNode.
+        # whens / else_val, WhenThenNode.when/then, JoinNode.on_condition).
+        # The formatter and other helpers read those attrs directly, so
+        # whenever we mutate `children` we must keep the parallel pointers in
+        # sync. Walk the node's __dict__ and substitute any reference that
+        # `is target` with `replacement`.
+        for attr_name, attr_value in list(node.__dict__.items()):
+            if attr_name == "children":
+                continue
+            if attr_value is target:
+                setattr(node, attr_name, replacement)
+            elif isinstance(attr_value, list):
+                for idx, item in enumerate(attr_value):
+                    if item is target:
+                        attr_value[idx] = replacement
+            elif isinstance(attr_value, tuple):
+                if any(item is target for item in attr_value):
+                    setattr(
+                        node,
+                        attr_name,
+                        tuple(replacement if item is target else item for item in attr_value),
+                    )
 
     @staticmethod
     def _is_placeholder_name(name: str) -> bool:
@@ -3233,6 +3374,81 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _variable_lists_of_ast(ast: Node) -> List[List[str]]:
+        # AND chains parse left-associatively in v2 (e.g. `a AND b AND c` →
+        # `(a AND b) AND c`). v1 sees them as a flat `{'and': [a, b, c]}`.
+        # We mirror v1 by collecting variable lists only at top-most AND
+        # operators (where the parent is not also AND) and flattening the
+        # whole chain into a single list of placeholder names.
+        out: List[List[str]] = []
+
+        def _flatten_and(node: Node) -> List[str]:
+            if isinstance(node, OperatorNode) and node.name.lower() == "and":
+                names: List[str] = []
+                for child in node.children:
+                    names.extend(_flatten_and(child))
+                return names
+            if isinstance(node, ElementVariableNode):
+                return [node.name]
+            return []
+
+        seen_and_ids: Set[int] = set()
+
+        def _is_inside_and(parent: Optional[Node]) -> bool:
+            return (
+                parent is not None
+                and isinstance(parent, OperatorNode)
+                and parent.name.lower() == "and"
+            )
+
+        def _visit(node: Node, parent: Optional[Node] = None) -> None:
+            if isinstance(node, SelectNode):
+                if not getattr(node, "distinct", False):
+                    names: List[str] = []
+                    for child in node.children:
+                        if isinstance(child, ElementVariableNode):
+                            names.append(child.name)
+                        elif (
+                            isinstance(child, ColumnNode)
+                            and child.parent_alias is None
+                            and RuleGeneratorV2._is_placeholder_name(child.name)
+                        ):
+                            names.append(child.name)
+                    if names:
+                        out.append(names)
+            elif (
+                isinstance(node, OperatorNode)
+                and node.name.lower() == "and"
+                and not _is_inside_and(parent)
+            ):
+                names = _flatten_and(node)
+                if names:
+                    out.append(names)
+                seen_and_ids.add(id(node))
+            elif isinstance(node, WhereNode) and len(node.children) == 1 and isinstance(node.children[0], ElementVariableNode):
+                out.append([node.children[0].name])
+            elif isinstance(node, LimitNode) and isinstance(node.limit, str) and RuleGeneratorV2._is_placeholder_name(node.limit):
+                out.append([node.limit])
+            elif isinstance(node, JoinNode) and node.on_condition is not None:
+                oc = node.on_condition
+                if isinstance(oc, ElementVariableNode):
+                    out.append([oc.name])
+
+            children = getattr(node, "children", None)
+            if children:
+                for child in children:
+                    if isinstance(child, Node):
+                        _visit(child, node)
+
+        _visit(ast)
+        return out
+
+    # ``_variable_lists_of_ast`` no longer uses the legacy linear loop, but the
+    # following nested-list helpers remain for the pre-existing behavior in
+    # ``_merge_variable_list_in_ast``.
+
+    @staticmethod
+    def _legacy_variable_lists_of_ast_unused(ast: Node) -> List[List[str]]:
+        # Kept temporarily for reference; not used anymore.
         out: List[List[str]] = []
         for node in RuleGeneratorV2._walk(ast):
             if isinstance(node, SelectNode):
@@ -3342,7 +3558,38 @@ class RuleGeneratorV2:
             return False
 
         if isinstance(node, ColumnNode):
-            return isinstance(parent, SelectNode) and RuleGeneratorV2._node_is_fully_variablized_column(node)
+            # Mirror v1's `{'value': '...'}` wrapping for column refs that act
+            # as standalone select/group-by/order-by items: those are subtree
+            # candidates in v1 and get replaced; bare column refs inside
+            # operators/functions (e.g. JOIN ON, WHERE, expressions) are not.
+            if not RuleGeneratorV2._node_is_fully_variablized_column(node):
+                return False
+            return isinstance(parent, (SelectNode, GroupByNode, OrderByItemNode))
+
+        if isinstance(node, SetVariableNode):
+            # v1 wraps SELECT-position set vars as `{'value': VL}` (a subtree
+            # dict). Mirror that so the SELECT/GROUP BY split iterations can
+            # lift the set var into a fresh element var.
+            if isinstance(parent, SelectNode):
+                return True
+            # v1 *also* wraps a fully-collapsed AND chain in WHERE / WHEN as
+            # `{'and': [VL]}` (single-child AND). That ONLY happens when the
+            # entire AND collapses to one set var, which in v2 means the set
+            # var stands alone as a WHERE / WHEN predicate or as an OR-branch
+            # (it took the place of an AND that had no other surviving
+            # siblings). When the set var is mixed with other conjuncts under
+            # an AND (like in `<<y>> AND <expr> AND <expr>`), v1's outer AND
+            # list does *not* satisfy `isSubtree` (it has dict children), so
+            # the set var stays a set var in v1 too — don't variabilize it
+            # here.
+            if isinstance(parent, (WhereNode, WhenThenNode)):
+                return True
+            if (
+                isinstance(parent, OperatorNode)
+                and parent.name.lower() == "or"
+            ):
+                return True
+            return False
 
         if isinstance(node, LiteralNode):
             if isinstance(parent, ListNode):
@@ -3624,6 +3871,9 @@ class RuleGeneratorV2:
         working = copy.deepcopy(node)
 
         def _visit(cur: Node) -> Node:
+            if isinstance(cur, JoinNode):
+                had_on = cur.on_condition is not None
+                n_using = len(cur.using) if cur.using else 0
             children = getattr(cur, "children", None)
             if isinstance(children, list):
                 new_children = []
@@ -3657,9 +3907,7 @@ class RuleGeneratorV2:
                 if len(deduped) == 1:
                     return deduped[0]
             if isinstance(cur, JoinNode):
-                cur.left_table = cur.children[0]  # type: ignore[assignment]
-                cur.right_table = cur.children[1]  # type: ignore[assignment]
-                cur.on_condition = cur.children[2] if len(cur.children) > 2 else None  # type: ignore[assignment]
+                RuleGeneratorV2._resync_join_attrs(cur, had_on, n_using)
             elif isinstance(cur, UnaryOperatorNode):
                 cur.operand = cur.children[0]
             elif isinstance(cur, CompoundQueryNode):
@@ -3993,27 +4241,43 @@ class RuleGeneratorV2:
         return ast
 
     @staticmethod
-    def _replace_subtree_in_ast(ast: Node, subtree: Node, replacement: Node) -> Node:
-        if ast == subtree:
+    def _replace_subtree_in_ast(ast: Node, subtree: Node, replacement: Node, parent: Optional[Node] = None) -> Node:
+        # Mirror v1's position-aware subtree replacement. In v1 a SELECT item
+        # is wrapped in a `{'value': ...}` dict so column-ref strings appearing
+        # in JOIN/ON/WHERE clauses are never matched by a SELECT-item subtree.
+        # In v2 a `ColumnNode`/`LiteralNode` is the same node regardless of
+        # context, so we additionally require the current position to be one
+        # where the subtree would have been collected as a candidate.
+        if ast == subtree and RuleGeneratorV2._is_subtree_candidate(ast, parent):
             return copy.deepcopy(replacement)
+        if isinstance(ast, JoinNode):
+            had_on = ast.on_condition is not None
+            n_using = len(ast.using) if ast.using else 0
         children = getattr(ast, "children", None)
         if isinstance(children, list):
             for idx, child in enumerate(children):
                 if isinstance(child, Node):
-                    children[idx] = RuleGeneratorV2._replace_subtree_in_ast(child, subtree, replacement)
+                    new_child = RuleGeneratorV2._replace_subtree_in_ast(child, subtree, replacement, ast)
+                    if new_child is not child:
+                        children[idx] = new_child
+                        RuleGeneratorV2._resync_parallel_attrs(ast, child, new_child)
         elif isinstance(children, set):
+            replacements: List[Tuple[Node, Node]] = []
             new_children: Set[Node] = set()
             for child in children:
                 if isinstance(child, Node):
-                    new_children.add(RuleGeneratorV2._replace_subtree_in_ast(child, subtree, replacement))
+                    new_child = RuleGeneratorV2._replace_subtree_in_ast(child, subtree, replacement, ast)
+                    new_children.add(new_child)
+                    if new_child is not child:
+                        replacements.append((child, new_child))
                 else:
                     new_children.add(child)  # type: ignore[arg-type]
             ast.children = new_children
+            for old, new in replacements:
+                RuleGeneratorV2._resync_parallel_attrs(ast, old, new)
 
         if isinstance(ast, JoinNode):
-            ast.left_table = ast.children[0]  # type: ignore[assignment]
-            ast.right_table = ast.children[1]  # type: ignore[assignment]
-            ast.on_condition = ast.children[2] if len(ast.children) > 2 else None  # type: ignore[assignment]
+            RuleGeneratorV2._resync_join_attrs(ast, had_on, n_using)
         elif isinstance(ast, UnaryOperatorNode):
             ast.operand = ast.children[0]
         elif isinstance(ast, CompoundQueryNode):
@@ -4022,6 +4286,25 @@ class RuleGeneratorV2:
         elif isinstance(ast, SubqueryNode) and isinstance(ast.children, set):
             pass
         return ast
+
+    @staticmethod
+    def _resync_join_attrs(join: JoinNode, had_on: bool, n_using: int) -> None:
+        children = list(join.children)
+        if len(children) < 2:
+            return
+        join.left_table = children[0]  # type: ignore[assignment]
+        join.right_table = children[1]  # type: ignore[assignment]
+        rest = children[2:]
+        if had_on and rest:
+            join.on_condition = rest[0]  # type: ignore[assignment]
+            using_rest = rest[1:]
+        else:
+            join.on_condition = None
+            using_rest = rest
+        if n_using and using_rest:
+            join.using = list(using_rest[:n_using])
+        else:
+            join.using = None
 
     @staticmethod
     def _query_without_clause(query: QueryNode, clause_type: NodeType) -> QueryNode:

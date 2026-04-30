@@ -163,29 +163,20 @@ def format_from(from_node: FromNode):
 
 def format_join(join_node: JoinNode) -> list:
     """Format a JOIN node"""
-    children = list(join_node.children)
-    
-    if len(children) < 2:
-        raise ValueError("JoinNode must have at least 2 children (left and right tables)")
-    
-    left_node = children[0]
-    right_node = children[1]
-    join_condition = children[2] if len(children) > 2 else None
-    
+    left_node = join_node.left_table
+    right_node = join_node.right_table
+    join_condition = join_node.on_condition
+    using_columns = join_node.using
+
     result = []
-    
-    # Format left side (could be a table or nested join)
+
     if left_node.type == NodeType.JOIN:
-        # Nested join - recursively format
         result.extend(format_join(left_node))
     else:
-        # Simple table - this becomes the FROM table
         result.append(format_source(left_node))
     
-    # Format the join itself
     join_dict = {}
     
-    # Map join types to mosql format
     join_type_map = {
         JoinType.JOIN: 'join',
         JoinType.INNER: 'inner join',
@@ -193,17 +184,22 @@ def format_join(join_node: JoinNode) -> list:
         JoinType.RIGHT: 'right join',
         JoinType.FULL: 'full join',
         JoinType.CROSS: 'cross join',
+        JoinType.NATURAL: 'natural join',
     }
     
     join_key = join_type_map.get(join_node.join_type, 'join')
     join_dict[join_key] = format_source(right_node)
-    
-    # Add join condition if it exists
+
     if join_condition:
         join_dict['on'] = format_expression(join_condition)
-    
+    if using_columns:
+        if len(using_columns) == 1:
+            join_dict['using'] = format_expression(using_columns[0])
+        else:
+            join_dict['using'] = [format_expression(col) for col in using_columns]
+
     result.append(join_dict)
-    
+
     return result
 
 

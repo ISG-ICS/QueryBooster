@@ -476,13 +476,19 @@ class RuleParserV2:
             j = node
             if not isinstance(j, JoinNode):
                 return node
-            ch = list(j.children)
-            left = RuleParserV2._substitute_placeholders(ch[0], rev)
-            right = RuleParserV2._substitute_placeholders(ch[1], rev)
+            left = RuleParserV2._substitute_placeholders(j.left_table, rev)
+            right = RuleParserV2._substitute_placeholders(j.right_table, rev)
             on_expr = (
-                RuleParserV2._substitute_placeholders(ch[2], rev) if len(ch) > 2 else None
+                RuleParserV2._substitute_placeholders(j.on_condition, rev)
+                if j.on_condition is not None
+                else None
             )
-            return JoinNode(left, right, j.join_type, on_expr)
+            using_cols = (
+                [RuleParserV2._substitute_placeholders(c, rev) for c in j.using]
+                if j.using
+                else None
+            )
+            return JoinNode(left, right, j.join_type, on_expr, using_cols)
 
         if node.type == NodeType.SUBQUERY:
             sq = node

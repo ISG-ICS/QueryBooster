@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Set, Optional, Union
+from typing import List, Set, Optional, Tuple, Union
 from abc import ABC
 
 from .enums import NodeType, JoinType, SortOrder
@@ -251,24 +251,31 @@ class FunctionNode(Node):
 
 class JoinNode(Node):
     """JOIN clause node"""
-    def __init__(self, _left_table: Union['TableNode', 'JoinNode', 'SubqueryNode'], _right_table: Union['TableNode', 'SubqueryNode'], _join_type: JoinType = JoinType.INNER, _on_condition: Optional['Node'] = None, **kwargs):
+    def __init__(self, _left_table: Union['TableNode', 'JoinNode', 'SubqueryNode'], _right_table: Union['TableNode', 'SubqueryNode'], _join_type: JoinType = JoinType.INNER, _on_condition: Optional['Node'] = None, _using: Optional[List['Node']] = None, **kwargs):
         children = [_left_table, _right_table]
         if _on_condition:
             children.append(_on_condition)
+        if _using:
+            children.extend(_using)
         super().__init__(NodeType.JOIN, children=children, **kwargs)
         self.left_table = _left_table
         self.right_table = _right_table
         self.join_type = _join_type
         self.on_condition = _on_condition
-    
+        self.using = list(_using) if _using else None
+
     def __eq__(self, other):
         if not isinstance(other, JoinNode):
             return False
         return (super().__eq__(other) and 
-                self.join_type == other.join_type)
+                self.join_type == other.join_type and
+                self.using == other.using)
     
     def __hash__(self):
-        return hash((super().__hash__(), self.join_type))
+        using_key: Tuple = ()
+        if self.using:
+            using_key = tuple(self.using)
+        return hash((super().__hash__(), self.join_type, using_key))
 
 # ============================================================================
 # Query Structure Nodes
