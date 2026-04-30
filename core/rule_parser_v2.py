@@ -41,11 +41,11 @@ from core.query_parser import QueryParser
 
 
 # Variable types (v2 naming; same placeholder syntax as v1).
-# AST: ``<name>`` to ElementVariableNode, ``<<name>>`` to SetVariableNode.
+# AST: ``<name>`` → ElementVariableNode, ``<<name>>`` → SetVariableNode.
 #
 class VarType(Enum):
-    ElementVariable = 1  # <x>  to ElementVariableNode in rule AST
-    SetVariable = 2  # <<y>> to SetVariableNode in rule AST
+    ElementVariable = 1  # <x>  → ElementVariableNode in rule AST
+    SetVariable = 2  # <<y>> → SetVariableNode in rule AST
 
 
 # Placeholder markers and internal token prefixes for rule variables.
@@ -255,15 +255,13 @@ class RuleParserV2:
     ) -> Node:
         out = RuleParserV2._as_rule_ast(query, internal_to_external)
         if not isinstance(out, (QueryNode, CompoundQueryNode)):
-            raise TypeError(
-                "expected QueryNode or CompoundQueryNode after substituting rule variables on full query"
-            )
+            raise TypeError("expected QueryNode or CompoundQueryNode after substituting rule variables on full query")
         return out
 
     # Slice a fully substituted query to the rule fragment for this scope (no variable-node pass).
     #
     @staticmethod
-    def _extract_rule_fragment(query: QueryNode, scope: Scope) -> Node:
+    def _extract_rule_fragment(query: Node, scope: Scope) -> Node:
         # CompoundQueryNode (e.g. UNION) is always a full-query scope — return as-is
         if isinstance(query, CompoundQueryNode):
             return query

@@ -33,7 +33,7 @@ def _collect_union_branches(node: CompoundQueryNode, is_all: bool) -> list:
     """Flatten a left-chain of same-type CompoundQueryNodes into a list.
 
     mo_sql_parsing uses flat lists for chains of the same operator
-    (e.g. A UNION B UNION C to {'union': [A, B, C]}).  Nesting is only
+    (e.g. A UNION B UNION C → {'union': [A, B, C]}).  Nesting is only
     used at type boundaries (e.g. (A UNION ALL B) UNION C).  This helper
     mirrors that convention so round-trips produce identical JSON.
     """
@@ -131,11 +131,11 @@ def format_from(from_node: FromNode):
     wrapping a {'value': ...} dict.  For example:
 
         SELECT * FROM (SELECT 1 UNION SELECT 2)
-        to {"select": ..., "from": {"union": [...]}}   ← dict, not list
+        → {"select": ..., "from": {"union": [...]}}   ← dict, not list
 
     An aliased variant uses the normal list-of-sources form:
         SELECT * FROM (SELECT 1 UNION SELECT 2) t
-        to {"select": ..., "from": [{"value": {"union": [...]}, "name": "t"}]}
+        → {"select": ..., "from": [{"value": {"union": [...]}, "name": "t"}]}
 
     Everything else (tables, aliased subqueries, JOINs) returns a list.
     """
@@ -403,8 +403,7 @@ def format_expression(node: Node):
         return {node.name.lower(): {}}
     
     elif node.type == NodeType.LIST:
-        rendered = [format_expression(item) for item in node.children]
-        return rendered
+        return [format_expression(item) for item in node.children]
     
     elif node.type == NodeType.CASE:
         case_list = []
