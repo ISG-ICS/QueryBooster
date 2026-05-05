@@ -1,6 +1,7 @@
 import json
 
 from core.rule_parser import RuleParser
+from core.rule_parser_v2 import RuleParserV2
 
 rules = [
     # PostgresSQL Rules
@@ -760,6 +761,32 @@ def get_rule(key: str) -> dict:
         'database': rule['database'],
         'examples': rule['examples']
     }
+
+
+def get_rule_v2(key: str) -> dict:
+    """Fetch one rule by key using the AST-based RuleParserV2."""
+    raw = next((x for x in rules if x['key'] == key), None)
+    if raw is None:
+        raise ValueError(f"Rule {key} not found")
+    rule = dict(raw)
+    result = RuleParserV2.parse(rule['pattern'], rule['rewrite'])
+    identity_mapping = json.dumps({k: k for k in result.mapping})
+    actions_json = RuleParser.parse_actions(rule['actions'], identity_mapping)
+    return {
+        'id': rule['id'],
+        'key': rule['key'],
+        'name': rule['name'],
+        'pattern': rule['pattern'],
+        'pattern_ast': result.pattern_ast,
+        'rewrite': rule['rewrite'],
+        'rewrite_ast': result.rewrite_ast,
+        'mapping': result.mapping,
+        'actions': rule['actions'],
+        'actions_json': json.loads(actions_json),
+        'database': rule['database'],
+        'examples': rule['examples'],
+    }
+
 
 # return a list of rules (json attributes are in str)
 # 
