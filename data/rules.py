@@ -770,14 +770,16 @@ def get_rule_v2(key: str) -> dict:
         raise ValueError(f"Rule {key} not found")
     rule = dict(raw)
     result = RuleParserV2.parse(rule['pattern'], rule['rewrite'])
-    identity_mapping = json.dumps({k: k for k in result.mapping})
-    actions_json = RuleParser.parse_actions(rule['actions'], identity_mapping)
+    mapping_json = json.dumps(result.mapping)
+    constraints_json = RuleParser.parse_constraints(rule['constraints'], mapping_json)
+    actions_json = RuleParser.parse_actions(rule['actions'], mapping_json)
     return {
         'id': rule['id'],
         'key': rule['key'],
         'name': rule['name'],
         'pattern': rule['pattern'],
-        'pattern_ast': result.pattern_ast,
+        'constraints': rule['constraints'],
+        'constraints_json': json.loads(constraints_json),
         'rewrite': rule['rewrite'],
         'rewrite_ast': result.rewrite_ast,
         'mapping': result.mapping,
