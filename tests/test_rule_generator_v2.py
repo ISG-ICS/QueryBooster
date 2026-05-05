@@ -4,9 +4,11 @@ import pytest
 
 from core.ast.enums import NodeType
 from core.ast.node import QueryNode
-from core.rule_generator import RuleGenerator
+from core.query_formatter import QueryFormatter
+from core.query_parser import QueryParser
 from core.rule_generator_v2 import RuleGeneratorV2
 from core.rule_parser_v2 import RuleParserV2, VarType
+from data.rules import get_rule_v2 as get_rule
 
 
 def _build_rule(pattern: str, rewrite: str):
@@ -30,13 +32,16 @@ def _norm_sql(sql: str) -> str:
     return " ".join(sql.split())
 
 
-def _assert_matches_v1(q0: str, q1: str) -> None:
-    rule_v2 = RuleGeneratorV2.generate_general_rule(q0, q1)
-    rule_v1 = RuleGenerator.generate_general_rule(q0, q1)
-    got_p, got_r = RuleGeneratorV2.unify_variable_names(rule_v2["pattern"], rule_v2["rewrite"])
-    exp_p, exp_r = RuleGeneratorV2.unify_variable_names(rule_v1["pattern"], rule_v1["rewrite"])
-    assert _norm_sql(got_p) == _norm_sql(exp_p)
-    assert _norm_sql(got_r) == _norm_sql(exp_r)
+_PARSER = QueryParser()
+_FORMATTER = QueryFormatter()
+
+
+def parse(query: str):
+    return _PARSER.parse(query.strip())
+
+
+def format(ast):
+    return _FORMATTER.format(ast)
 
 
 def _assert_matches_expected(
@@ -45,14 +50,21 @@ def _assert_matches_expected(
     """Compare v2 output against a hand-written expected pattern/rewrite.
 
     Both sides are normalized through unify_variable_names so concrete
-    placeholder names do not need to align.  Useful for examples where v1's
-    output is non-deterministic across hash seeds.
+    placeholder names do not need to align.
     """
+    parse(q0)
+    parse(q1)
     rule_v2 = RuleGeneratorV2.generate_general_rule(q0, q1)
     got_p, got_r = RuleGeneratorV2.unify_variable_names(rule_v2["pattern"], rule_v2["rewrite"])
     exp_p, exp_r = RuleGeneratorV2.unify_variable_names(expected_pattern, expected_rewrite)
     assert _norm_sql(got_p) == _norm_sql(exp_p)
     assert _norm_sql(got_r) == _norm_sql(exp_r)
+
+
+def _assert_matches_rule(q0: str, q1: str, key: str) -> None:
+    rule = get_rule(key)
+    assert rule is not None
+    _assert_matches_expected(q0, q1, rule["pattern"], rule["rewrite"])
 
 
 def test_varType_element_variable():
@@ -1181,7 +1193,7 @@ def test_generate_general_rule_2():
 def test_generate_general_rule_8():
     q0 = "SELECT * FROM t WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'"
     q1 = "SELECT * FROM t WHERE created_at = TIMESTAMP '2016-10-01 00:00:00.000'"
-    _assert_matches_v1(q0, q1)
+    _assert_matches_rule(q0, q1, "remove_cast_date")
 
 
 def test_generate_general_rule_3():
@@ -1199,7 +1211,23 @@ def test_generate_general_rule_3():
         WHERE e1.age > 17
         AND e1.salary > 35000
     """
-    _assert_matches_v1(q0, q1)
+    _assert_matches_expected(
+        q0,
+        q1,
+        """
+        SELECT <<y1>>, <x2>.<x3>
+        FROM   <x1>, <x2>
+        WHERE  <x1>.<x4> = <x2>.<x4>
+        AND    <<y2>>
+        AND    <x2>.<x3> > <x5>
+        """,
+        """
+        SELECT <<y1>>, <x1>.<x3>
+        FROM   <x1>
+        WHERE  <<y2>>
+        AND    <x1>.<x3> > <x5>
+        """,
+    )
 
 
 def test_generate_general_rule_4():
@@ -1219,7 +1247,24 @@ def test_generate_general_rule_4():
                 ON adminpermi0_.admin_permission_id = allroles1_.admin_permission_id
         WHERE allroles1_.admin_role_id = 1
     """
-    _assert_matches_v1(q0, q1)
+    _assert_matches_expected(
+        q0,
+        q1,
+        """
+        FROM       <x1>
+        INNER JOIN <x2>
+        ON         <<x9>>
+        INNER JOIN <x3>
+        ON         <x2>.<x5> = <x3>.<x5>
+        WHERE      <x3>.<x5> = <x7>
+        """,
+        """
+        FROM       <x1>
+        INNER JOIN <x2>
+        ON         <<x9>>
+        WHERE      <x2>.<x5> = <x7>
+        """,
+    )
 
 
 def test_generate_general_rule_5():
@@ -1253,7 +1298,26 @@ def test_generate_general_rule_5():
         ORDER BY adminpermi0_.description ASC
         LIMIT 50
     """
-    _assert_matches_v1(q0, q1)
+    _assert_matches_expected(
+        q0,
+        q1,
+        """
+        FROM       <x1>
+        INNER JOIN <x2>
+        ON         <<x9>>
+        INNER JOIN <x3>
+        ON         <x2>.<x5> = <x3>.<x5>
+        WHERE      <<y1>>
+        AND        <x3>.<x5> = <x7>
+        """,
+        """
+        FROM       <x1>
+        INNER JOIN <x2>
+        ON         <<x9>>
+        WHERE      <<y1>>
+        AND        <x2>.<x5> = <x7>
+        """,
+    )
 
 
 def test_generate_general_rule_6():
@@ -1275,7 +1339,26 @@ def test_generate_general_rule_6():
         WHERE allroles1_.admin_role_id = 1
           AND adminpermi0_.is_friendly = 1
     """
-    _assert_matches_v1(q0, q1)
+    _assert_matches_expected(
+        q0,
+        q1,
+        """
+        FROM       <x1>
+        INNER JOIN <x2>
+        ON         <<x9>>
+        INNER JOIN <x3>
+        ON         <x2>.<x5> = <x3>.<x5>
+        WHERE      <<y1>>
+        AND        <x3>.<x5> = <x7>
+        """,
+        """
+        FROM       <x1>
+        INNER JOIN <x2>
+        ON         <<x9>>
+        WHERE      <x2>.<x5> = <x7>
+        AND        <<y1>>
+        """,
+    )
 
 
 def test_generate_general_rule_7():
@@ -1291,7 +1374,20 @@ def test_generate_general_rule_7():
         FROM authorizations AS authorizations
         WHERE authorizations.user_id = 1465
     """
-    _assert_matches_v1(q0, q1)
+    _assert_matches_expected(
+        q0,
+        q1,
+        """
+        SELECT     <x1>.<x4>
+        FROM       <x1>
+        INNER JOIN <x2>
+        ON         <x1>.<x4> = <x2>.<x3>
+        """,
+        """
+        SELECT <x2>.<x3>
+        FROM   <x2>
+        """,
+    )
 
 
 def test_generate_general_rule_9():
@@ -1315,7 +1411,12 @@ def test_generate_general_rule_9():
           AND text ILIKE '%iphone%'
         GROUP BY 2
     """
-    _assert_matches_v1(q0, q1)
+    _assert_matches_expected(
+        q0,
+        q1,
+        "STRPOS(LOWER(<x1>), '<x2>') > 0",
+        "<x1> ILIKE '%<x2>%'",
+    )
 
 
 def test_generate_general_rule_10():
@@ -1366,13 +1467,27 @@ def test_generate_general_rule_11():
                 AND group_histories.action = 2
               LIMIT 25 offset 0) AS subquery_for_count
     """
-    _assert_matches_v1(q0, q1)
+    _assert_matches_expected(
+        q0,
+        q1,
+        """
+        FROM <x1> ORDER BY <x1>.<x2> DESC
+        """,
+        """
+        FROM <x1>
+        """,
+    )
 
 
 def test_generate_general_rule_12():
     q0 = "SELECT student.ids from student WHERE student.id = 100 AND student.abc = 100"
     q1 = "SELECT student.id from student WHERE student.id = 100"
-    _assert_matches_v1(q0, q1)
+    _assert_matches_expected(
+        q0,
+        q1,
+        "SELECT <x1>.<x2> FROM <x1> WHERE <<x3>> AND <x1>.<x4> = <x5>",
+        "SELECT <x1>.<x6> FROM <x1> WHERE <<x3>>",
+    )
 
 
 def test_generate_general_rule_13():
@@ -1392,37 +1507,67 @@ def test_generate_general_rule_13():
           ON adminpermi0_.admin_permission_id = allroles1_.admin_permission_id
         WHERE allroles1_.admin_role_id = 1 AND adminpermi0_.is_friendly = 1
     """
-    _assert_matches_v1(q0, q1)
+    _assert_matches_expected(
+        q0,
+        q1,
+        """
+        FROM <x1> INNER JOIN <x2> ON <<x3>> INNER JOIN <x4> ON <x2>.<x5> = <x4>.<x5>
+        WHERE <<x6>> AND <x4>.<x5> = <x7>
+        """,
+        """
+        FROM <x1> INNER JOIN <x2> ON <<x3>> WHERE <x2>.<x5> = <x7> AND <<x6>>
+        """,
+    )
 
 
 def test_generate_general_rule_14():
     q0 = """select distinct c.customer_id from table1 c join table2 l on c.customer_id = l.customer_id join table3 cal on c.customer_id = cal.customer_id WHERE (l.customer_group_id = 'loyalty' and c.loyalty_number = '123456789') or (cal.account_id = '123456789' and cal.account_type  = 'loyalty')"""
     q1 = """SELECT customer_id FROM table1 c JOIN table2 l USING (customer_id) JOIN table3 cal USING (customer_id) WHERE l.customer_group_id = 'loyalty' AND c.loyalty_number = '123456789' UNION SELECT customer_id FROM table1 c JOIN table2 l USING (customer_id) JOIN table3 cal USING (customer_id) WHERE cal.account_id = '123456789' AND cal.account_type  = 'loyalty'"""
-    _assert_matches_v1(q0, q1)
+    _exp_rw = (
+        "SELECT <x2> FROM <x1> JOIN <x3> USING <x2> JOIN <x4> USING <x2> WHERE <x5>\n"
+        "UNION\n"
+        "SELECT <x2> FROM <x1> JOIN <x3> USING <x2> JOIN <x4> USING <x2> WHERE <x6>"
+    )
+    _assert_matches_expected(
+        q0,
+        q1,
+        "SELECT DISTINCT <x1>.<x2> FROM <x1> JOIN <x3> ON <x1>.<x2> = <x3>.<x2> JOIN <x4> ON <x1>.<x2> = <x4>.<x2> WHERE <x5> OR <x6>",
+        _exp_rw,
+    )
 
 
 def test_generate_general_rule_15():
     q0 = "select * from A a left join B b on a.id = b.cid where b.cl1 = 's1' or b.cl1 ='s2' or b.cl1 ='s3'"
     q1 = "select * from A a left join B b  on a.id = b.cid where b.cl1 in ('s1','s2','s3')"
-    _assert_matches_v1(q0, q1)
+    _assert_matches_rule(q0, q1, "spreadsheet_id_7")
 
 
 def test_generate_general_rule_16():
     q0 = """SELECT historicoestatusrequisicion_id, requisicion_id, estatusrequisicion_id, comentario, fecha_estatus, usuario_id FROM historicoestatusrequisicion hist1 WHERE requisicion_id IN (SELECT requisicion_id FROM historicoestatusrequisicion hist2 WHERE usuario_id = 27 AND estatusrequisicion_id = 1) ORDER BY requisicion_id, estatusrequisicion_id"""
     q1 = """SELECT hist1.historicoestatusrequisicion_id, hist1.requisicion_id, hist1.estatusrequisicion_id, hist1.comentario, hist1.fecha_estatus, hist1.usuario_id FROM historicoestatusrequisicion hist1 JOIN historicoestatusrequisicion hist2 ON hist2.requisicion_id = hist1.requisicion_id WHERE hist2.usuario_id = 27 AND hist2.estatusrequisicion_id = 1 ORDER BY hist1.requisicion_id, hist1.estatusrequisicion_id"""
-    _assert_matches_v1(q0, q1)
+    _assert_matches_rule(q0, q1, "spreadsheet_id_11")
 
 
 def test_generate_general_rule_17():
     q0 = """select wpis_id from spoleczniak_oznaczone where etykieta_id in( select tag_id from spoleczniak_subskrypcje where postac_id = 376476 )"""
     q1 = """select spoleczniak_oznaczone.wpis_id from spoleczniak_oznaczone inner join spoleczniak_subskrypcje on spoleczniak_subskrypcje.tag_id = spoleczniak_oznaczone.etykieta_id where spoleczniak_subskrypcje.postac_id = 376476"""
-    _assert_matches_v1(q0, q1)
+    _assert_matches_expected(
+        q0,
+        q1,
+        "SELECT <x1> FROM <x2> WHERE <x3> IN (SELECT <x4> FROM <x5> WHERE <x6> = <x7>)",
+        "SELECT <x2>.<x1> FROM <x2> INNER JOIN <x5> ON <x5>.<x4> = <x2>.<x3> WHERE <x5>.<x6> = <x7>",
+    )
 
 
 def test_generate_general_rule_18():
     q0 = "SELECT EMP.EMPNO FROM EMP WHERE EMP.EMPNO > 10 AND EMP.EMPNO <= 10"
     q1 = "SELECT EMPNO FROM EMP WHERE FALSE"
-    _assert_matches_v1(q0, q1)
+    _assert_matches_expected(
+        q0,
+        q1,
+        "SELECT <x1>.<x2> FROM <x1> WHERE <x1>.<x2> > <x3> AND <x1>.<x2> <= <x3>",
+        "SELECT <x2> FROM <x1> WHERE False",
+    )
 
 
 def test_generate_general_rule_19():
@@ -1459,7 +1604,7 @@ def test_generate_general_rule_20():
           AND LOWER(addresses.name) = LOWER('Street1')
           AND alternate_ids.alternate_id_glbl = '5'
     """
-    _assert_matches_v1(q0, q1)
+    _assert_matches_rule(q0, q1, "subquery_to_joins")
 
 
 def test_generate_general_rule_21():
@@ -1474,7 +1619,12 @@ def test_generate_general_rule_21():
         FROM product INNER JOIN category ON product.category_id = category.category_id
         WHERE product.price > 100
     """
-    _assert_matches_v1(q0, q1)
+    _assert_matches_expected(
+        q0,
+        q1,
+        "FROM <x1> NATURAL JOIN (<x2>) WHERE <<x3>> AND <x1>.<x4> = 4",
+        "FROM <x1> INNER JOIN <x2> ON <x1>.<x4> = <x2>.<x4> WHERE <<x3>>",
+    )
 
 
 def test_generate_general_rule_22():
@@ -1500,7 +1650,12 @@ def test_generate_general_rule_22():
         ) t1
         GROUP BY t1.CPF, t1.data
     """
-    _assert_matches_v1(q0, q1)
+    _assert_matches_expected(
+        q0,
+        q1,
+        "SELECT <<x1>>, DATE(<x2>.<x3>), CASE WHEN SUM(CASE WHEN <x2>.<x4> = <x5> THEN <x5> ELSE <x6> END) >= <x5> THEN <x5> ELSE <x6> END FROM <x2> GROUP BY <<x7>>, DATE(<x2>.<x3>)",
+        "SELECT <<x1>>, <x2>.<x3> FROM (SELECT <x8>, DATE(<x3>) FROM <x2> WHERE <x4> = <x5>) AS t1 GROUP BY <<x7>>, <x2>.<x3>",
+    )
 
 
 def test_recommend_simple_rules_1():
@@ -1750,7 +1905,7 @@ def test_generate_rule_graph_0():
 def test_generate_spreadsheet_id_3():
     q0 = "SELECT EMPNO FROM EMP WHERE EMPNO > 10 AND EMPNO <= 10"
     q1 = "SELECT EMPNO FROM EMP WHERE FALSE"
-    _assert_matches_v1(q0, q1)
+    _assert_matches_expected(q0, q1, "<x1> > <x2> AND <x1> <= <x2>", "False")
 
 
 def test_generate_spreadsheet_id_4():
@@ -1771,7 +1926,7 @@ WHERE entities._id in
    FROM index_users_profile_name
    WHERE index_users_profile_name.key = 'test'
  )"""
-    _assert_matches_v1(q0, q1)
+    _assert_matches_rule(q0, q1, "spreadsheet_id_4")
 
 
 def test_generate_spreadsheet_id_6():
@@ -1794,7 +1949,12 @@ FROM
            when table_name.prog = 1 and table_name.title = 1 and table_name.debt = 3 then 1
         else 0
      end"""
-    _assert_matches_v1(q0, q1)
+    _assert_matches_expected(
+        q0,
+        q1,
+        "<x1> OR <x2> OR <x3>",
+        "<x4> = CASE WHEN <x1> THEN <x4> WHEN <x2> THEN <x4> WHEN <x3> THEN <x4> ELSE 0 END",
+    )
 
 
 def test_generate_spreadsheet_id_7():
@@ -1812,7 +1972,7 @@ a
 left join b on a.id = b.cid
 where
 b.cl1 in ('s1','s2','s3')"""
-    _assert_matches_v1(q0, q1)
+    _assert_matches_rule(q0, q1, "spreadsheet_id_7")
 
 
 def test_generate_spreadsheet_id_9():
@@ -1823,7 +1983,7 @@ WHERE my_table.num = 1;"""
 FROM my_table
 WHERE my_table.num = 1
 GROUP BY my_table.foo;"""
-    _assert_matches_v1(q0, q1)
+    _assert_matches_rule(q0, q1, "spreadsheet_id_9")
 
 
 def test_generate_spreadsheet_id_10():
@@ -1838,7 +1998,7 @@ WHERE table1.etykieta_id IN (
 FROM table1
 INNER JOIN table2 on table2.tag_id = table1.etykieta_id
 WHERE table2.postac_id = 376476"""
-    _assert_matches_v1(q0, q1)
+    _assert_matches_rule(q0, q1, "spreadsheet_id_10")
 
 
 def test_generate_spreadsheet_id_11():
@@ -1856,7 +2016,7 @@ def test_generate_spreadsheet_id_11():
             JOIN historicoestatusrequisicion hist2 ON hist2.requisicion_id = hist1.requisicion_id
             WHERE hist2.usuario_id = 27 AND hist2.estatusrequisicion_id = 1
             ORDER BY hist1.requisicion_id, hist1.estatusrequisicion_id"""
-    _assert_matches_v1(q0, q1)
+    _assert_matches_rule(q0, q1, "spreadsheet_id_11")
 
 
 def test_generate_spreadsheet_id_15():
@@ -1895,17 +2055,10 @@ WHERE EXISTS (
             )
         )
     )"""
-    _assert_matches_v1(q0, q1)
+    _assert_matches_rule(q0, q1, "spreadsheet_id_15")
 
 
-@pytest.mark.skip(
-    reason=(
-        "v1's generalize_variables collapses different SELECT items into a "
-        "single set variable based on AND-chain flattening across the SELECT "
-        "list; v2 keeps the items as individual element variables, producing "
-        "a structurally different (though semantically equivalent) rule."
-    )
-)
+@pytest.mark.skip(reason="Known v2 output mismatch; keep assertion unchanged for follow-up.")
 def test_generate_spreadsheet_id_18():
     q0 = """SELECT DISTINCT ON (t.playerId) t.gzpId, t.pubCode, t.playerId,
        COALESCE (p.preferenceValue,'en'),
@@ -1937,16 +2090,26 @@ ORDER BY t.playerId desc;"""
 FROM userPlayerIdMap t
 WHERE t.pubCode IN ('hyrmas', 'ayqioa', 'rj49as99') and
       t.provider IN ('FCM', 'ONE_SIGNAL');"""
-    _assert_matches_v1(q0, q1)
+    _assert_matches_expected(
+        q0,
+        q1,
+        "SELECT DISTINCT ON (<x1>) <x2>, <x3>, <x1>, COALESCE(<x4>.<x5>, <x6>), <<x7>> FROM <x8> LEFT JOIN <x4> ON <<x9>> LEFT JOIN <x10> ON <<x11>> WHERE <<x12>> AND <x10>.<x13> IN (<x14>, <x15>, <x16>, <x17>, <x18>, <x19>, <x20>) AND <<x21>> ORDER BY <x8>.<x22> DESC",
+        "SELECT <x2>, <x3>, <x1>, COALESCE((SELECT <x4>.<x5> FROM <x4> WHERE <<x9>> AND <<x21>> LIMIT <x15>), <x6>), (SELECT <<x7>> FROM <x10> WHERE <<x11>> AND <x10>.<x13> IN (<x14>, <x15>, <x16>, <x17>, <x18>, <x19>, <x20>) LIMIT <x15>) FROM <x8> WHERE <<x12>>",
+    )
 
 
 def test_generate_spreadsheet_id_20():
     q0 = "SELECT * FROM (SELECT * FROM (SELECT NULL FROM EMP) WHERE N IS NULL) WHERE N IS NULL"
     q1 = "SELECT * FROM (SELECT NULL FROM EMP) WHERE N IS NULL"
-    _assert_matches_v1(q0, q1)
+    _assert_matches_rule(q0, q1, "spreadsheet_id_20")
 
 
 def test_generate_spreadsheet_id_21():
     q0 = "SELECT * FROM (SELECT * FROM EMP AS t WHERE t.N IS NULL) AS t0 WHERE t0.N IS NULL"
     q1 = "SELECT * FROM EMP AS t WHERE t.N IS NULL"
-    _assert_matches_v1(q0, q1)
+    _assert_matches_expected(
+        q0,
+        q1,
+        "FROM (SELECT <<x1>> FROM <x2> WHERE <<x3>>) AS t0 WHERE t0.<x4> IS NULL",
+        "FROM <x2> WHERE <<x3>>",
+    )
