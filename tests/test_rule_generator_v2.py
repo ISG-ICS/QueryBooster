@@ -2058,7 +2058,6 @@ WHERE EXISTS (
     _assert_matches_rule(q0, q1, "spreadsheet_id_15")
 
 
-@pytest.mark.skip(reason="Known v2 output mismatch; keep assertion unchanged for follow-up.")
 def test_generate_spreadsheet_id_18():
     q0 = """SELECT DISTINCT ON (t.playerId) t.gzpId, t.pubCode, t.playerId,
        COALESCE (p.preferenceValue,'en'),
@@ -2093,8 +2092,8 @@ WHERE t.pubCode IN ('hyrmas', 'ayqioa', 'rj49as99') and
     _assert_matches_expected(
         q0,
         q1,
-        "SELECT DISTINCT ON (<x1>) <x2>, <x3>, <x1>, COALESCE(<x4>.<x5>, <x6>), <<x7>> FROM <x8> LEFT JOIN <x4> ON <<x9>> LEFT JOIN <x10> ON <<x11>> WHERE <<x12>> AND <x10>.<x13> IN (<x14>, <x15>, <x16>, <x17>, <x18>, <x19>, <x20>) AND <<x21>> ORDER BY <x8>.<x22> DESC",
-        "SELECT <x2>, <x3>, <x1>, COALESCE((SELECT <x4>.<x5> FROM <x4> WHERE <<x9>> AND <<x21>> LIMIT <x15>), <x6>), (SELECT <<x7>> FROM <x10> WHERE <<x11>> AND <x10>.<x13> IN (<x14>, <x15>, <x16>, <x17>, <x18>, <x19>, <x20>) LIMIT <x15>) FROM <x8> WHERE <<x12>>",
+        "SELECT DISTINCT ON (<x1>.<x5>) <<y10>>, COALESCE(<x2>.<x6>, <x31>), <x30> FROM <x1> LEFT JOIN <x2> ON <<y1>> LEFT JOIN <x3> ON <<y2>> WHERE <<y8>> AND <<y6>> AND <<y4>> ORDER BY <x32> DESC",
+        "SELECT <<y10>>, COALESCE((SELECT <x2>.<x6> FROM <x2> WHERE <x29> AND <x35> LIMIT 1), <x31>), (SELECT <x30> FROM <x3> WHERE <x28> AND <x36> LIMIT 1) FROM <x1> WHERE <<y8>>",
     )
 
 

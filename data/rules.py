@@ -778,6 +778,7 @@ def get_rule_v2(key: str) -> dict:
         'key': rule['key'],
         'name': rule['name'],
         'pattern': rule['pattern'],
+        'pattern_ast': result.pattern_ast,
         'constraints': rule['constraints'],
         'constraints_json': json.loads(constraints_json),
         'rewrite': rule['rewrite'],
