@@ -616,9 +616,9 @@ class RuleGeneratorV2:
 
     @staticmethod
     def tables(pattern_ast: Node, rewrite_ast: Node) -> List[Dict[str, str]]:
-        """Return the deduplicated union of table references ({"value", "name"} dicts) seen across both ASTs.
+        """Return deduplicated table references ({"value", "name"} dicts) from the pattern, augmented with any additional rewrite-side aliases for the same table names.
 
-        Each entry pairs a base table name with one alias; the order preserves pattern-side first appearance, then rewrite-side aliases not already seen.
+        Tables that appear only in the rewrite are excluded — they cannot be variablized since they have no pattern-side binding.
         """
         pattern_tables = RuleGeneratorV2._tables_of_ast(pattern_ast)
         rewrite_tables = RuleGeneratorV2._tables_of_ast(rewrite_ast)
@@ -949,8 +949,8 @@ class RuleGeneratorV2:
             if wrong_bracket_rewrite > -1:
                 return False, "mismatching brackets in query 2", wrong_bracket_rewrite
 
-        pattern_compact = pattern.replace("\n", "")
-        rewrite_compact = rewrite.replace("\n", "") if rewrite is not None else None
+        pattern_compact = " ".join(pattern.splitlines())
+        rewrite_compact = " ".join(rewrite.splitlines()) if rewrite is not None else None
 
         def _first_token(sql: str) -> str:
             parts = [part for part in sql.split(" ") if part]
@@ -959,11 +959,11 @@ class RuleGeneratorV2:
         for keyword in ("SELECT", "FROM", "WHERE"):
             token = _first_token(pattern_compact)
             if token and RuleGeneratorV2._lev_distance(keyword, token) == 1:
-                return False, f"possible spelling error at query 1{token} instead of {keyword}", 0
+                return False, f"possible spelling error at query 1: {token} instead of {keyword}", 0
             if rewrite_compact is not None:
                 token = _first_token(rewrite_compact)
                 if token and RuleGeneratorV2._lev_distance(keyword, token) == 1:
-                    return False, f"possible spelling error at query 2{token} instead of {keyword}", 0
+                    return False, f"possible spelling error at query 2: {token} instead of {keyword}", 0
 
         try:
             pattern_sql, rewrite_sql, mapping = RuleParserV2.replaceVars(pattern_compact, rewrite_compact or pattern_compact)
@@ -1000,7 +1000,7 @@ class RuleGeneratorV2:
         pattern_vars = set(re.findall(r"<<\w+>>|<\w+>", pattern))
         for match in re.finditer(r"<<\w+>>|<\w+>", rewrite):
             if match.group(0) not in pattern_vars:
-                return False, f"{match.group(0)}not in first rule", match.start()
+                return False, f"{match.group(0)} not in first rule", match.start()
 
         try:
             rewrite_full, rewrite_scope = RuleParserV2.extendToFullSQL(rewrite_sql)
@@ -1492,7 +1492,10 @@ class RuleGeneratorV2:
 
             if isinstance(literal, numbers.Number) and isinstance(value, numbers.Number) and value == literal:
                 replacement = ElementVariableNode(external_name)
-                RuleGeneratorV2._replace_node_reference(ast, node, replacement)
+                if node is ast:
+                    ast = replacement
+                else:
+                    RuleGeneratorV2._replace_node_reference(ast, node, replacement)
         return ast
 
     @staticmethod
