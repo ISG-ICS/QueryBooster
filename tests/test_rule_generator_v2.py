@@ -1028,6 +1028,29 @@ def test_merge_variable_list_2():
     assert "LIMIT <<y1>>" in out["rewrite"]
 
 
+def test_merge_variable_list_descends_into_select_expressions():
+    rule = _build_rule(
+        """
+        SELECT COALESCE(<x1>.<x2>, <x3>)
+        FROM <x4>
+        LEFT JOIN <x1> ON <x9>
+        """,
+        """
+        SELECT COALESCE(
+            (SELECT <x1>.<x2>
+             FROM <x1>
+             WHERE <x9> AND <x1>.<x2> = 1
+             LIMIT 1),
+            <x3>
+        )
+        FROM <x4>
+        """,
+    )
+    out = RuleGeneratorV2.merge_variable_list(rule, ["x9"])
+    assert "LEFT JOIN <x1> ON <<y1>>" in out["pattern"]
+    assert "WHERE <<y1>> AND <x1>.<x2> = 1" in out["rewrite"]
+
+
 def test_branches_1():
     result = RuleParserV2.parse(
         "SELECT <<x>> FROM <t> WHERE CAST(created_at AS DATE) = TIMESTAMP '2016-10-01 00:00:00.000'",
@@ -2092,8 +2115,8 @@ WHERE t.pubCode IN ('hyrmas', 'ayqioa', 'rj49as99') and
     _assert_matches_expected(
         q0,
         q1,
-        "SELECT DISTINCT ON (<x1>.<x5>) <<y10>>, COALESCE(<x2>.<x6>, <x31>), <x30> FROM <x1> LEFT JOIN <x2> ON <<y1>> LEFT JOIN <x3> ON <<y2>> WHERE <<y8>> AND <<y6>> AND <<y4>> ORDER BY <x32> DESC",
-        "SELECT <<y10>>, COALESCE((SELECT <x2>.<x6> FROM <x2> WHERE <x29> AND <x35> LIMIT 1), <x31>), (SELECT <x30> FROM <x3> WHERE <x28> AND <x36> LIMIT 1) FROM <x1> WHERE <<y8>>",
+        "SELECT DISTINCT ON (<x1>.<x2>) <<x3>>, COALESCE(<x4>.<x5>, <x6>), <x7> FROM <x1> LEFT JOIN <x4> ON <<x8>> LEFT JOIN <x9> ON <<x10>> WHERE <<x11>> AND <<x12>> AND <<x13>> ORDER BY <x14> DESC",
+        "SELECT <<x3>>, COALESCE((SELECT <x4>.<x5> FROM <x4> WHERE <<x8>> AND <<x13>> LIMIT <x15>), <x6>), (SELECT <x7> FROM <x9> WHERE <<x10>> AND <<x12>> LIMIT <x15>) FROM <x1> WHERE <<x11>>",
     )
 
 

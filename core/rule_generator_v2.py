@@ -1367,7 +1367,9 @@ class RuleGeneratorV2:
                 # but replacement still walks related list-bearing clauses and
                 # collapses any subset match. Apply that to GROUP BY so a
                 # singleton merged on the SELECT side also collapses the same
-                # column ref in the GROUP BY clause.
+                # column ref in the GROUP BY clause. Keep walking afterward:
+                # SELECT items can contain nested expressions and subqueries
+                # whose variables must be merged too.
                 new_children: List[Node] = []
                 pending = False
                 changed = False
@@ -1393,7 +1395,6 @@ class RuleGeneratorV2:
                     new_children.append(child)
                 if changed:
                     node.children = new_children
-                return node
 
             if isinstance(node, WhereNode):
                 if len(node.children) == 1 and isinstance(node.children[0], ElementVariableNode):
@@ -1474,6 +1475,10 @@ class RuleGeneratorV2:
         String literals are rewritten in place (preserving any surrounding % LIKE wildcards) using placeholder_token; numeric literal nodes are swapped wholesale for an ElementVariableNode(external_name). Mutates ast in place and returns it.
         """
         for node in RuleGeneratorV2._walk(ast):
+            if isinstance(node, LimitNode):
+                if isinstance(literal, numbers.Number) and node.limit == literal:
+                    node.limit = external_name  # bare name, deparse handles <> wrapping via _encode_vars_for_format
+                continue
             if node.type != NodeType.LITERAL:
                 continue
             value = getattr(node, "value", None)
@@ -2316,6 +2321,16 @@ class RuleGeneratorV2:
                 placeholder = f"__rvs_{curr.name}__"
                 placeholders[placeholder] = f"<<{curr.name}>>"
                 return ColumnNode(placeholder)
+
+            if isinstance(curr, LimitNode) and isinstance(curr.limit, str) and RuleGeneratorV2._is_placeholder_name(curr.limit):
+                name = curr.limit
+                if name.lower().startswith("y"):
+                    placeholder = f"__rvs_{name}__"
+                    placeholders[placeholder] = f"<<{name}>>"
+                else:
+                    placeholder = f"__rv_{name}__"
+                    placeholders[placeholder] = f"<{name}>"
+                curr.limit = placeholder
 
             children = getattr(curr, "children", None)
             if not children:
