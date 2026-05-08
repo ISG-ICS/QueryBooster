@@ -209,6 +209,10 @@ def _match_node(
         # RuleParserV2 may represent placeholders inside string literals like `'<s>'`
         # as LiteralNode("s") (where "s" is a declared rule variable). In that case,
         # treat it as a bindable placeholder rather than a concrete string.
+
+        # TODO: We hope to further flatten variables in the literal, e.g.,
+        # q: {like: [name, '%joe%']} -> Func(like, [Col('name'), LiteralNode('%joe%')]) 
+        # p: {like: [x, '%y%']} -> Func(like, [EV(x),  LitrlComb([LiteralNode('%'), EV(y), LiteralNode('%')])])
         if isinstance(pv, str) and _is_var_name(pv, mapping):
             return _bind(pv, q, memo)
         if isinstance(qv, str) and isinstance(pv, str):
@@ -353,33 +357,9 @@ def _match_node(
                    if p.distinct_on is None or c is not p.distinct_on]
         return _match_children_list(q_items, p_items, memo, mode, mapping)
 
-    # --- FromNode ---
-    if isinstance(p, FromNode):
-        if not isinstance(q, FromNode):
-            return False
-        return _match_children_list(list(q.children), list(p.children), memo, mode, mapping)
-
-    # --- WhereNode ---
-    if isinstance(p, WhereNode):
-        if not isinstance(q, WhereNode):
-            return False
-        return _match_children_list(list(q.children), list(p.children), memo, mode, mapping)
-
-    # --- GroupByNode ---
-    if isinstance(p, GroupByNode):
-        if not isinstance(q, GroupByNode):
-            return False
-        return _match_children_list(list(q.children), list(p.children), memo, mode, mapping)
-
-    # --- HavingNode ---
-    if isinstance(p, HavingNode):
-        if not isinstance(q, HavingNode):
-            return False
-        return _match_children_list(list(q.children), list(p.children), memo, mode, mapping)
-
-    # --- OrderByNode ---
-    if isinstance(p, OrderByNode):
-        if not isinstance(q, OrderByNode):
+    # --- FromNode / WhereNode / GroupByNode / HavingNode / OrderByNode ---
+    if isinstance(p, (FromNode, WhereNode, GroupByNode, HavingNode, OrderByNode)):
+        if not isinstance(q, type(p)):
             return False
         return _match_children_list(list(q.children), list(p.children), memo, mode, mapping)
 
@@ -777,20 +757,8 @@ def _subst(node: Node, memo: dict) -> Node:
         new_don = _subst(node.distinct_on, memo) if node.distinct_on is not None else None
         return SelectNode(items, _distinct=node.distinct, _distinct_on=new_don)
 
-    if isinstance(node, FromNode):
-        return FromNode(_subst_list(list(node.children), memo))
-
-    if isinstance(node, WhereNode):
-        return WhereNode(_subst_list(list(node.children), memo))
-
-    if isinstance(node, GroupByNode):
-        return GroupByNode(_subst_list(list(node.children), memo))
-
-    if isinstance(node, HavingNode):
-        return HavingNode(_subst_list(list(node.children), memo))
-
-    if isinstance(node, OrderByNode):
-        return OrderByNode(_subst_list(list(node.children), memo))
+    if isinstance(node, (FromNode, WhereNode, GroupByNode, HavingNode, OrderByNode)):
+        return type(node)(_subst_list(list(node.children), memo))
 
     if isinstance(node, OrderByItemNode):
         inner = list(node.children)[0]
@@ -944,29 +912,14 @@ def _replace_in_tree(tree: Node, target_id: int, replacement: Node) -> Node:
                    if tree.distinct_on is not None else None)
         return SelectNode(new_items, _distinct=tree.distinct, _distinct_on=new_don)
 
-    if isinstance(tree, FromNode):
-        return FromNode([_replace_in_tree(c, target_id, replacement) for c in list(tree.children)])
-
-    if isinstance(tree, WhereNode):
-        return WhereNode([_replace_in_tree(c, target_id, replacement) for c in list(tree.children)])
-
-    if isinstance(tree, GroupByNode):
-        return GroupByNode([_replace_in_tree(c, target_id, replacement) for c in list(tree.children)])
-
-    if isinstance(tree, HavingNode):
-        return HavingNode([_replace_in_tree(c, target_id, replacement) for c in list(tree.children)])
-
-    if isinstance(tree, OrderByNode):
-        return OrderByNode([_replace_in_tree(c, target_id, replacement) for c in list(tree.children)])
+    if isinstance(tree, (FromNode, WhereNode, GroupByNode, HavingNode, OrderByNode)):
+        return type(tree)([_replace_in_tree(c, target_id, replacement) for c in list(tree.children)])
 
     if isinstance(tree, OrderByItemNode):
         inner = list(tree.children)[0]
         return OrderByItemNode(_replace_in_tree(inner, target_id, replacement), tree.sort)
 
-    if isinstance(tree, LimitNode):
-        return tree
-
-    if isinstance(tree, OffsetNode):
+    if isinstance(tree, (LimitNode, OffsetNode)):
         return tree
 
     if isinstance(tree, JoinNode):
@@ -1072,11 +1025,8 @@ def _node_subst(tree: Any, src: Any, tgt: Any) -> Any:
         new_don = _node_subst(tree.distinct_on, src, tgt) if tree.distinct_on else None
         return SelectNode(new_items, _distinct=tree.distinct, _distinct_on=new_don)
 
-    if isinstance(tree, FromNode):
-        return FromNode([_node_subst(c, src, tgt) for c in list(tree.children)])
-
-    if isinstance(tree, WhereNode):
-        return WhereNode([_node_subst(c, src, tgt) for c in list(tree.children)])
+    if isinstance(tree, (FromNode, WhereNode)):
+        return type(tree)([_node_subst(c, src, tgt) for c in list(tree.children)])
 
     if isinstance(tree, JoinNode):
         ch = list(tree.children)
