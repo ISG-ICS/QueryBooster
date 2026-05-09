@@ -12,6 +12,7 @@ from core.ast.enums import NodeType
 from core.ast.node import (
     CaseNode,
     ColumnNode,
+    CompoundQueryNode,
     FromNode,
     FunctionNode,
     GroupByNode,
@@ -250,17 +251,20 @@ class RuleParserV2:
     #
     @staticmethod
     def _substitute_rule_vars(
-        query: QueryNode, internal_to_external: Dict[str, str]
-    ) -> QueryNode:
+        query: Node, internal_to_external: Dict[str, str]
+    ) -> Node:
         out = RuleParserV2._as_rule_ast(query, internal_to_external)
-        if not isinstance(out, QueryNode):
-            raise TypeError("expected QueryNode after substituting rule variables on full query")
+        if not isinstance(out, (QueryNode, CompoundQueryNode)):
+            raise TypeError("expected QueryNode or CompoundQueryNode after substituting rule variables on full query")
         return out
 
     # Slice a fully substituted query to the rule fragment for this scope (no variable-node pass).
     #
     @staticmethod
-    def _extract_rule_fragment(query: QueryNode, scope: Scope) -> Node:
+    def _extract_rule_fragment(query: Node, scope: Scope) -> Node:
+        # CompoundQueryNode (e.g. UNION) is always a full-query scope — return as-is
+        if isinstance(query, CompoundQueryNode):
+            return query
         frm = RuleParserV2._get_clause(query, NodeType.FROM)
         wh = RuleParserV2._get_clause(query, NodeType.WHERE)
         gb = RuleParserV2._get_clause(query, NodeType.GROUP_BY)
@@ -357,6 +361,12 @@ class RuleParserV2:
             t = node
             if not isinstance(t, TableNode):
                 return node
+            # If table name is a SET variable placeholder (<<name>>), promote to SetVariableNode
+            # so it matches any table or list of tables in the FROM clause.
+            # Element variable tokens (EV...) stay as TableNode so _match_node handles them.
+            sv_base = VarTypesInfo[VarType.SetVariable]["internalBase"]
+            if isinstance(t.name, str) and t.name in rev and t.name.startswith(sv_base):
+                return SetVariableNode(rev[t.name])
             new_name = rev.get(t.name, t.name) if isinstance(t.name, str) else t.name
             if t.alias is not None and isinstance(t.alias, str) and t.alias in rev:
                 new_alias = rev[t.alias]
@@ -369,6 +379,10 @@ class RuleParserV2:
             if not isinstance(lit, LiteralNode):
                 return node
             if isinstance(lit.value, str):
+                # If the entire literal value is an internal placeholder token, promote to var node
+                if lit.value in rev:
+                    return LiteralNode(rev[lit.value])
+                # Otherwise substitute any embedded tokens (e.g. '%EV001%' to '%x%')
                 return LiteralNode(_replace_internal_in_string(lit.value))
             return LiteralNode(lit.value)
 
@@ -530,6 +544,16 @@ class RuleParserV2:
                 RuleParserV2._substitute_placeholders(ch[0], rev),
                 op.name,
                 RuleParserV2._substitute_placeholders(ch[1], rev),
+            )
+
+        if node.type == NodeType.COMPOUND_QUERY:
+            cq = node
+            if not isinstance(cq, CompoundQueryNode):
+                return node
+            return CompoundQueryNode(
+                RuleParserV2._substitute_placeholders(cq.left, rev),
+                RuleParserV2._substitute_placeholders(cq.right, rev),
+                cq.is_all,
             )
 
         return node
