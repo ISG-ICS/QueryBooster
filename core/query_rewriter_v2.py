@@ -32,8 +32,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import sqlparse
 
 from core.ast.enums import NodeType
-
-logger = logging.getLogger(__name__)
+from core.ast.utils import flatten_logical_operands
 from core.ast.node import (
     CaseNode,
     ColumnNode,
@@ -67,6 +66,8 @@ from core.ast.node import (
 from core.query_formatter import QueryFormatter
 from core.query_parser import QueryParser
 
+logger = logging.getLogger(__name__)
+
 
 class MatchingMode(Enum):
     FULL_ONLY = "full_only"
@@ -77,17 +78,6 @@ class MatchingMode(Enum):
 # ============================================================================
 # Logical-tree helpers
 # ============================================================================
-
-def _flatten_logical(node: Node, op_name: str) -> List[Node]:
-    """Flatten a left-associative binary AND/OR tree into a flat list."""
-    if isinstance(node, OperatorNode) and not isinstance(node, UnaryOperatorNode) \
-            and node.name.upper() == op_name.upper():
-        result: List[Node] = []
-        for child in list(node.children):
-            result.extend(_flatten_logical(child, op_name))
-        return result
-    return [node]
-
 
 def _unflatten_logical(nodes: List[Node], op_name: str) -> Node:
     """Rebuild a left-associative binary AND/OR tree from a flat list."""
@@ -457,8 +447,8 @@ def _match_and_or(
     memo: dict, mode: MatchingMode, mapping: dict
 ) -> bool:
     """Flatten both q and p into lists, do unordered matching, store remaining."""
-    q_flat = _flatten_logical(q, op_name)
-    p_flat = _flatten_logical(p, op_name)
+    q_flat = flatten_logical_operands(q, op_name)
+    p_flat = flatten_logical_operands(p, op_name)
 
     remaining = _match_logical_list_unordered(q_flat, p_flat, memo, mode, mapping)
     if remaining is None:
@@ -482,7 +472,7 @@ def _partial_match_in_logical(
     Preserves the original position of the matched element so replace() can
     reconstruct the clause list in the same order.
     """
-    q_flat = _flatten_logical(q, op_name)
+    q_flat = flatten_logical_operands(q, op_name)
 
     for i, qe in enumerate(q_flat):
         with _memo_snapshot(memo) as commit:
@@ -609,39 +599,24 @@ def _match_children_list(
     if len(q_list) < n_before + n_after:
         return False
 
-    snap = {k: v for k, v in memo.items()}
-
-    # Match prefix
-    for i, pi in enumerate(before):
-        if not _match_node(q_list[i], pi, memo, mode, mapping):
-            for k in list(memo.keys()):
-                if k not in snap:
-                    del memo[k]
-            memo.update(snap)
-            return False
-
-    # Match suffix from the end
-    q_tail = q_list[n_before:]
-    if after:
-        for j, pi in enumerate(after):
-            q_idx = len(q_tail) - n_after + j
-            if q_idx < 0 or not _match_node(q_tail[q_idx], pi, memo, mode, mapping):
-                for k in list(memo.keys()):
-                    if k not in snap:
-                        del memo[k]
-                memo.update(snap)
+    with _memo_snapshot(memo) as commit:
+        for i, pi in enumerate(before):
+            if not _match_node(q_list[i], pi, memo, mode, mapping):
                 return False
-        sv_absorbed = q_tail[:len(q_tail) - n_after]
-    else:
-        sv_absorbed = q_tail
 
-    if not _bind(sv_node.name, sv_absorbed, memo):
-        for k in list(memo.keys()):
-            if k not in snap:
-                del memo[k]
-        memo.update(snap)
-        return False
+        q_tail = q_list[n_before:]
+        if after:
+            for j, pi in enumerate(after):
+                q_idx = len(q_tail) - n_after + j
+                if q_idx < 0 or not _match_node(q_tail[q_idx], pi, memo, mode, mapping):
+                    return False
+            sv_absorbed = q_tail[: len(q_tail) - n_after]
+        else:
+            sv_absorbed = q_tail
 
+        if not _bind(sv_node.name, sv_absorbed, memo):
+            return False
+        commit()
     return True
 
 
@@ -733,7 +708,7 @@ def _subst(node: Node, memo: dict) -> Node:
         op = node.name.upper()
         if op in ("AND", "OR"):
             # Flatten, expand SVs, rebuild
-            flat = _flatten_logical(node, op)
+            flat = flatten_logical_operands(node, op)
             expanded = _subst_list(flat, memo)
             return _unflatten_logical(expanded, op)
         left = _subst(ch[0], memo)
@@ -826,6 +801,9 @@ def _subst_str(s: Any, memo: dict) -> Any:
     - str  to return directly
     - TableNode to alias or name (used for parent_alias fields like 'tb1' to 'employee')
     - ColumnNode to name (used for name fields like 'a1' to 'workdept')
+    - FunctionNode (rare): if an element variable bound to e.g. COUNT(col) in the SELECT
+      list is substituted into a string-only context, unwrap COUNT(col) -> ``col`` name.
+      Normally bindings are ColumnNode/TableNode/str here.
     """
     if isinstance(s, str) and s in memo:
         val = memo[s]
@@ -857,12 +835,7 @@ def _subst_list(items: List[Node], memo: dict) -> List[Node]:
             if isinstance(val, list):
                 result.extend(val)
             else:
-                materialized = _subst(item, memo)
-                # _subst(ElementVariableNode) returns either a Node or the original variable node
-                if isinstance(materialized, ElementVariableNode):
-                    result.append(materialized)
-                else:
-                    result.append(materialized)
+                result.append(_subst(item, memo))
         else:
             result.append(_subst(item, memo))
     return result
@@ -982,6 +955,10 @@ def _node_subst(tree: Any, src: Any, tgt: Any) -> Any:
 
     src / tgt are typically strings (table alias / column name) from the memo,
     but may also be Nodes when the variable was bound to a whole node.
+
+    Recurses through the same structural node shapes as :func:`_subst` /
+    :func:`_replace_in_tree` so SUBSTITUTE actions do not silently skip scopes
+    that contain GROUP BY, CASE, UNION, etc.
     """
     if isinstance(tree, list):
         return [_node_subst(item, src, tgt) for item in tree]
@@ -1025,8 +1002,39 @@ def _node_subst(tree: Any, src: Any, tgt: Any) -> Any:
         new_don = _node_subst(tree.distinct_on, src, tgt) if tree.distinct_on else None
         return SelectNode(new_items, _distinct=tree.distinct, _distinct_on=new_don)
 
-    if isinstance(tree, (FromNode, WhereNode)):
+    if isinstance(tree, IntervalNode):
+        if isinstance(tree.value, Node):
+            return IntervalNode(_node_subst(tree.value, src, tgt), tree.unit)
+        return tree
+
+    if isinstance(tree, WhenThenNode):
+        return WhenThenNode(
+            _node_subst(tree.when, src, tgt),
+            _node_subst(tree.then, src, tgt),
+        )
+
+    if isinstance(tree, CaseNode):
+        new_whens = [
+            WhenThenNode(_node_subst(wt.when, src, tgt), _node_subst(wt.then, src, tgt))
+            for wt in tree.whens
+        ]
+        new_else = (
+            _node_subst(tree.else_val, src, tgt) if tree.else_val is not None else None
+        )
+        return CaseNode(new_whens, new_else)
+
+    if isinstance(tree, OrderByItemNode):
+        inner = list(tree.children)[0]
+        return OrderByItemNode(_node_subst(inner, src, tgt), tree.sort)
+
+    if isinstance(tree, (FromNode, WhereNode, GroupByNode, HavingNode, OrderByNode)):
         return type(tree)([_node_subst(c, src, tgt) for c in list(tree.children)])
+
+    if isinstance(tree, LimitNode):
+        return LimitNode(_subst_val(tree.limit, src, tgt))
+
+    if isinstance(tree, OffsetNode):
+        return OffsetNode(_subst_val(tree.offset, src, tgt))
 
     if isinstance(tree, JoinNode):
         ch = list(tree.children)
@@ -1038,6 +1046,13 @@ def _node_subst(tree: Any, src: Any, tgt: Any) -> Any:
     if isinstance(tree, SubqueryNode):
         inner = list(tree.children)[0]
         return SubqueryNode(_node_subst(inner, src, tgt), tree.alias)
+
+    if isinstance(tree, CompoundQueryNode):
+        return CompoundQueryNode(
+            _node_subst(tree.left, src, tgt),
+            _node_subst(tree.right, src, tgt),
+            tree.is_all,
+        )
 
     if isinstance(tree, QueryNode):
         def _rc(ct: NodeType) -> Optional[Node]:
@@ -1054,6 +1069,13 @@ def _node_subst(tree: Any, src: Any, tgt: Any) -> Any:
             _offset=_rc(NodeType.OFFSET),
         )
 
+    if isinstance(tree, (ElementVariableNode, SetVariableNode)):
+        return tree
+
+    logger.warning(
+        "SUBSTITUTE: unsupported node type %s in scope tree; no substitution applied",
+        tree.type,
+    )
     return tree
 
 
@@ -1264,7 +1286,7 @@ class QueryRewriterV2:
                     # Flatten the existing WHERE if it's already the same logical op
                     if (len(where_items) == 1 and isinstance(where_items[0], OperatorNode)
                             and where_items[0].name == op):
-                        existing_flat = _flatten_logical(where_items[0], op)
+                        existing_flat = flatten_logical_operands(where_items[0], op)
                     else:
                         existing_flat = where_items
                     all_conditions = existing_flat + remaining
@@ -1306,7 +1328,11 @@ class QueryRewriterV2:
     def take_actions(query_ast: Node, rule: dict, memo: dict) -> Node:
         """Execute rule actions against memo bindings.
 
-        Currently supports 'substitute' only:
+        The ``query_ast`` argument is unused while only SUBSTITUTE is implemented
+        (that action mutates ``memo`` in place). It is kept for API symmetry with
+        v1 and for future actions that may inspect or rewrite the parsed tree.
+
+        Currently supports ``substitute`` only::
             SUBSTITUTE(scope, source, target)  =>
                 memo[scope] = node_subst(memo[scope], memo[source], memo[target])
         """
@@ -1342,6 +1368,12 @@ class QueryRewriterV2:
                         src_val = memo[src_key]
                         tgt_val = memo[tgt_key]
                         memo[scope_key] = _node_subst(memo[scope_key], src_val, tgt_val)
+            elif func:
+                logger.warning(
+                    "Unsupported rule action %r for rule %s; skipping",
+                    action.get("function"),
+                    rule.get("key", rule.get("id")),
+                )
         return query_ast
 
     @staticmethod

@@ -13,8 +13,9 @@ from core.ast.node import (
     JoinNode,
     SubqueryNode,
 )
-from core.ast.enums import NodeType, JoinType, SortOrder
+from core.ast.enums import NodeType, JoinType
 from core.ast.node import Node
+from core.ast.utils import flatten_logical_operands
 
 class QueryFormatter:
     def format(self, query: Node) -> str:
@@ -327,17 +328,6 @@ def format_expression(node: Node):
     
     elif node.type == NodeType.OPERATOR:
         # format: {'operator': [left, right]} or {'operator': operand} for unary ops
-        def _flatten_logical(n: Node, op_upper: str) -> list:
-            if (
-                isinstance(n, Node)
-                and n.type == NodeType.OPERATOR
-                and getattr(n, "name", "").upper() == op_upper
-                and len(list(n.children)) == 2
-            ):
-                ch = list(n.children)
-                return _flatten_logical(ch[0], op_upper) + _flatten_logical(ch[1], op_upper)
-            return [n]
-
         op_map = {
             '>': 'gt',
             '<': 'lt',
@@ -382,7 +372,7 @@ def format_expression(node: Node):
 
         # Flatten left-associative AND/OR trees into the list form mo_sql_parsing expects.
         if op_name in ("and", "or"):
-            flat = _flatten_logical(node, node.name.upper())
+            flat = flatten_logical_operands(node, node.name.upper())
             rendered = [format_expression(c) for c in flat]
             return {op_name: rendered}
         
