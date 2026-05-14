@@ -315,6 +315,14 @@ def _match_node(
             return False
         if q.name.upper() != p.name.upper():
             return False
+        if p.alias is not None:
+            if q.alias is None:
+                return False
+            if _is_var_name(p.alias, mapping):
+                if not _bind(p.alias, q.alias, memo):
+                    return False
+            elif q.alias.lower() != p.alias.lower():
+                return False
         return _match_children_list(list(q.children), list(p.children), memo, mode, mapping)
 
     # --- ListNode ---

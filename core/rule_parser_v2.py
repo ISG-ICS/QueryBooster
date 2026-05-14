@@ -27,6 +27,7 @@ from core.ast.node import (
     OperatorNode,
     OrderByItemNode,
     OrderByNode,
+    CompoundQueryNode,
     QueryNode,
     SelectNode,
     SubqueryNode,
@@ -262,9 +263,13 @@ class RuleParserV2:
     #
     @staticmethod
     def _extract_rule_fragment(query: Node, scope: Scope) -> Node:
-        # CompoundQueryNode (e.g. UNION) is always a full-query scope — return as-is
         if isinstance(query, CompoundQueryNode):
+            if scope != Scope.SELECT:
+                raise ValueError("Non-SELECT fragment scope is not supported for compound queries")
             return query
+        if not isinstance(query, QueryNode):
+            raise TypeError("expected QueryNode or CompoundQueryNode while extracting rule fragment")
+
         frm = RuleParserV2._get_clause(query, NodeType.FROM)
         wh = RuleParserV2._get_clause(query, NodeType.WHERE)
         gb = RuleParserV2._get_clause(query, NodeType.GROUP_BY)
@@ -378,13 +383,14 @@ class RuleParserV2:
             lit = node
             if not isinstance(lit, LiteralNode):
                 return node
+            alias = _replace_internal_in_string(lit.alias) if isinstance(getattr(lit, "alias", None), str) else getattr(lit, "alias", None)
             if isinstance(lit.value, str):
                 # If the entire literal value is an internal placeholder token, promote to var node
                 if lit.value in rev:
-                    return LiteralNode(rev[lit.value])
+                    return LiteralNode(rev[lit.value], _alias=alias)
                 # Otherwise substitute any embedded tokens (e.g. '%EV001%' to '%x%')
-                return LiteralNode(_replace_internal_in_string(lit.value))
-            return LiteralNode(lit.value)
+                return LiteralNode(_replace_internal_in_string(lit.value), _alias=alias)
+            return LiteralNode(lit.value, _alias=alias)
 
         if node.type == NodeType.QUERY:
             q = node
@@ -400,6 +406,14 @@ class RuleParserV2:
                 _limit=RuleParserV2._as_rule_ast(RuleParserV2._get_clause(q, NodeType.LIMIT), rev),
                 _offset=RuleParserV2._as_rule_ast(RuleParserV2._get_clause(q, NodeType.OFFSET), rev),
             )
+
+        if node.type == NodeType.COMPOUND_QUERY:
+            cq = node
+            if not isinstance(cq, CompoundQueryNode):
+                return node
+            left = RuleParserV2._substitute_placeholders(cq.left, rev)
+            right = RuleParserV2._substitute_placeholders(cq.right, rev)
+            return CompoundQueryNode(left, right, cq.is_all)
 
         if node.type == NodeType.SELECT:
             sn = node
@@ -473,13 +487,19 @@ class RuleParserV2:
             j = node
             if not isinstance(j, JoinNode):
                 return node
-            ch = list(j.children)
-            left = RuleParserV2._substitute_placeholders(ch[0], rev)
-            right = RuleParserV2._substitute_placeholders(ch[1], rev)
+            left = RuleParserV2._substitute_placeholders(j.left_table, rev)
+            right = RuleParserV2._substitute_placeholders(j.right_table, rev)
             on_expr = (
-                RuleParserV2._substitute_placeholders(ch[2], rev) if len(ch) > 2 else None
+                RuleParserV2._substitute_placeholders(j.on_condition, rev)
+                if j.on_condition is not None
+                else None
             )
-            return JoinNode(left, right, j.join_type, on_expr)
+            using_cols = (
+                [RuleParserV2._substitute_placeholders(c, rev) for c in j.using]
+                if j.using
+                else None
+            )
+            return JoinNode(left, right, j.join_type, on_expr, using_cols)
 
         if node.type == NodeType.SUBQUERY:
             sq = node

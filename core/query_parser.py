@@ -8,6 +8,7 @@ from core.ast.node import (
 )
 # TODO: implement ElementVariableNode, SetVariableNode
 from core.ast.enums import JoinType, SortOrder
+from typing import List, Optional
 import mo_sql_parsing as mosql
 import json
 
@@ -133,8 +134,21 @@ class QueryParser:
                     if 'on' in item:
                         on_condition = self.parse_expression(item['on'], aliases)
 
+                    using_columns: Optional[List[Node]] = None
+                    if 'using' in item:
+                        using_value = item['using']
+                        if isinstance(using_value, list):
+                            using_columns = [
+                                ColumnNode(str(c)) if not isinstance(c, dict) else self.parse_expression(c, aliases)
+                                for c in using_value
+                            ]
+                        elif isinstance(using_value, dict):
+                            using_columns = [self.parse_expression(using_value, aliases)]
+                        else:
+                            using_columns = [ColumnNode(str(using_value))]
+
                     join_type = self.parse_join_type(join_key)
-                    join_node = JoinNode(left_source, right_source, join_type, on_condition)
+                    join_node = JoinNode(left_source, right_source, join_type, on_condition, using_columns)
                     left_source = join_node
 
                 elif 'value' in item:
@@ -595,7 +609,9 @@ class QueryParser:
         """Extract JoinType from mo_sql_parsing join key."""
         key_lower = join_key.lower().replace(' ', '_')
         
-        if 'inner' in key_lower:
+        if 'natural' in key_lower:
+            return JoinType.NATURAL
+        elif 'inner' in key_lower:
             return JoinType.INNER
         elif 'left' in key_lower:
             return JoinType.LEFT
