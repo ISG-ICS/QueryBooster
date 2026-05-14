@@ -13,8 +13,9 @@ from core.ast.node import (
     JoinNode,
     SubqueryNode,
 )
-from core.ast.enums import NodeType, JoinType, SortOrder
+from core.ast.enums import NodeType, JoinType
 from core.ast.node import Node
+from core.ast.utils import flatten_logical_operands
 
 class QueryFormatter:
     def format(self, query: Node) -> str:
@@ -355,6 +356,12 @@ def format_expression(node: Node):
         
         if op_name == 'sub' and len(children) == 2 and children[0].type == NodeType.LITERAL and children[0].value == 0:
             return {'neg': format_expression(children[1])}
+
+        # Flatten left-associative AND/OR trees into the list form mo_sql_parsing expects.
+        if op_name in ("and", "or"):
+            flat = flatten_logical_operands(node, node.name.upper())
+            rendered = [format_expression(c) for c in flat]
+            return {op_name: rendered}
         
         left = format_expression(children[0])
         

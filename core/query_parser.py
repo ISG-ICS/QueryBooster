@@ -324,6 +324,9 @@ class QueryParser:
             
             # Special cases first
             if 'all_columns' in expr:
+                qualifier = expr['all_columns']
+                if qualifier and qualifier != '*':
+                    return ColumnNode('*', _parent_alias=qualifier)
                 return ColumnNode('*')
             if 'literal' in expr:
                 # mo_sql_parsing uses {'literal': [..]} for IN literal lists and
