@@ -387,10 +387,10 @@ class RuleParserV2:
             if isinstance(lit.value, str):
                 # If the entire literal value is an internal placeholder token, promote to var node
                 if lit.value in rev:
-                    return LiteralNode(rev[lit.value])
+                    return LiteralNode(rev[lit.value], _alias=alias)
                 # Otherwise substitute any embedded tokens (e.g. '%EV001%' to '%x%')
-                return LiteralNode(_replace_internal_in_string(lit.value))
-            return LiteralNode(lit.value)
+                return LiteralNode(_replace_internal_in_string(lit.value), _alias=alias)
+            return LiteralNode(lit.value, _alias=alias)
 
         if node.type == NodeType.QUERY:
             q = node
