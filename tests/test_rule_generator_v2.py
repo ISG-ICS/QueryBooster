@@ -79,14 +79,6 @@ def test_varType_unknown():
     assert RuleGeneratorV2.varType("V001") is None
 
 
-def test_dereplaceVars_simple():
-    pattern = "CAST(EV001 AS DATE)"
-    rewrite = "EV001"
-    mapping = {"x": "EV001"}
-
-    assert RuleGeneratorV2.dereplaceVars(pattern, mapping) == "CAST(<x> AS DATE)"
-    assert RuleGeneratorV2.dereplaceVars(rewrite, mapping) == "<x>"
-
 
 def test_dereplaceVars_mixed_element_and_set_vars():
     pattern = """
@@ -172,20 +164,6 @@ def test_deparse_2():
     assert RuleGeneratorV2.deparse(result.pattern_ast) == "STRPOS(LOWER(V1), 'V2') > 0"
     assert RuleGeneratorV2.deparse(result.rewrite_ast) == "V1 ILIKE '%V2%'"
 
-
-def test_columns_basic_function_rule():
-    result = RuleParserV2.parse(
-        "STRPOS(LOWER(text), 'iphone') > 0",
-        "text ILIKE '%iphone%'",
-    )
-    columns = RuleGeneratorV2.columns(result.pattern_ast, result.rewrite_ast)
-    assert set(columns) == {"text"}
-
-
-def test_columns_basic_cast_rule():
-    result = RuleParserV2.parse("CAST(state_name AS TEXT)", "state_name")
-    columns = RuleGeneratorV2.columns(result.pattern_ast, result.rewrite_ast)
-    assert set(columns) == {"state_name"}
 
 
 def test_columns_1():

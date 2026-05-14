@@ -25,9 +25,10 @@ replacement, and formatting cleanup.
 from __future__ import annotations
 
 import copy
+import functools
 import numbers
 import re
-from collections import defaultdict
+from collections import defaultdict, deque
 from typing import Dict, Iterator, List, Optional, Set, Tuple, Union
 
 from core.ast.enums import NodeType
@@ -63,10 +64,26 @@ from core.query_formatter import QueryFormatter
 from core.rule_parser_v2 import RuleParserV2, Scope, VarType, VarTypesInfo
 
 
+@functools.lru_cache(maxsize=None)
+def _lev_distance_cached(a: str, b: str) -> int:
+    if not b:
+        return len(a)
+    if not a:
+        return len(b)
+    if a[0] == b[0]:
+        return _lev_distance_cached(a[1:], b[1:])
+    return 1 + min(
+        _lev_distance_cached(a[1:], b),
+        _lev_distance_cached(a, b[1:]),
+        _lev_distance_cached(a[1:], b[1:]),
+    )
+
+
 class RuleGeneratorV2:
     """Generate AST-backed rewrite rules from example SQL pairs."""
 
     _PLACEHOLDER_PREFIXES = ("x", "y")
+    _MAX_RECOMMENDATION_CANDIDATES = 256  # BFS cap to bound graph exploration cost
 
     @staticmethod
     def varType(var: str) -> Optional[VarType]:
@@ -268,11 +285,11 @@ class RuleGeneratorV2:
         candidates: List[Dict[str, object]] = []
         seed_sig = RuleGeneratorV2._recommendation_signature(seed)
         seen: Set[str] = {seed_sig}
-        queue: List[Dict[str, object]] = [seed]
-        max_candidates = 256
+        queue: deque[Dict[str, object]] = deque([seed])
+        max_candidates = RuleGeneratorV2._MAX_RECOMMENDATION_CANDIDATES
 
         while queue and len(candidates) < max_candidates:
-            base_rule = queue.pop(0)
+            base_rule = queue.popleft()
             for transform in (
                 RuleGeneratorV2.variablize_tables,
                 RuleGeneratorV2.variablize_columns,
@@ -303,9 +320,9 @@ class RuleGeneratorV2:
         seed_rule = RuleGeneratorV2.initialize_seed_rule(q0, q1)
         seed_fp = RuleGeneratorV2.fingerPrint(seed_rule)
         visited = {seed_fp: seed_rule}
-        queue = [seed_rule]
+        queue: deque[Dict[str, object]] = deque([seed_rule])
         while queue:
-            base_rule = queue.pop(0)
+            base_rule = queue.popleft()
             base_rule["children"] = []
             for transform in (
                 RuleGeneratorV2.variablize_tables,
@@ -914,17 +931,7 @@ class RuleGeneratorV2:
 
     @staticmethod
     def _lev_distance(a: str, b: str) -> int:
-        if len(b) == 0:
-            return len(a)
-        if len(a) == 0:
-            return len(b)
-        if a[0] == b[0]:
-            return RuleGeneratorV2._lev_distance(a[1:], b[1:])
-        return 1 + min(
-            RuleGeneratorV2._lev_distance(a[1:], b),
-            RuleGeneratorV2._lev_distance(a, b[1:]),
-            RuleGeneratorV2._lev_distance(a[1:], b[1:]),
-        )
+        return _lev_distance_cached(a, b)
 
     @staticmethod
     def _parse_validate_impl(pattern: str, rewrite: Optional[str]) -> Tuple[bool, str, int]:
@@ -1632,6 +1639,9 @@ class RuleGeneratorV2:
         """Return True when name is a generator-internal placeholder identifier.
 
         Matches the parser-friendly tokens (__rv_x?__, __rvs_y?__) and bare x?/y? external names. Used to filter out variabilized identifiers when scanning ASTs for concrete tables/columns/literals.
+
+        NOTE: columns or tables actually named x1, y2, etc. in user SQL would be
+        misclassified as placeholders and silently skipped during variablization.
         """
         lower = name.lower()
         if re.fullmatch(r"__rv_[xy]\d+__", lower):
@@ -1976,7 +1986,7 @@ class RuleGeneratorV2:
             return out
 
         if isinstance(ast, OperatorNode) and ast.name.lower() in {"and", "or"}:
-            out: List[Tuple[Dict[str, object], object]] = []
+            out = []
             for child in list(ast.children):
                 wrapped = OperatorNode(copy.deepcopy(child), ast.name.upper())
                 if RuleGeneratorV2._is_branch_node(wrapped):
@@ -2036,14 +2046,14 @@ class RuleGeneratorV2:
                     if not RuleGeneratorV2._is_placeholder_name(child.name):
                         return False
                 else:
-                    if RuleGeneratorV2._tables_of_ast(copy.deepcopy(child)):
+                    if RuleGeneratorV2._tables_of_ast(child):
                         return False
-                    cols = RuleGeneratorV2.columns(copy.deepcopy(child), copy.deepcopy(child))
+                    cols = RuleGeneratorV2.columns(child, child)
                     if cols and not (len(cols) == 1 and cols[0] == "*"):
                         return False
-                    if RuleGeneratorV2._literal_counts(copy.deepcopy(child)):
+                    if RuleGeneratorV2._literal_counts(child):
                         return False
-                    if RuleGeneratorV2._variable_lists_of_ast(copy.deepcopy(child)):
+                    if RuleGeneratorV2._variable_lists_of_ast(child):
                         return False
             return True
         if isinstance(node, WhereNode):
@@ -2051,14 +2061,14 @@ class RuleGeneratorV2:
             if len(predicates) == 1:
                 return RuleGeneratorV2._is_branch_node(predicates[0])
             return False
-        if RuleGeneratorV2._tables_of_ast(copy.deepcopy(node)):
+        if RuleGeneratorV2._tables_of_ast(node):
             return False
-        columns = RuleGeneratorV2.columns(copy.deepcopy(node), copy.deepcopy(node))
+        columns = RuleGeneratorV2.columns(node, node)
         if columns:
             return len(columns) == 1 and columns[0] == "*"
-        if RuleGeneratorV2._literal_counts(copy.deepcopy(node)):
+        if RuleGeneratorV2._literal_counts(node):
             return False
-        if RuleGeneratorV2._variable_lists_of_ast(copy.deepcopy(node)):
+        if RuleGeneratorV2._variable_lists_of_ast(node):
             return False
         return True
 
