@@ -56,13 +56,13 @@ from core.ast.node import (
     SubqueryNode,
     TableNode,
     UnaryOperatorNode,
+    VariableLiteralNode,
     WhenThenNode,
     WhereNode,
 )
 from core.query_parser import QueryParser
-from core.query_formatter import QueryFormatter, _placeholder_token
+from core.query_formatter import QueryFormatter
 from core.rule_parser_v2 import RuleParserV2, Scope, VarType, VarTypesInfo
-from core.ast.utils import is_placeholder_name
 
 
 @functools.lru_cache(maxsize=None)
@@ -392,13 +392,14 @@ class RuleGeneratorV2:
                 state["tables"][name] = mapped
             return mapped
 
-        def _alias_token(name: Optional[str]) -> Optional[str]:
+        def _alias_token(name) -> Optional[str]:
             if name is None:
                 return None
-            mapped = state["aliases"].get(name)
+            key = name.name if isinstance(name, ElementVariableNode) else name
+            mapped = state["aliases"].get(key)
             if mapped is None:
                 mapped = f"A{len(state['aliases']) + 1}"
-                state["aliases"][name] = mapped
+                state["aliases"][key] = mapped
             return mapped
 
         if isinstance(node, QueryNode):
@@ -426,16 +427,13 @@ class RuleGeneratorV2:
             return ("ORDERBY_ITEM", node.sort.value if node.sort else None, RuleGeneratorV2._recommendation_ast_signature(inner, state))
         if isinstance(node, LimitNode):
             value = node.limit
-            # TODO: LimitNode/OffsetNode use string placeholders (from _replace_literal_in_ast)
-            # rather than ElementVariableNode, for the same reason as string literals.
-            # is_placeholder_name check here is the one remaining generator-level token reference.
-            if isinstance(value, str) and is_placeholder_name(value):
-                value = f"VAR:{RuleGeneratorV2._fingerPrint(value)}"
+            if isinstance(value, ElementVariableNode):
+                value = f"VAR:{RuleGeneratorV2._fingerPrint(value.name)}"
             return ("LIMIT", value)
         if isinstance(node, OffsetNode):
             value = node.offset
-            if isinstance(value, str) and is_placeholder_name(value):
-                value = f"VAR:{RuleGeneratorV2._fingerPrint(value)}"
+            if isinstance(value, ElementVariableNode):
+                value = f"VAR:{RuleGeneratorV2._fingerPrint(value.name)}"
             return ("OFFSET", value)
         if isinstance(node, TableNode):
             return ("TABLE", _table_token(node.name), _alias_token(node.alias))
@@ -447,6 +445,8 @@ class RuleGeneratorV2:
             return ("COLUMN", node.name, _alias_token(node.alias), _alias_token(node.parent_alias))
         if isinstance(node, LiteralNode):
             return ("LITERAL", node.value, _alias_token(getattr(node, "alias", None)))
+        if isinstance(node, VariableLiteralNode):
+            return ("VAR_LITERAL", node.prefix, node.suffix)
         if isinstance(node, FunctionNode):
             return (
                 "FUNCTION",
@@ -624,14 +624,12 @@ class RuleGeneratorV2:
 
         mapping, external_name = RuleGeneratorV2._find_next_element_variable(mapping)
         new_rule["mapping"] = mapping
-        # TODO: remove placeholder_token once VariableLiteralNode is added for string literals
-        placeholder_token = _placeholder_token(external_name)
 
         for key in ("pattern_ast", "rewrite_ast"):
             ast = new_rule.get(key)
             if not isinstance(ast, Node):
                 raise TypeError(f"rule['{key}'] must be an AST Node")
-            new_rule[key] = RuleGeneratorV2._replace_literal_in_ast(ast, literal, external_name, placeholder_token)
+            new_rule[key] = RuleGeneratorV2._replace_literal_in_ast(ast, literal, external_name)
 
         new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
         new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
@@ -880,13 +878,7 @@ class RuleGeneratorV2:
                 continue
             value = getattr(node, "value", None)
             if isinstance(value, str):
-                normalized = value.replace("%", "")
-                # TODO: string literals with embedded __rv_ tokens (from _replace_literal_in_ast)
-                # cannot be replaced with ElementVariableNode due to LIKE wildcard preservation.
-                # is_placeholder_name check here is the one remaining generator-level token reference.
-                if is_placeholder_name(normalized):
-                    continue
-                counts[normalized] = counts.get(normalized, 0) + 1
+                counts[value.replace("%", "")] = counts.get(value.replace("%", ""), 0) + 1
             elif isinstance(value, numbers.Number):
                 counts[value] = counts.get(value, 0) + 1
         return counts
@@ -1025,8 +1017,8 @@ class RuleGeneratorV2:
                 seen_and_ids.add(id(node))
             elif isinstance(node, WhereNode) and len(node.children) == 1 and isinstance(node.children[0], ElementVariableNode):
                 out.append([node.children[0].name])
-            elif isinstance(node, LimitNode) and isinstance(node.limit, str) and is_placeholder_name(node.limit):
-                out.append([node.limit])
+            elif isinstance(node, LimitNode) and isinstance(node.limit, ElementVariableNode):
+                out.append([node.limit.name])
             elif isinstance(node, JoinNode) and node.on_condition is not None:
                 oc = node.on_condition
                 if isinstance(oc, ElementVariableNode):
@@ -1164,12 +1156,7 @@ class RuleGeneratorV2:
                 return True
             return False
 
-        if isinstance(node, LiteralNode):
-            if isinstance(parent, ListNode):
-                return False
-            value = getattr(node, "value", None)
-            if isinstance(value, str) and is_placeholder_name(value):
-                return True
+        if isinstance(node, (LiteralNode, VariableLiteralNode)):
             return False
 
         var_count = 0
@@ -1179,15 +1166,10 @@ class RuleGeneratorV2:
             if isinstance(child, list):
                 return False
             if isinstance(child, Node):
-                if isinstance(child, (ElementVariableNode, SetVariableNode)):
+                if isinstance(child, (ElementVariableNode, SetVariableNode, VariableLiteralNode)):
                     var_count += 1
                     continue
                 if isinstance(child, LiteralNode):
-                    value = getattr(child, "value", None)
-                    if isinstance(value, str):
-                        normalized = value.replace("%", "")
-                        if is_placeholder_name(normalized):
-                            var_count += 1
                     continue
                 return False
         return var_count >= 1
@@ -1462,16 +1444,17 @@ class RuleGeneratorV2:
         ast: Node,
         literal: Union[str, numbers.Number],
         external_name: str,
-        placeholder_token: str,
     ) -> Node:
         """Substitute every occurrence of literal in ast with the new variable.
 
-        String literals are rewritten in place (preserving any surrounding % LIKE wildcards) using placeholder_token; numeric literal nodes are swapped wholesale for an ElementVariableNode(external_name). Mutates ast in place and returns it.
+        String literals become VariableLiteralNode (preserving surrounding % wildcards).
+        Numeric literals and LIMIT/OFFSET values become ElementVariableNode.
         """
+        to_replace = []
         for node in RuleGeneratorV2._walk(ast):
             if isinstance(node, LimitNode):
                 if isinstance(literal, numbers.Number) and node.limit == literal:
-                    node.limit = placeholder_token
+                    node.limit = ElementVariableNode(external_name)
                 continue
             if node.type != NodeType.LITERAL:
                 continue
@@ -1479,17 +1462,21 @@ class RuleGeneratorV2:
 
             if isinstance(literal, str) and isinstance(value, str):
                 if value == literal:
-                    node.value = placeholder_token  # type: ignore[attr-defined]
+                    to_replace.append((node, VariableLiteralNode(external_name)))
                 elif value.replace("%", "") == literal:
-                    node.value = value.replace(literal, placeholder_token)  # type: ignore[attr-defined]
+                    prefix = "%" if value.startswith("%") else ""
+                    suffix = "%" if value.endswith("%") else ""
+                    to_replace.append((node, VariableLiteralNode(external_name, prefix=prefix, suffix=suffix)))
                 continue
 
             if isinstance(literal, numbers.Number) and isinstance(value, numbers.Number) and value == literal:
-                replacement = ElementVariableNode(external_name)
-                if node is ast:
-                    ast = replacement
-                else:
-                    RuleGeneratorV2._replace_node_reference(ast, node, replacement)
+                to_replace.append((node, ElementVariableNode(external_name)))
+
+        for old_node, new_node in to_replace:
+            if old_node is ast:
+                ast = new_node
+            else:
+                RuleGeneratorV2._replace_node_reference(ast, old_node, new_node)
         return ast
 
     @staticmethod
@@ -1503,7 +1490,7 @@ class RuleGeneratorV2:
 
         A bare-named reference to target_value is also matched even when its alias disagrees with target_name, so a single variable can cover both an aliased outer reference and a bare-named reference inside a subquery.
         placeholder_token here is actually the external_name (e.g. "x1") passed from variablize_table.
-        ColumnNode.parent_alias is set to this bare string; the formatter's is_placeholder_name check handles it.
+        ColumnNode.parent_alias is set to ElementVariableNode(placeholder_token) so the formatter and rewriter handle it via isinstance checks.
         """
         # A bare-table reference, with no explicit alias, is also matched when
         # its value equals the target's value even if target_name differs. This
@@ -1543,7 +1530,7 @@ class RuleGeneratorV2:
                     or node.parent_alias == target_name
                 )
             ):
-                node.parent_alias = placeholder_token
+                node.parent_alias = ElementVariableNode(placeholder_token)
         return ast
 
     @staticmethod
@@ -1770,8 +1757,8 @@ class RuleGeneratorV2:
                         node.children[2] = replacement
                     return node
 
-            if isinstance(node, LimitNode) and isinstance(node.limit, str) and node.limit in variable_set:
-                node.limit = set_name
+            if isinstance(node, LimitNode) and isinstance(node.limit, ElementVariableNode) and node.limit.name in variable_set:
+                node.limit = SetVariableNode(set_name)
                 return node
 
             if (
@@ -2195,5 +2182,3 @@ class RuleGeneratorV2:
             return
         for child in children:
             yield from RuleGeneratorV2._walk(child)
-
-

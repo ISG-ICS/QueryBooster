@@ -20,6 +20,7 @@ class NodeType(Enum):
     # VarSQL specific
     VAR = "var"
     VARSET = "varset"
+    VAR_LITERAL = "var_literal"
 
     # Operators
     OPERATOR = "operator"

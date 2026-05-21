@@ -14,10 +14,11 @@ from core.ast.node import (
     SubqueryNode,
     ElementVariableNode,
     SetVariableNode,
+    VariableLiteralNode,
 )
 from core.ast.enums import NodeType, JoinType
 from core.ast.node import Node
-from core.ast.utils import flatten_logical_operands, is_placeholder_name
+from core.ast.utils import flatten_logical_operands
 
 
 def _placeholder_token(name: str) -> str:
@@ -31,6 +32,18 @@ def _normalize_placeholder_tokens(sql: str) -> str:
     out = _replace_wrapped_tokens(out, "__rvs_", "__", "<<", ">>")
     out = _replace_wrapped_tokens(out, "__rv_", "__", "<", ">")
     return out
+
+
+def _render_alias(alias) -> str:
+    """Render an alias/parent_alias field to a string for mosql output.
+
+    Concrete string aliases pass through unchanged; ElementVariableNode aliases
+    emit their placeholder token (``__rv_name__``), which ``_normalize_placeholder_tokens``
+    later converts to ``<name>``.
+    """
+    if isinstance(alias, ElementVariableNode):
+        return f"__rv_{alias.name}__"
+    return alias
 
 
 def _replace_wrapped_tokens(text: str, prefix: str, suffix: str, open_marker: str, close_marker: str) -> str:
@@ -121,11 +134,18 @@ def ast_to_json(node: Node) -> dict:
             result['orderby'] = format_order_by(child)
         elif child.type == NodeType.LIMIT:
             lv = child.limit
-            if isinstance(lv, str) and is_placeholder_name(lv) and not (lv.startswith("__rv_") or lv.startswith("__rvs_")):
-                lv = _placeholder_token(lv)
+            if isinstance(lv, ElementVariableNode):
+                lv = _placeholder_token(lv.name)
+            elif isinstance(lv, SetVariableNode):
+                lv = f"__rvs_{lv.name}__"
             result['limit'] = lv
         elif child.type == NodeType.OFFSET:
-            result['offset'] = child.offset
+            ov = child.offset
+            if isinstance(ov, ElementVariableNode):
+                ov = _placeholder_token(ov.name)
+            elif isinstance(ov, SetVariableNode):
+                ov = f"__rvs_{ov.name}__"
+            result['offset'] = ov
     
     return result
 
@@ -147,7 +167,7 @@ def format_select(select_node: SelectNode) -> dict:
     for child in children:
         item = {'value': format_expression(child)}
         if hasattr(child, 'alias') and child.alias:
-            item['name'] = child.alias
+            item['name'] = _render_alias(child.alias)
         items.append(item)
     
     select_key = 'select_distinct' if select_node.distinct else 'select'
@@ -252,28 +272,21 @@ def format_source(node: Node) -> dict:
         subquery_child = list(node.children)[0]
         result = {'value': ast_to_json(subquery_child)}
         if node.alias:
-            result['name'] = node.alias
+            result['name'] = _render_alias(node.alias)
         return result
     elif node.type == NodeType.VAR:
         result = {'value': f"__rv_{node.name}__"}
         if node.alias:
-            result['name'] = node.alias
+            result['name'] = _render_alias(node.alias)
         return result
     raise ValueError(f"Unsupported source type: {node.type}")
 
 
 def format_table(table_node: TableNode) -> dict:
-    """Format a table reference.
-
-    TableNode names from the rule generator are always concrete after the refactor;
-    however RuleParserV2 still produces TableNode(name="x1") for user-written table
-    variable placeholders like <x1>, so is_placeholder_name is kept as a safety
-    fallback for those cases.
-    """
-    name = _placeholder_token(table_node.name) if is_placeholder_name(table_node.name) else table_node.name
-    result = {'value': name}
+    """Format a table reference."""
+    result = {'value': table_node.name}
     if table_node.alias:
-        result['name'] = table_node.alias
+        result['name'] = _render_alias(table_node.alias)
     return result
 
 
@@ -335,17 +348,19 @@ def format_expression(node: Node):
     if node.type == NodeType.VAR:
         token = f"__rv_{node.name}__"
         if node.parent_alias:
-            pa = _placeholder_token(node.parent_alias) if is_placeholder_name(node.parent_alias) else node.parent_alias
+            pa = _render_alias(node.parent_alias)
             return f"{pa}.{token}"
         return token
     if node.type == NodeType.VARSET:
         return f"__rvs_{node.name}__"
+    if node.type == NodeType.VAR_LITERAL:
+        return {'literal': f"{node.prefix}__rv_{node.name}__{node.suffix}"}
+
     if node.type == NodeType.COLUMN:
-        col_token = _placeholder_token(node.name) if is_placeholder_name(node.name) else node.name
         if node.parent_alias:
-            pa_token = _placeholder_token(node.parent_alias) if is_placeholder_name(node.parent_alias) else node.parent_alias
-            return f"{pa_token}.{col_token}"
-        return col_token
+            pa_token = _render_alias(node.parent_alias)
+            return f"{pa_token}.{node.name}"
+        return node.name
     
     elif node.type == NodeType.LITERAL:
         if node.value is None:

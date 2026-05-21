@@ -1052,7 +1052,7 @@ def test_branches_4():
     )
     branches = RuleGeneratorV2.branches(result.pattern_ast, result.rewrite_ast)
     actual = {(b["key"], RuleGeneratorV2.deparse(b["value"])) for b in branches}
-    assert actual == {("eq_rhs", "TIMESTAMP('x')")}
+    assert actual == {("eq_rhs", "TIMESTAMP('<x>')")}
 
 
 def test_branches_5():
@@ -1428,13 +1428,13 @@ def test_generate_general_rule_10():
         FROM   <x1>
         WHERE  <x6> IN (SELECT <x5>
                         FROM   <x2>
-                        WHERE  <x4> = <x8>)
+                        WHERE  <x4> = '<x8>')
     """
     expected_rewrite = """
         SELECT DISTINCT <x3>
         FROM   <x1>, <x2>
         WHERE  <x1>.<x6> = <x2>.<x5>
-        AND    <x2>.<x4> = <x8>
+        AND    <x2>.<x4> = '<x8>'
     """
     _assert_matches_expected(q0, q1, expected_pattern, expected_rewrite)
 
@@ -2082,8 +2082,8 @@ WHERE t.pubCode IN ('hyrmas', 'ayqioa', 'rj49as99') and
     _assert_matches_expected(
         q0,
         q1,
-        "SELECT DISTINCT ON (<x1>.<x2>) <<x3>>, COALESCE(<x4>.<x5>, <x6>), <x7> FROM <x1> LEFT JOIN <x4> ON <<x8>> LEFT JOIN <x9> ON <<x10>> WHERE <<x11>> AND <<x12>> AND <<x13>> ORDER BY <x14> DESC",
-        "SELECT <<x3>>, COALESCE((SELECT <x4>.<x5> FROM <x4> WHERE <<x8>> AND <<x13>> LIMIT <x15>), <x6>), (SELECT <x7> FROM <x9> WHERE <<x10>> AND <<x12>> LIMIT <x15>) FROM <x1> WHERE <<x11>>",
+        "SELECT DISTINCT ON (<x1>.<x2>) <<x3>>, COALESCE(<x4>.<x5>, '<x6>'), <x7> FROM <x1> LEFT JOIN <x4> ON <<x8>> LEFT JOIN <x9> ON <<x10>> WHERE <<x11>> AND <<x12>> AND <<x13>> ORDER BY <x14> DESC",
+        "SELECT <<x3>>, COALESCE((SELECT <x4>.<x5> FROM <x4> WHERE <<x8>> AND <<x13>> LIMIT <x15>), '<x6>'), (SELECT <x7> FROM <x9> WHERE <<x10>> AND <<x12>> LIMIT <x15>) FROM <x1> WHERE <<x11>>",
     )
 
 

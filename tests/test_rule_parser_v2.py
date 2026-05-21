@@ -30,6 +30,7 @@ from core.ast.node import (
     UnaryOperatorNode,
     ElementVariableNode,
     SetVariableNode,
+    VariableLiteralNode,
     WhenThenNode,
     WhereNode,
 )
@@ -87,7 +88,15 @@ def _assert_varnodes_declared(result: RuleParseResult) -> None:
 
 def _assert_no_internal_tokens(result: RuleParseResult) -> None:
     """No EV00x / SV00x tokens should survive in identifier-bearing AST fields."""
-    internal_tokens = set(result.mapping.values())
+    def _check_alias(label: str, field_name: str, value) -> None:
+        if isinstance(value, str):
+            assert not _TOKEN_RE.match(value), (
+                f"{label} AST has raw internal token {value!r} as {field_name}"
+            )
+        elif isinstance(value, ElementVariableNode):
+            assert not _TOKEN_RE.match(value.name), (
+                f"{label} AST has raw internal token {value.name!r} inside ElementVariableNode at {field_name}"
+            )
 
     for tree_label, tree in [("pattern", result.pattern_ast), ("rewrite", result.rewrite_ast)]:
         for n in _walk(tree):
@@ -95,34 +104,22 @@ def _assert_no_internal_tokens(result: RuleParseResult) -> None:
                 assert not _TOKEN_RE.match(n.name), (
                     f"{tree_label} AST has raw internal token {n.name!r} as ColumnNode.name"
                 )
-                if isinstance(n.alias, str):
-                    assert not _TOKEN_RE.match(n.alias), (
-                        f"{tree_label} AST has raw internal token {n.alias!r} as ColumnNode.alias"
-                    )
-                if n.parent_alias in internal_tokens:
-                    assert not _TOKEN_RE.match(n.parent_alias), (
-                        f"{tree_label} AST has raw internal token {n.parent_alias!r} "
-                        f"as ColumnNode.parent_alias"
-                    )
+                _check_alias(tree_label, "ColumnNode.alias", n.alias)
+                _check_alias(tree_label, "ColumnNode.parent_alias", n.parent_alias)
 
             if isinstance(n, TableNode) and isinstance(n.name, str):
                 assert not _TOKEN_RE.match(n.name), (
                     f"{tree_label} AST has raw internal token {n.name!r} as TableNode.name"
                 )
-                if isinstance(n.alias, str):
-                    assert not _TOKEN_RE.match(n.alias), (
-                        f"{tree_label} AST has raw internal token {n.alias!r} as TableNode.alias"
-                    )
+                _check_alias(tree_label, "TableNode.alias", n.alias)
 
             if isinstance(n, SubqueryNode) and isinstance(n.alias, str):
                 assert not _TOKEN_RE.match(n.alias), (
                     f"{tree_label} AST has raw internal token {n.alias!r} as SubqueryNode.alias"
                 )
 
-            if isinstance(n, FunctionNode) and isinstance(n.alias, str):
-                assert not _TOKEN_RE.match(n.alias), (
-                    f"{tree_label} AST has raw internal token {n.alias!r} as FunctionNode.alias"
-                )
+            if isinstance(n, FunctionNode):
+                _check_alias(tree_label, "FunctionNode.alias", n.alias)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -364,14 +361,15 @@ def test_parse_ast_strpos_ilike_rule():
     assert isinstance(lower, FunctionNode) and lower.name.lower() == "lower"
     assert isinstance(list(lower.children)[0], ElementVariableNode)
     assert list(lower.children)[0].name == "x"
-    assert isinstance(strpos_args[1], LiteralNode)
+    assert isinstance(strpos_args[1], VariableLiteralNode)
+    assert strpos_args[1].name == "s"
     # Rewrite: ILIKE
     rew = result.rewrite_ast
     assert isinstance(rew, FunctionNode) and rew.name.lower() == "ilike"
     ilike_args = list(rew.children)
     assert isinstance(ilike_args[0], ElementVariableNode) and ilike_args[0].name == "x"
-    assert isinstance(ilike_args[1], LiteralNode)
-    assert ilike_args[1].value == "%s%"
+    assert isinstance(ilike_args[1], VariableLiteralNode)
+    assert ilike_args[1].name == "s" and ilike_args[1].prefix == "%" and ilike_args[1].suffix == "%"
 
 
 def test_substitute_placeholders_limit_offset_string_tokens():
@@ -382,8 +380,8 @@ def test_substitute_placeholders_limit_offset_string_tokens():
     off = RuleParserV2._substitute_placeholders(  # type: ignore[arg-type]
         OffsetNode("EV002"), {"EV002": "y"}
     )
-    assert isinstance(lim, LimitNode) and lim.limit == "x"
-    assert isinstance(off, OffsetNode) and off.offset == "y"
+    assert isinstance(lim, LimitNode) and isinstance(lim.limit, ElementVariableNode) and lim.limit.name == "x"
+    assert isinstance(off, OffsetNode) and isinstance(off.offset, ElementVariableNode) and off.offset.name == "y"
 
 
 def test_parse_substitutes_alias_fields():
@@ -640,11 +638,13 @@ def test_qualified_column_both_parts_substituted():
     _assert_varnodes_declared(result)
     _assert_no_internal_tokens(result)
     # When both parts are variables, _substitute_placeholders returns ElementVariableNode
+    # with parent_alias stored as ElementVariableNode (widened field type).
     evars = _find_all(result.pattern_ast, ElementVariableNode)
     qualified = [e for e in evars if e.parent_alias is not None]
     assert len(qualified) >= 1
     for e in qualified:
-        assert e.parent_alias in result.mapping
+        assert isinstance(e.parent_alias, ElementVariableNode)
+        assert e.parent_alias.name in result.mapping
         assert e.name in result.mapping
 
 
