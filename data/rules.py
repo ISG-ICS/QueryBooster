@@ -2,6 +2,7 @@ import json
 
 from core.rule_parser import RuleParser
 from core.rule_parser_v2 import RuleParserV2
+from core.rule import RuleV2
 
 rules = [
     # PostgresSQL Rules
@@ -764,7 +765,7 @@ def get_rule(key: str) -> dict:
 
 # fetch one rule by key using the v2 AST-based parser
 #
-def get_rule_v2(key: str) -> dict:
+def get_rule_v2(key: str) -> RuleV2:
     rule = next(filter(lambda x: x['key'] == key, rules), None)
     if rule is None:
         raise ValueError(f"Rule {key} not found")
@@ -772,20 +773,16 @@ def get_rule_v2(key: str) -> dict:
     # TODO: reuse v1 parse_actions?
     identity_mapping = json.dumps({k: k for k in result.mapping})
     actions_json = RuleParser.parse_actions(rule['actions'], identity_mapping)
-    return {
-        'id': rule['id'],
-        'key': rule['key'],
-        'name': rule['name'],
-        'pattern': rule['pattern'],
-        'pattern_ast': result.pattern_ast,
-        'rewrite': rule['rewrite'],
-        'rewrite_ast': result.rewrite_ast,
-        'mapping': result.mapping,
-        'actions': rule['actions'],
-        'actions_json': json.loads(actions_json),
-        'database': rule['database'],
-        'examples': rule['examples'],
-    }
+    return RuleV2(
+        id=rule['id'],
+        key=rule['key'],
+        pattern=rule['pattern'],
+        pattern_ast=result.pattern_ast,
+        rewrite=rule['rewrite'],
+        rewrite_ast=result.rewrite_ast,
+        mapping=result.mapping,
+        actions=rule['actions'],
+    )
 
 
 # return a list of rules (json attributes are in str)

@@ -7,21 +7,20 @@ from core.ast.node import QueryNode
 from core.query_formatter import QueryFormatter
 from core.query_parser import QueryParser
 from core.rule_generator_v2 import RuleGeneratorV2
+from core.rule import RuleV2
 from core.rule_parser_v2 import RuleParserV2, VarType
 from data.rules import get_rule_v2 as get_rule
 
 
-def _build_rule(pattern: str, rewrite: str):
+def _build_rule(pattern: str, rewrite: str) -> RuleV2:
     parsed = RuleParserV2.parse(pattern, rewrite)
-    return {
-        "pattern": pattern,
-        "rewrite": rewrite,
-        "pattern_ast": parsed.pattern_ast,
-        "rewrite_ast": parsed.rewrite_ast,
-        "mapping": parsed.mapping,
-        "constraints": "",
-        "actions": "",
-    }
+    return RuleV2(
+        pattern=pattern,
+        rewrite=rewrite,
+        pattern_ast=parsed.pattern_ast,
+        rewrite_ast=parsed.rewrite_ast,
+        mapping=parsed.mapping,
+    )
 
 
 def _has_clause(query: QueryNode, clause_type: NodeType) -> bool:
@@ -1884,7 +1883,7 @@ def test_generate_rule_graph_0():
     q0 = "CAST(created_at AS DATE)"
     q1 = "created_at"
     root_rule = RuleGeneratorV2.generate_rule_graph(q0, q1)
-    assert isinstance(root_rule, dict)
+    assert isinstance(root_rule, RuleV2)
     children = root_rule["children"]
     assert len(children) == 1
     child_rule = children[0]

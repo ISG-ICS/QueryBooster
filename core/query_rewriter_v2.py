@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import copy
 import logging
-import re
 from contextlib import contextmanager
 from collections import deque
 from enum import Enum
@@ -143,8 +142,6 @@ def _bind(var_name: str, value: Any, memo: dict) -> bool:
         # (table vars bind to whole TableNode; ColumnNode.parent_alias binds to string)
         if isinstance(existing, TableNode) and isinstance(value, str):
             return (existing.alias or existing.name) == value
-        if isinstance(value, TableNode) and isinstance(existing, str):
-            return (value.alias or value.name) == existing
         if isinstance(existing, Node) and isinstance(value, Node):
             return existing == value
         return existing == value
@@ -675,9 +672,6 @@ def _subst(node: Node, memo: dict) -> Node:
             return val
         if isinstance(val, str):
             return ColumnNode(val)
-        if isinstance(val, (int, float, bool)) or val is None:
-            return LiteralNode(val)
-        # Fallback: caller will keep the variable node unchanged.
         return None
 
     if isinstance(node, ElementVariableNode):
@@ -706,12 +700,7 @@ def _subst(node: Node, memo: dict) -> Node:
         if alias_key is not None and alias_key in memo:
             alias_val = memo[alias_key]
             # val may be a whole TableNode (from binding) or a string
-            if isinstance(val, TableNode):
-                table_name = val.name
-            elif isinstance(val, str):
-                table_name = val
-            else:
-                table_name = None
+            table_name = val.name if isinstance(val, TableNode) else None
             if table_name is not None:
                 alias_str = alias_val if isinstance(alias_val, str) else None
                 if alias_str is not None:
@@ -733,32 +722,11 @@ def _subst(node: Node, memo: dict) -> Node:
         return LiteralNode(f"{node.prefix}{val}{node.suffix}")
 
     if isinstance(node, (LiteralNode, DataTypeNode, TimeUnitNode)):
-        # For string literals, substitute any variable names embedded in the value
-        # (e.g. LiteralNode('%y%') with memo['y']=LiteralNode('iphone') to LiteralNode('%iphone%'))
-        if isinstance(node, LiteralNode) and isinstance(node.value, str):
-            new_val = node.value
-            for var_name, bound in memo.items():
-                if not isinstance(var_name, str) or var_name.startswith("_"):
-                    continue
-                if var_name not in new_val:
-                    continue
-                if isinstance(bound, LiteralNode) and isinstance(bound.value, (str, int, float)):
-                    new_val = re.sub(r"\b" + re.escape(var_name) + r"\b", str(bound.value), new_val)
-                elif isinstance(bound, str):
-                    new_val = re.sub(r"\b" + re.escape(var_name) + r"\b", bound, new_val)
-            if new_val != node.value:
-                return LiteralNode(new_val)
         return node
 
     if isinstance(node, TableNode):
-        # If the name variable is bound to a whole TableNode, return it directly
-        if isinstance(node.name, str) and node.name in memo:
-            val = memo[node.name]
-            if isinstance(val, TableNode):
-                return val
-        new_name = _subst_str(node.name, memo)
         new_alias = _subst_str(node.alias, memo) if node.alias is not None else None
-        return TableNode(new_name, new_alias)
+        return TableNode(node.name, new_alias)
 
     if isinstance(node, ColumnNode):
         new_name = _subst_str(node.name, memo)

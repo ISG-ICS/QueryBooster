@@ -21,16 +21,9 @@ from core.ast.node import Node
 from core.ast.utils import flatten_logical_operands
 
 
-def _placeholder_token(name: str) -> str:
-    if name.lower().startswith("y"):
-        return f"__rvs_{name}__"
-    return f"__rv_{name}__"
-
-
 def _normalize_placeholder_tokens(sql: str) -> str:
-    out = sql
-    out = _replace_wrapped_tokens(out, "__rvs_", "__", "<<", ">>")
-    out = _replace_wrapped_tokens(out, "__rv_", "__", "<", ">")
+    out = re.sub(r"__rvs_(\w+)__", r"<<\1>>", sql)
+    out = re.sub(r"__rv_(\w+)__", r"<\1>", out)
     return out
 
 
@@ -44,26 +37,6 @@ def _render_alias(alias) -> str:
     if isinstance(alias, ElementVariableNode):
         return f"__rv_{alias.name}__"
     return alias
-
-
-def _replace_wrapped_tokens(text: str, prefix: str, suffix: str, open_marker: str, close_marker: str) -> str:
-    out = text
-    start = 0
-    while True:
-        i = out.find(prefix, start)
-        if i < 0:
-            break
-        j = out.find(suffix, i + len(prefix))
-        if j < 0:
-            break
-        inner = out[i + len(prefix):j]
-        if inner and all(ch.isalnum() or ch == "_" for ch in inner):
-            replacement = f"{open_marker}{inner}{close_marker}"
-            out = out[:i] + replacement + out[j + len(suffix):]
-            start = i + len(replacement)
-        else:
-            start = i + 1
-    return out
 
 
 class QueryFormatter:
@@ -135,14 +108,14 @@ def ast_to_json(node: Node) -> dict:
         elif child.type == NodeType.LIMIT:
             lv = child.limit
             if isinstance(lv, ElementVariableNode):
-                lv = _placeholder_token(lv.name)
+                lv = f"__rv_{lv.name}__"
             elif isinstance(lv, SetVariableNode):
                 lv = f"__rvs_{lv.name}__"
             result['limit'] = lv
         elif child.type == NodeType.OFFSET:
             ov = child.offset
             if isinstance(ov, ElementVariableNode):
-                ov = _placeholder_token(ov.name)
+                ov = f"__rv_{ov.name}__"
             elif isinstance(ov, SetVariableNode):
                 ov = f"__rvs_{ov.name}__"
             result['offset'] = ov

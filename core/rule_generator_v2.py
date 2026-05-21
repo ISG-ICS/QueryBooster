@@ -62,6 +62,7 @@ from core.ast.node import (
 )
 from core.query_parser import QueryParser
 from core.query_formatter import QueryFormatter
+from core.rule import RuleV2
 from core.rule_parser_v2 import RuleParserV2, Scope, VarType, VarTypesInfo
 
 
@@ -243,27 +244,27 @@ class RuleGeneratorV2:
         return 0
 
     @staticmethod
-    def initialize_seed_rule(q0: str, q1: str) -> Dict[str, object]:
-        """Build the initial (un-generalized) rule dict for the rewrite pair q0 -> q1.
+    def initialize_seed_rule(q0: str, q1: str) -> RuleV2:
+        """Build the initial (un-generalized) rule for the rewrite pair q0 -> q1.
 
-        Parses both sides via RuleParserV2, snapshots the source ASTs/SQL, and returns a fresh rule dict carrying pattern, rewrite, pattern_ast, rewrite_ast, mapping, and empty constraints/actions.
+        Parses both sides via RuleParserV2, snapshots the source ASTs/SQL, and returns a fresh RuleV2 carrying pattern, rewrite, pattern_ast, rewrite_ast, mapping, and empty constraints/actions.
         """
         parsed = RuleParserV2.parse(q0, q1)
         pattern = RuleGeneratorV2.deparse(copy.deepcopy(parsed.pattern_ast))
         rewrite = RuleGeneratorV2.deparse(copy.deepcopy(parsed.rewrite_ast))
-        return {
-            "pattern": pattern,
-            "rewrite": rewrite,
-            "pattern_ast": parsed.pattern_ast,
-            "rewrite_ast": parsed.rewrite_ast,
-            "source_pattern_ast": copy.deepcopy(parsed.pattern_ast),
-            "source_rewrite_ast": copy.deepcopy(parsed.rewrite_ast),
-            "source_pattern_sql": q0,
-            "source_rewrite_sql": q1,
-            "mapping": parsed.mapping,
-            "constraints": "",
-            "actions": "",
-        }
+        return RuleV2(
+            pattern=pattern,
+            rewrite=rewrite,
+            pattern_ast=parsed.pattern_ast,
+            rewrite_ast=parsed.rewrite_ast,
+            source_pattern_ast=copy.deepcopy(parsed.pattern_ast),
+            source_rewrite_ast=copy.deepcopy(parsed.rewrite_ast),
+            source_pattern_sql=q0,
+            source_rewrite_sql=q1,
+            mapping=parsed.mapping,
+            constraints="",
+            actions="",
+        )
 
     RuleGeneralizations = (
         "generalize_tables",
@@ -275,7 +276,7 @@ class RuleGeneratorV2:
     )
 
     @staticmethod
-    def generate_general_rule(q0: str, q1: str) -> Dict[str, object]:
+    def generate_general_rule(q0: str, q1: str) -> RuleV2:
         """Repeatedly apply every generalize_* step until the rule's fingerprint stops changing.
 
         Returns the most general rule reachable from the seed by exhaustively variablizing tables/columns/literals/subtrees, merging variable lists, and dropping branches.
@@ -292,7 +293,7 @@ class RuleGeneratorV2:
         return general_rule
 
     @staticmethod
-    def generate_rule_graph(q0: str, q1: str) -> Dict[str, object]:
+    def generate_rule_graph(q0: str, q1: str) -> RuleV2:
         """Build the full BFS graph of generalizations rooted at the seed rule for q0 -> q1.
 
         Each node's children list is populated with the rules reachable in one variabilization/merge/drop step; nodes with the same fingerprint are deduplicated, so the graph is a DAG, not a tree.
@@ -300,7 +301,7 @@ class RuleGeneratorV2:
         seed_rule = RuleGeneratorV2.initialize_seed_rule(q0, q1)
         seed_fp = RuleGeneratorV2.fingerPrint(seed_rule)
         visited = {seed_fp: seed_rule}
-        queue: deque[Dict[str, object]] = deque([seed_rule])
+        queue: deque[RuleV2] = deque([seed_rule])
         while queue:
             base_rule = queue.popleft()
             base_rule["children"] = []
@@ -323,18 +324,18 @@ class RuleGeneratorV2:
         return seed_rule
 
     @staticmethod
-    def recommend_simple_rules(examples: List[Dict[str, str]]) -> List[Dict[str, object]]:
+    def recommend_simple_rules(examples: List[Dict[str, str]]) -> List[RuleV2]:
         """Pick a small set of generalized rules that together cover every (q0, q1) example.
 
         Generates candidate rules per example, fingerprints them, and greedy set-covers the still-uncovered examples, breaking ties toward fewer variables.
         """
         fingerprint_to_examples: Dict[str, Set[int]] = defaultdict(set)
-        fingerprint_to_rule: Dict[str, Dict[str, object]] = {}
-        example_candidates: List[List[Tuple[str, Dict[str, object]]]] = []
+        fingerprint_to_rule: Dict[str, RuleV2] = {}
+        example_candidates: List[List[Tuple[str, RuleV2]]] = []
 
         for index, example in enumerate(examples):
             seed = RuleGeneratorV2.initialize_seed_rule(example["q0"], example["q1"])
-            candidates_with_fingerprints: List[Tuple[str, Dict[str, object]]] = []
+            candidates_with_fingerprints: List[Tuple[str, RuleV2]] = []
             for rule in RuleGeneratorV2._recommendation_candidates(seed):
                 fp = RuleGeneratorV2.fingerPrint(rule)
                 candidates_with_fingerprints.append((fp, rule))
@@ -345,11 +346,11 @@ class RuleGeneratorV2:
             example_candidates.append(candidates_with_fingerprints)
 
         uncovered = set(range(len(examples)))
-        ans: List[Dict[str, object]] = []
+        ans: List[RuleV2] = []
         for index, _example in enumerate(examples):
             if index not in uncovered:
                 continue
-            chosen: Optional[Dict[str, object]] = None
+            chosen: Optional[RuleV2] = None
             remaining = set(uncovered)
             for fp, rule in example_candidates[index]:
                 covered = fingerprint_to_examples.get(fp, set()).intersection(remaining)
@@ -365,7 +366,7 @@ class RuleGeneratorV2:
         return ans
 
     @staticmethod
-    def _recommendation_signature(rule: Dict[str, object]) -> str:
+    def _recommendation_signature(rule: RuleV2) -> str:
         pattern_ast = rule.get("pattern_ast")
         rewrite_ast = rule.get("rewrite_ast")
         if not isinstance(pattern_ast, Node) or not isinstance(rewrite_ast, Node):
@@ -487,11 +488,11 @@ class RuleGeneratorV2:
         )
 
     @staticmethod
-    def _recommendation_candidates(seed: Dict[str, object]) -> List[Dict[str, object]]:
-        candidates: List[Dict[str, object]] = []
+    def _recommendation_candidates(seed: RuleV2) -> List[RuleV2]:
+        candidates: List[RuleV2] = []
         seed_sig = RuleGeneratorV2._recommendation_signature(seed)
         seen: Set[str] = {seed_sig}
-        queue: deque[Dict[str, object]] = deque([seed])
+        queue: deque[RuleV2] = deque([seed])
         max_candidates = RuleGeneratorV2._MAX_RECOMMENDATION_CANDIDATES
 
         while queue and len(candidates) < max_candidates:
@@ -518,27 +519,34 @@ class RuleGeneratorV2:
         return candidates
 
     @staticmethod
-    def variablize_tables(rule: Dict[str, object]) -> List[Dict[str, object]]:
+    def variablize_tables(rule: RuleV2) -> List[RuleV2]:
         """Return one child rule per table that can still be replaced with a fresh element variable.
 
         Each child is the result of substituting a single table reference with <x?> on both pattern and rewrite sides.
         """
-        pattern_ast = rule.get("pattern_ast")
-        rewrite_ast = rule.get("rewrite_ast")
+        pattern_ast = rule.pattern_ast
+        rewrite_ast = rule.rewrite_ast
         if not isinstance(pattern_ast, Node) or not isinstance(rewrite_ast, Node):
             raise TypeError("rule ASTs must be Node instances")
         return [RuleGeneratorV2.variablize_table(rule, table) for table in RuleGeneratorV2.tables(pattern_ast, rewrite_ast)]
 
     @staticmethod
-    def variablize_table(rule: Dict[str, object], table: Dict[str, str]) -> Dict[str, object]:
+    def _sync_rule_strings(rule: RuleV2) -> None:
+        rule.pattern = RuleGeneratorV2.deparse(rule.pattern_ast)
+        rule.rewrite = RuleGeneratorV2.deparse(rule.rewrite_ast)
+
+    @staticmethod
+    def variablize_table(rule: Union[RuleV2, dict], table: Dict[str, str]) -> RuleV2:
         """Return a new rule where the named table (and its qualified column refs) is replaced by a fresh element variable.
 
         table is a {"value": <name>, "name": <alias>} descriptor as produced by tables. Both ASTs are rewritten and re-deparsed; the input rule is not mutated.
         """
+        if isinstance(rule, dict):
+            rule = RuleV2.from_dict(rule)
         new_rule = copy.deepcopy(rule)
-        mapping = copy.deepcopy(new_rule["mapping"])
+        mapping = copy.deepcopy(new_rule.mapping)
         if not isinstance(mapping, dict):
-            raise TypeError("rule['mapping'] must be a dict[str, str]")
+            raise TypeError("rule.mapping must be a dict[str, str]")
 
         target_value = table.get("value")
         target_name = table.get("name")
@@ -546,25 +554,24 @@ class RuleGeneratorV2:
             raise TypeError("table must have string keys 'value' and 'name'")
 
         mapping, external_name = RuleGeneratorV2._find_next_element_variable(mapping)
-        new_rule["mapping"] = mapping
+        new_rule.mapping = mapping
 
-        for key in ("pattern_ast", "rewrite_ast"):
-            ast = new_rule.get(key)
+        for attr in ("pattern_ast", "rewrite_ast"):
+            ast = getattr(new_rule, attr)
             if not isinstance(ast, Node):
-                raise TypeError(f"rule['{key}'] must be an AST Node")
-            new_rule[key] = RuleGeneratorV2._replace_table_in_ast(
+                raise TypeError(f"rule.{attr} must be an AST Node")
+            setattr(new_rule, attr, RuleGeneratorV2._replace_table_in_ast(
                 ast,
                 target_value=target_value,
                 target_name=target_name,
                 placeholder_token=external_name,
-            )
+            ))
 
-        new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
-        new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
+        RuleGeneratorV2._sync_rule_strings(new_rule)
         return new_rule
 
     @staticmethod
-    def variablize_columns(rule: Dict[str, object]) -> List[Dict[str, object]]:
+    def variablize_columns(rule: RuleV2) -> List[RuleV2]:
         """Return one child rule per column that can still be replaced with a fresh element variable.
 
         Each child substitutes one un-variablized column name with <x?> on both sides.
@@ -576,7 +583,7 @@ class RuleGeneratorV2:
         return [RuleGeneratorV2.variablize_column(rule, column) for column in RuleGeneratorV2.columns(pattern_ast, rewrite_ast)]
 
     @staticmethod
-    def variablize_column(rule: Dict[str, object], column: str) -> Dict[str, object]:
+    def variablize_column(rule: RuleV2, column: str) -> RuleV2:
         """Return a new rule where every occurrence of column (in both ASTs) is replaced by a fresh element variable.
 
         Allocates the next available <x?> and re-deparses both sides. The input rule is not mutated.
@@ -595,12 +602,11 @@ class RuleGeneratorV2:
                 raise TypeError(f"rule['{key}'] must be an AST Node")
             new_rule[key] = RuleGeneratorV2._replace_column_in_ast(ast, column, external_name)
 
-        new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
-        new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
+        RuleGeneratorV2._sync_rule_strings(new_rule)
         return new_rule
 
     @staticmethod
-    def variablize_literals(rule: Dict[str, object]) -> List[Dict[str, object]]:
+    def variablize_literals(rule: RuleV2) -> List[Dict[str, object]]:
         """Return one child rule per literal that can still be replaced with a fresh element variable.
 
         Considers literals that recur within one side or are shared across both sides.
@@ -612,7 +618,7 @@ class RuleGeneratorV2:
         return [RuleGeneratorV2.variablize_literal(rule, literal) for literal in RuleGeneratorV2.literals(pattern_ast, rewrite_ast)]
 
     @staticmethod
-    def variablize_literal(rule: Dict[str, object], literal: Union[str, numbers.Number]) -> Dict[str, object]:
+    def variablize_literal(rule: RuleV2, literal: Union[str, numbers.Number]) -> RuleV2:
         """Return a new rule where every occurrence of literal (in both ASTs) is replaced by a fresh element variable.
 
         Allocates the next available <x?> and re-deparses both sides. The input rule is not mutated.
@@ -631,18 +637,17 @@ class RuleGeneratorV2:
                 raise TypeError(f"rule['{key}'] must be an AST Node")
             new_rule[key] = RuleGeneratorV2._replace_literal_in_ast(ast, literal, external_name)
 
-        new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
-        new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
+        RuleGeneratorV2._sync_rule_strings(new_rule)
         return new_rule
 
     @staticmethod
-    def variablize_subtrees(rule: Dict[str, object]) -> List[Dict[str, object]]:
+    def variablize_subtrees(rule: RuleV2) -> List[Dict[str, object]]:
         """Return one child rule per subtree shared by pattern and rewrite that can be collapsed into an element variable.
         """
-        return [RuleGeneratorV2.variablize_subtree(rule, subtree) for subtree in RuleGeneratorV2.subtrees(rule["pattern_ast"], rule["rewrite_ast"])]  # type: ignore[arg-type,index]
+        return [RuleGeneratorV2.variablize_subtree(rule, subtree) for subtree in RuleGeneratorV2.subtrees(rule.pattern_ast, rule.rewrite_ast)]
 
     @staticmethod
-    def variablize_subtree(rule: Dict[str, object], subtree: Node) -> Dict[str, object]:
+    def variablize_subtree(rule: RuleV2, subtree: Node) -> RuleV2:
         """Return a new rule where every occurrence of subtree (in both ASTs) is replaced by a fresh element variable.
 
         Allocates the next available <x?> in the mapping and re-deparses both sides. The input rule is not mutated.
@@ -661,12 +666,11 @@ class RuleGeneratorV2:
                 raise TypeError(f"rule['{key}'] must be an AST Node")
             new_rule[key] = RuleGeneratorV2._replace_subtree_in_ast(ast, subtree, ElementVariableNode(external_name))
 
-        new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
-        new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
+        RuleGeneratorV2._sync_rule_strings(new_rule)
         return new_rule
 
     @staticmethod
-    def merge_variables(rule: Dict[str, object]) -> List[Dict[str, object]]:
+    def merge_variables(rule: RuleV2) -> List[Dict[str, object]]:
         """Return one child rule per element-variable list collapsible into a single set variable <<y?>>.
 
         Each candidate list is the intersection of an AND-chain or SELECT-list on both sides.
@@ -678,7 +682,7 @@ class RuleGeneratorV2:
         return [RuleGeneratorV2.merge_variable_list(rule, variable_list) for variable_list in RuleGeneratorV2.variable_lists(pattern_ast, rewrite_ast)]
 
     @staticmethod
-    def merge_variable_list(rule: Dict[str, object], variable_list: List[str]) -> Dict[str, object]:
+    def merge_variable_list(rule: RuleV2, variable_list: List[str]) -> RuleV2:
         """Return a new rule where the given element variables are collapsed into a single set variable <<y?>>.
 
         Allocates the next available set variable and rewrites both ASTs (and their deparsed forms) so consecutive members of variable_list share that one set variable. The input rule is not mutated.
@@ -698,12 +702,11 @@ class RuleGeneratorV2:
                 raise TypeError(f"rule['{key}'] must be an AST Node")
             new_rule[key] = RuleGeneratorV2._merge_variable_list_in_ast(ast, var_set, set_name)
 
-        new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
-        new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
+        RuleGeneratorV2._sync_rule_strings(new_rule)
         return new_rule
 
     @staticmethod
-    def drop_branches(rule: Dict[str, object]) -> List[Dict[str, object]]:
+    def drop_branches(rule: RuleV2) -> List[Dict[str, object]]:
         """Return one child rule per droppable branch (a clause or AND/OR conjunct that is fully variablized on both sides).
 
         Each child removes one branch from both pattern and rewrite, producing a strictly more general rule.
@@ -715,7 +718,7 @@ class RuleGeneratorV2:
         return [RuleGeneratorV2.drop_branch(rule, branch) for branch in RuleGeneratorV2.branches(pattern_ast, rewrite_ast)]
 
     @staticmethod
-    def drop_branch(rule: Dict[str, object], branch: Dict[str, object]) -> Dict[str, object]:
+    def drop_branch(rule: RuleV2, branch: Dict[str, object]) -> RuleV2:
         """Return a new rule with branch removed from both pattern and rewrite ASTs.
 
         branch is a descriptor produced by branches (e.g. {"key": "where", "value": ...}). The input rule is not mutated.
@@ -726,12 +729,11 @@ class RuleGeneratorV2:
             if not isinstance(ast, Node):
                 raise TypeError(f"rule['{key}'] must be an AST Node")
             new_rule[key] = RuleGeneratorV2._drop_branch_in_ast(ast, branch)
-        new_rule["pattern"] = RuleGeneratorV2.deparse(new_rule["pattern_ast"])  # type: ignore[index]
-        new_rule["rewrite"] = RuleGeneratorV2.deparse(new_rule["rewrite_ast"])  # type: ignore[index]
+        RuleGeneratorV2._sync_rule_strings(new_rule)
         return new_rule
 
     @staticmethod
-    def generalize_tables(rule: Dict[str, object]) -> Dict[str, object]:
+    def generalize_tables(rule: RuleV2) -> RuleV2:
         """Return a new rule with every replaceable table variabilized in one pass.
 
         Walks the candidate tables and applies variablize_table repeatedly. Returns a fresh dict; the input rule is not mutated.
@@ -743,12 +745,12 @@ class RuleGeneratorV2:
             raise TypeError("rule ASTs must be Node instances")
         for table in RuleGeneratorV2.tables(pattern_ast, rewrite_ast):
             new_rule = RuleGeneratorV2.variablize_table(new_rule, table)
-            pattern_ast = new_rule["pattern_ast"]  # type: ignore[assignment]
-            rewrite_ast = new_rule["rewrite_ast"]  # type: ignore[assignment]
+            pattern_ast = new_rule.pattern_ast
+            rewrite_ast = new_rule.rewrite_ast
         return new_rule
 
     @staticmethod
-    def generalize_columns(rule: Dict[str, object]) -> Dict[str, object]:
+    def generalize_columns(rule: RuleV2) -> RuleV2:
         """Return a new rule with every replaceable column variabilized in one pass.
 
         Returns a fresh dict; the input is not mutated.
@@ -760,12 +762,12 @@ class RuleGeneratorV2:
             raise TypeError("rule ASTs must be Node instances")
         for column in RuleGeneratorV2.columns(pattern_ast, rewrite_ast):
             new_rule = RuleGeneratorV2.variablize_column(new_rule, column)
-            pattern_ast = new_rule["pattern_ast"]  # type: ignore[assignment]
-            rewrite_ast = new_rule["rewrite_ast"]  # type: ignore[assignment]
+            pattern_ast = new_rule.pattern_ast
+            rewrite_ast = new_rule.rewrite_ast
         return new_rule
 
     @staticmethod
-    def generalize_literals(rule: Dict[str, object]) -> Dict[str, object]:
+    def generalize_literals(rule: RuleV2) -> RuleV2:
         """Return a new rule with every replaceable literal variabilized in one pass.
 
         Returns a fresh dict; the input is not mutated.
@@ -777,12 +779,12 @@ class RuleGeneratorV2:
             raise TypeError("rule ASTs must be Node instances")
         for literal in RuleGeneratorV2.literals(pattern_ast, rewrite_ast):
             new_rule = RuleGeneratorV2.variablize_literal(new_rule, literal)
-            pattern_ast = new_rule["pattern_ast"]  # type: ignore[assignment]
-            rewrite_ast = new_rule["rewrite_ast"]  # type: ignore[assignment]
+            pattern_ast = new_rule.pattern_ast
+            rewrite_ast = new_rule.rewrite_ast
         return new_rule
 
     @staticmethod
-    def generalize_subtrees(rule: Dict[str, object]) -> Dict[str, object]:
+    def generalize_subtrees(rule: RuleV2) -> RuleV2:
         """Return a new rule with every shared, fully-variablized subtree collapsed into a single element variable.
 
         Returns a fresh dict; the input is not mutated.
@@ -794,12 +796,12 @@ class RuleGeneratorV2:
             raise TypeError("rule ASTs must be Node instances")
         for subtree in RuleGeneratorV2.subtrees(pattern_ast, rewrite_ast):
             new_rule = RuleGeneratorV2.variablize_subtree(new_rule, subtree)
-            pattern_ast = new_rule["pattern_ast"]  # type: ignore[assignment]
-            rewrite_ast = new_rule["rewrite_ast"]  # type: ignore[assignment]
+            pattern_ast = new_rule.pattern_ast
+            rewrite_ast = new_rule.rewrite_ast
         return new_rule
 
     @staticmethod
-    def generalize_variables(rule: Dict[str, object]) -> Dict[str, object]:
+    def generalize_variables(rule: RuleV2) -> RuleV2:
         """Return a new rule with every mergeable element-variable list collapsed into a set variable.
 
         Returns a fresh dict; the input is not mutated.
@@ -812,12 +814,12 @@ class RuleGeneratorV2:
         for variable_list in RuleGeneratorV2.variable_lists(pattern_ast, rewrite_ast):
             if variable_list:
                 new_rule = RuleGeneratorV2.merge_variable_list(new_rule, variable_list)
-                pattern_ast = new_rule["pattern_ast"]  # type: ignore[assignment]
-                rewrite_ast = new_rule["rewrite_ast"]  # type: ignore[assignment]
+                pattern_ast = new_rule.pattern_ast
+                rewrite_ast = new_rule.rewrite_ast
         return new_rule
 
     @staticmethod
-    def generalize_branches(rule: Dict[str, object]) -> Dict[str, object]:
+    def generalize_branches(rule: RuleV2) -> RuleV2:
         """Return a new rule with every droppable branch removed in one pass.
 
         Returns a fresh dict; the input is not mutated.
@@ -829,8 +831,8 @@ class RuleGeneratorV2:
             raise TypeError("rule ASTs must be Node instances")
         for branch in RuleGeneratorV2.branches(pattern_ast, rewrite_ast):
             new_rule = RuleGeneratorV2.drop_branch(new_rule, branch)
-            pattern_ast = new_rule["pattern_ast"]  # type: ignore[assignment]
-            rewrite_ast = new_rule["rewrite_ast"]  # type: ignore[assignment]
+            pattern_ast = new_rule.pattern_ast
+            rewrite_ast = new_rule.rewrite_ast
         return new_rule
 
 
@@ -1342,11 +1344,8 @@ class RuleGeneratorV2:
                 return RuleGeneratorV2._is_branch_node(clause)
             return False
         if key == "where":
-            if isinstance(clause, WhereNode):
-                if len(clause.children) == 1:
-                    return RuleGeneratorV2._is_branch_node(clause.children[0])
-                return RuleGeneratorV2._is_branch_node(clause)
-            return RuleGeneratorV2._is_branch_node(clause)
+            if isinstance(clause, WhereNode) and len(clause.children) == 1:
+                return RuleGeneratorV2._is_branch_node(clause.children[0])
         return RuleGeneratorV2._is_branch_node(clause)
 
     @staticmethod
@@ -1560,13 +1559,10 @@ class RuleGeneratorV2:
             replacements: List[Tuple[Node, Node]] = []
             new_children: Set[Node] = set()
             for child in children:
-                if isinstance(child, Node):
-                    new_child = RuleGeneratorV2._replace_subtree_in_ast(child, subtree, replacement, ast)
-                    new_children.add(new_child)
-                    if new_child is not child:
-                        replacements.append((child, new_child))
-                else:
-                    new_children.add(child)  # type: ignore[arg-type]
+                new_child = RuleGeneratorV2._replace_subtree_in_ast(child, subtree, replacement, ast)
+                new_children.add(new_child)
+                if new_child is not child:
+                    replacements.append((child, new_child))
             ast.children = new_children
             for old, new in replacements:
                 RuleGeneratorV2._resync_parallel_attrs(ast, old, new)
@@ -1785,13 +1781,10 @@ class RuleGeneratorV2:
                 new_set: Set[Node] = set()
                 replacements: List[Tuple[Node, Node]] = []
                 for child in children:
-                    if isinstance(child, Node):
-                        new_child = _visit(child, node)
-                        new_set.add(new_child)
-                        if new_child is not child:
-                            replacements.append((child, new_child))
-                    else:
-                        new_set.add(child)  # type: ignore[arg-type]
+                    new_child = _visit(child, node)
+                    new_set.add(new_child)
+                    if new_child is not child:
+                        replacements.append((child, new_child))
                 node.children = new_set
                 for old, new in replacements:
                     RuleGeneratorV2._resync_parallel_attrs(node, old, new)
@@ -1995,27 +1988,10 @@ class RuleGeneratorV2:
             return full_sql.replace("SELECT * FROM t ", "", 1)
         return full_sql.replace("SELECT * FROM t WHERE ", "", 1)
 
-    @staticmethod
-    def _normalize_placeholder_numbers(text: str, start_token: str, end_token: str) -> str:
-        out = text
-        start = 0
-        while True:
-            i = out.find(start_token, start)
-            if i < 0:
-                break
-            j = out.find(end_token, i + len(start_token))
-            if j < 0:
-                break
-            inner = out[i + len(start_token):j]
-            if inner.isdigit():
-                out = out[: i + len(start_token)] + out[j:]
-                start = i + len(start_token)
-            else:
-                start = j + len(end_token)
-        return out
+
 
     @staticmethod
-    def fingerPrint(rule: Dict[str, object]) -> str:
+    def fingerPrint(rule: RuleV2) -> str:
         """Return a stable fingerprint string for rule based on its deparsed pattern.
 
         Variable indices are normalized so that two rules that differ only in variable numbering share a fingerprint. Used to deduplicate rules in the generalization graph.
@@ -2033,12 +2009,12 @@ class RuleGeneratorV2:
         out = re.sub(r"<x(\d+)>", "<x>", out)
         out = re.sub(r"<<y(\d+)>>", "<<y>>", out)
         out = re.sub(r"'<x(\d+)>'", "'<x>'", out)
-        out = RuleGeneratorV2._normalize_placeholder_numbers(out, "<x", ">")
-        out = RuleGeneratorV2._normalize_placeholder_numbers(out, "<<y", ">>")
+        out = re.sub(r"<x\d+>", "<x>", out)
+        out = re.sub(r"<<y\d+>>", "<<y>>", out)
         return out
 
     @staticmethod
-    def numberOfVariables(rule: Dict[str, object]) -> int:
+    def numberOfVariables(rule: RuleV2) -> int:
         """Return the count of declared variables in rule['mapping'].
 
         Used as a tie-breaker when picking the simplest rule among equivalents.
@@ -2057,65 +2033,15 @@ class RuleGeneratorV2:
         mapping: Dict[str, str] = {}
         counter = 1
 
-        def _scan_tokens(text: str) -> List[str]:
-            tokens: List[str] = []
-            i = 0
-            while i < len(text):
-                if text.startswith("<<", i):
-                    j = text.find(">>", i + 2)
-                    if j != -1:
-                        token = text[i : j + 2]
-                        inner = token[2:-2]
-                        if inner and all(ch.isalnum() or ch == "_" for ch in inner):
-                            tokens.append(token)
-                            i = j + 2
-                            continue
-                if text[i] == "<":
-                    j = text.find(">", i + 1)
-                    if j != -1:
-                        token = text[i : j + 1]
-                        inner = token[1:-1]
-                        if inner and all(ch.isalnum() or ch == "_" for ch in inner):
-                            tokens.append(token)
-                            i = j + 1
-                            continue
-                i += 1
-            return tokens
+        for token in re.findall(r"<<\w+>>|<\w+>", q0 + " " + q1):
+            if token not in mapping:
+                mapping[token] = f"<<x{counter}>>" if token.startswith("<<") else f"<x{counter}>"
+                counter += 1
 
-        for token in _scan_tokens(q0) + _scan_tokens(q1):
-            if token in mapping:
-                continue
-            if token.startswith("<<") and token.endswith(">>"):
-                mapping[token] = f"<<x{counter}>>"
-            else:
-                mapping[token] = f"<x{counter}>"
-            counter += 1
+        def _replace(text: str) -> str:
+            return re.sub(r"<<\w+>>|<\w+>", lambda m: mapping.get(m.group(), m.group()), text)
 
-        def _replace_all(text: str) -> str:
-            out: List[str] = []
-            i = 0
-            while i < len(text):
-                if text.startswith("<<", i):
-                    j = text.find(">>", i + 2)
-                    if j != -1:
-                        token = text[i : j + 2]
-                        if token in mapping:
-                            out.append(mapping[token])
-                            i = j + 2
-                            continue
-                if text[i] == "<":
-                    j = text.find(">", i + 1)
-                    if j != -1:
-                        token = text[i : j + 1]
-                        if token in mapping:
-                            out.append(mapping[token])
-                            i = j + 1
-                            continue
-                out.append(text[i])
-                i += 1
-            return "".join(out)
-
-        return _replace_all(q0), _replace_all(q1)
+        return _replace(q0), _replace(q1)
 
     @staticmethod
     def _find_next_element_variable(mapping: Dict[str, str]) -> Tuple[Dict[str, str], str]:
