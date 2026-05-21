@@ -172,17 +172,19 @@ class IntervalNode(Node):
 
 class ElementVariableNode(Node):
     """Rule element variable ``<name>`` (see ``VarType.ElementVariable`` in rule_parser_v2)."""
-    def __init__(self, _name: str, **kwargs):
+    def __init__(self, _name: str, parent_alias: Optional[str] = None, alias: Optional[str] = None, **kwargs):
         super().__init__(NodeType.VAR, **kwargs)
         self.name = _name
+        self.parent_alias = parent_alias
+        self.alias = alias
 
     def __eq__(self, other):
         if not isinstance(other, ElementVariableNode):
             return False
-        return super().__eq__(other) and self.name == other.name
+        return super().__eq__(other) and self.name == other.name and self.parent_alias == other.parent_alias and self.alias == other.alias
 
     def __hash__(self):
-        return hash((super().__hash__(), self.name))
+        return hash((super().__hash__(), self.name, self.parent_alias, self.alias))
 
 
 class SetVariableNode(Node):

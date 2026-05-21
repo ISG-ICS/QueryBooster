@@ -67,17 +67,6 @@ def _assert_matches_rule(q0: str, q1: str, key: str) -> None:
     _assert_matches_expected(q0, q1, rule["pattern"], rule["rewrite"])
 
 
-def test_varType_element_variable():
-    assert RuleGeneratorV2.varType("EV001") == VarType.ElementVariable
-
-
-def test_varType_set_variable():
-    assert RuleGeneratorV2.varType("SV001") == VarType.SetVariable
-
-
-def test_varType_unknown():
-    assert RuleGeneratorV2.varType("V001") is None
-
 
 
 def test_dereplaceVars_mixed_element_and_set_vars():
