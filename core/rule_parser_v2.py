@@ -352,26 +352,44 @@ class RuleParserV2:
             nm = col.name
             new_alias = _replace_internal_in_string(col.alias) if isinstance(col.alias, str) else col.alias
             new_pa = _replace_internal_in_string(pa) if isinstance(pa, str) else pa
+
+            # Bare column variable (no qualifier): promote to ElementVariableNode
             if pa is None and nm in rev:
                 return RuleParserV2._placeholder_varnode(nm, rev[nm])
+
+            # Both name and parent_alias are variables
             if pa is not None and pa in rev and nm in rev:
-                return ColumnNode(rev[nm], _alias=new_alias, _parent_alias=rev[pa])
+                return ElementVariableNode(rev[nm], parent_alias=rev[pa], alias=new_alias)
+
+            # Only parent_alias is a variable (concrete column, variable table qualifier)
             if pa is not None and pa in rev:
                 return ColumnNode(nm, _alias=new_alias, _parent_alias=rev[pa])
+
+            # Only column name is a variable (concrete table qualifier)
             if pa is not None and nm in rev:
-                return ColumnNode(rev[nm], _alias=new_alias, _parent_alias=new_pa)
+                return ElementVariableNode(rev[nm], parent_alias=new_pa, alias=new_alias)
+
             return ColumnNode(nm, _alias=new_alias, _parent_alias=new_pa)
 
         if node.type == NodeType.TABLE:
             t = node
             if not isinstance(t, TableNode):
                 return node
-            # If table name is a SET variable placeholder (<<name>>), promote to SetVariableNode
-            # so it matches any table or list of tables in the FROM clause.
-            # Element variable tokens (EV...) stay as TableNode so _match_node handles them.
             sv_base = VarTypesInfo[VarType.SetVariable]["internalBase"]
+            ev_base = VarTypesInfo[VarType.ElementVariable]["internalBase"]
+
+            # SET variable table: promote to SetVariableNode
             if isinstance(t.name, str) and t.name in rev and t.name.startswith(sv_base):
                 return SetVariableNode(rev[t.name])
+
+            # ELEMENT variable table: promote to ElementVariableNode
+            if isinstance(t.name, str) and t.name in rev and t.name.startswith(ev_base):
+                # alias may also be a variable
+                if t.alias is not None and isinstance(t.alias, str) and t.alias in rev:
+                    return ElementVariableNode(rev[t.name], alias=rev[t.alias])
+                return ElementVariableNode(rev[t.name])
+
+            # Concrete table
             new_name = rev.get(t.name, t.name) if isinstance(t.name, str) else t.name
             if t.alias is not None and isinstance(t.alias, str) and t.alias in rev:
                 new_alias = rev[t.alias]

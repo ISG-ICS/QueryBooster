@@ -470,13 +470,16 @@ def test_parse_where_scope_strips_select_and_from():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def test_parse_ast_from_scope():
+    # After parser update: EV tokens in TABLE position are promoted to ElementVariableNode.
+    # The concrete alias "li" is not a variable, so it's dropped from the ElementVariableNode.
+    # The element variable "t" captures the whole table reference during matching.
     result = RuleParserV2.parse("FROM <t> li", "FROM <t> li")
     assert result.mapping == {"t": "EV001"}
     assert isinstance(result.pattern_ast, QueryNode)
     frm = next(c for c in result.pattern_ast.children if c.type == NodeType.FROM)
     assert isinstance(frm, FromNode)
     tab = list(frm.children)[0]
-    assert isinstance(tab, TableNode) and tab.name == "t" and tab.alias == "li"
+    assert isinstance(tab, ElementVariableNode) and tab.name == "t"
 
 
 def test_parse_from_scope_strips_select():
@@ -536,8 +539,8 @@ def test_parse_self_join_rule():
     )
     _assert_varnodes_declared(result)
     _assert_no_internal_tokens(result)
-    assert len(_find_all(result.pattern_ast, TableNode)) >= 2
-    assert len(_find_all(result.rewrite_ast, TableNode)) >= 1
+    assert len(_find_all(result.pattern_ast, ElementVariableNode)) >= 2
+    assert len(_find_all(result.rewrite_ast, ElementVariableNode)) >= 1
     pat_svs = [n for n in _walk(result.pattern_ast) if isinstance(n, SetVariableNode)]
     assert len(pat_svs) >= 2  # s1 and p1
 
@@ -632,16 +635,17 @@ def test_parse_set_variable_in_select_and_where():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def test_qualified_column_both_parts_substituted():
-    """<t1>.<a1> — both parent_alias and name should become external names."""
+    """<t1>.<a1> — both parent_alias and name should become external names (ElementVariableNode)."""
     result = RuleParserV2.parse("<t1>.<a1> = 1", "<t1>.<a1> = 1")
     _assert_varnodes_declared(result)
     _assert_no_internal_tokens(result)
-    cols = _find_all(result.pattern_ast, ColumnNode)
-    qualified = [c for c in cols if c.parent_alias is not None]
+    # When both parts are variables, _substitute_placeholders returns ElementVariableNode
+    evars = _find_all(result.pattern_ast, ElementVariableNode)
+    qualified = [e for e in evars if e.parent_alias is not None]
     assert len(qualified) >= 1
-    for c in qualified:
-        assert c.parent_alias in result.mapping
-        assert c.name in result.mapping
+    for e in qualified:
+        assert e.parent_alias in result.mapping
+        assert e.name in result.mapping
 
 
 def test_qualified_column_only_parent_alias_is_var():

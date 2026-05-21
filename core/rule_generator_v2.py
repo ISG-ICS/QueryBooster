@@ -471,7 +471,7 @@ class RuleGeneratorV2:
                 tuple(RuleGeneratorV2._recommendation_ast_signature(child, state) for child in node.children),
             )
         if isinstance(node, ElementVariableNode):
-            return ("EVAR", RuleGeneratorV2._fingerPrint(node.name), _alias_token(node.parent_alias))
+            return ("EVAR", f"VAR:{RuleGeneratorV2._fingerPrint(node.name)}", _alias_token(node.parent_alias))
         if isinstance(node, SetVariableNode):
             return ("SVAR", RuleGeneratorV2._fingerPrint(node.name))
         if isinstance(node, CompoundQueryNode):
@@ -840,15 +840,14 @@ class RuleGeneratorV2:
     def columns(pattern_ast: Node, rewrite_ast: Node) -> List[str]:
         """Return the deterministic, sorted set of un-variablized column names in pattern_ast.
 
-        Columns variablized by the generator are now ElementVariableNode instances (not ColumnNode),
-        so those are automatically excluded. User-written variable placeholders (e.g. <x1>) are
-        still represented as ColumnNode by RuleParserV2, so is_placeholder_name still filters those out.
+        Variable columns are represented as ElementVariableNode, so isinstance(node, ColumnNode)
+        naturally excludes them — only concrete column names are returned.
         rewrite_ast is accepted but ignored.
         """
         del rewrite_ast  # accepted for API compatibility
         found: Set[str] = set()
         for node in RuleGeneratorV2._walk(pattern_ast):
-            if isinstance(node, ColumnNode) and node.name and not is_placeholder_name(node.name):
+            if isinstance(node, ColumnNode) and node.name:
                 found.add(node.name)
         # Sort deterministically so generalize_columns is hash-seed independent.
         return sorted(found)
@@ -936,10 +935,8 @@ class RuleGeneratorV2:
     def _tables_of_ast(ast: Node) -> List[Dict[str, str]]:
         """Return {"value", "name"} descriptors for every concrete TableNode in ast.
 
-        Tables variablized by the generator are now ElementVariableNode instances (not TableNode),
-        so those are automatically excluded by isinstance(node, TableNode).
-        User-written table variable placeholders (e.g. <x1>) are still represented as TableNode
-        by RuleParserV2, so is_placeholder_name still filters those out.
+        Variable tables are represented as ElementVariableNode, so isinstance(node, TableNode)
+        naturally excludes them — only concrete table references are returned.
         name is the alias when present, otherwise the table value.
         """
         found: List[Dict[str, str]] = []
@@ -948,11 +945,7 @@ class RuleGeneratorV2:
                 continue
             if not isinstance(node.name, str):
                 continue
-            if is_placeholder_name(node.name):
-                continue
             alias = node.alias if isinstance(node.alias, str) else node.name
-            if is_placeholder_name(alias):
-                continue
             found.append({"value": node.name, "name": alias})
         return found
 
@@ -1018,12 +1011,6 @@ class RuleGeneratorV2:
                     for child in node.children:
                         if isinstance(child, ElementVariableNode) and child.parent_alias is None:
                             # Only bare variables (not qualified column vars like <x1>.<x5>)
-                            names.append(child.name)
-                        elif (
-                            isinstance(child, ColumnNode)
-                            and child.parent_alias is None
-                            and is_placeholder_name(child.name)
-                        ):
                             names.append(child.name)
                     if names:
                         out.append(names)
@@ -1154,17 +1141,9 @@ class RuleGeneratorV2:
         ):
             return False
 
-        if isinstance(node, ElementVariableNode) and node.parent_alias is not None:
-            # Qualified column variable (e.g. <x1>.<x5> → ElementVariableNode("x5", parent_alias="x1"))
-            # acts as a standalone SELECT, GROUP BY, or ORDER BY item, mirroring the ColumnNode case.
-            return isinstance(parent, (SelectNode, GroupByNode, OrderByItemNode))
-
-        if isinstance(node, ColumnNode):
-            # Column refs that act as standalone SELECT, GROUP BY, or ORDER BY
-            # items are subtree candidates. Bare column refs inside operators
-            # or functions, such as JOIN ON, WHERE, and expressions, are not.
-            if not RuleGeneratorV2._node_is_fully_variablized_column(node):
-                return False
+        if isinstance(node, ElementVariableNode):
+            # Column variables (qualified or bare) are subtree candidates only as
+            # standalone SELECT, GROUP BY, or ORDER BY items.
             return isinstance(parent, (SelectNode, GroupByNode, OrderByItemNode))
 
         if isinstance(node, SetVariableNode):
@@ -1203,11 +1182,6 @@ class RuleGeneratorV2:
                 if isinstance(child, (ElementVariableNode, SetVariableNode)):
                     var_count += 1
                     continue
-                if isinstance(child, ColumnNode):
-                    if RuleGeneratorV2._node_is_fully_variablized_column(child):
-                        var_count += 1
-                        continue
-                    return False
                 if isinstance(child, LiteralNode):
                     value = getattr(child, "value", None)
                     if isinstance(value, str):
@@ -1401,10 +1375,8 @@ class RuleGeneratorV2:
                     # generator-variablized table — ok
                     pass
                 elif isinstance(child, TableNode):
-                    # user-written table variable placeholder (RuleParserV2 produces TableNode for <x1>)
-                    # or a concrete table. Only ok if placeholder name.
-                    if not is_placeholder_name(child.name):
-                        return False
+                    # Concrete table — branch is not fully variablized.
+                    return False
                 elif isinstance(child, JoinNode):
                     if not RuleGeneratorV2._is_branch_node(child):
                         return False
@@ -1419,9 +1391,7 @@ class RuleGeneratorV2:
                     # generator-variablized table — ok
                     pass
                 elif isinstance(child, TableNode):
-                    # user-written table variable placeholder or concrete table
-                    if not is_placeholder_name(child.name):
-                        return False
+                    return False
                 else:
                     if RuleGeneratorV2._tables_of_ast(child):
                         return False
@@ -1770,12 +1740,6 @@ class RuleGeneratorV2:
                 for child in node.children:
                     variable_name: Optional[str] = None
                     if isinstance(child, ElementVariableNode):
-                        variable_name = child.name
-                    elif (
-                        isinstance(child, ColumnNode)
-                        and child.parent_alias is None
-                        and is_placeholder_name(child.name)
-                    ):
                         variable_name = child.name
 
                     if variable_name is not None and variable_name in variable_set:
@@ -2232,16 +2196,4 @@ class RuleGeneratorV2:
         for child in children:
             yield from RuleGeneratorV2._walk(child)
 
-    @staticmethod
-    def _node_is_fully_variablized_column(node: Node) -> bool:
-        # Generator-variablized columns are ElementVariableNode.
-        if isinstance(node, ElementVariableNode):
-            return True
-        # User-written variable column placeholders (e.g. <x1>.<x2>) remain as ColumnNode
-        # with placeholder names from RuleParserV2.
-        if isinstance(node, ColumnNode) and is_placeholder_name(node.name):
-            if node.parent_alias is None:
-                return True
-            return is_placeholder_name(node.parent_alias)
-        return False
 
