@@ -17,6 +17,7 @@ class RuleV2:
     source_rewrite_sql: str = ""
     constraints: str = ""
     actions: str = ""
+    actions_json: List[Any] = field(default_factory=list)
     id: Optional[Any] = None
     key: Optional[str] = None
     children: Optional[List[RuleV2]] = field(default=None)
@@ -35,6 +36,7 @@ class RuleV2:
             source_rewrite_sql=d.get("source_rewrite_sql", ""),
             constraints=d.get("constraints", ""),
             actions=d.get("actions", ""),
+            actions_json=d.get("actions_json", []) or [],
             id=d.get("id"),
             key=d.get("key"),
             children=d.get("children"),
