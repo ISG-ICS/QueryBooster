@@ -46,7 +46,7 @@ class Node(ABC):
 
 class TableNode(Node):
     """Table reference node"""
-    def __init__(self, _name: str, _alias: Optional[str] = None, **kwargs):
+    def __init__(self, _name: str, _alias: Optional[Union[str, 'ElementVariableNode']] = None, **kwargs):
         super().__init__(NodeType.TABLE, **kwargs)
         self.name = _name
         self.alias = _alias
@@ -80,7 +80,7 @@ class SubqueryNode(Node):
 
 class ColumnNode(Node):
     """Column reference node"""
-    def __init__(self, _name: str, _alias: Optional[str] = None, _parent_alias: Optional[str] = None, _parent: Optional[TableNode|SubqueryNode] = None, **kwargs):
+    def __init__(self, _name: str, _alias: Optional[Union[str, 'ElementVariableNode']] = None, _parent_alias: Optional[Union[str, 'ElementVariableNode']] = None, _parent: Optional[TableNode|SubqueryNode] = None, **kwargs):
         super().__init__(NodeType.COLUMN, **kwargs)
         self.name = _name
         self.alias = _alias
@@ -172,7 +172,7 @@ class IntervalNode(Node):
 
 class ElementVariableNode(Node):
     """Rule element variable ``<name>`` (see ``VarType.ElementVariable`` in rule_parser_v2)."""
-    def __init__(self, _name: str, parent_alias: Optional[str] = None, alias: Optional[str] = None, **kwargs):
+    def __init__(self, _name: str, parent_alias: Optional[Union[str, 'ElementVariableNode']] = None, alias: Optional[Union[str, 'ElementVariableNode']] = None, **kwargs):
         super().__init__(NodeType.VAR, **kwargs)
         self.name = _name
         self.parent_alias = parent_alias
@@ -200,6 +200,31 @@ class SetVariableNode(Node):
 
     def __hash__(self):
         return hash((super().__hash__(), self.name))
+
+
+class VariableLiteralNode(Node):
+    """A string literal placeholder, e.g. ``'%<x1>%'`` in a LIKE predicate.
+
+    ``prefix`` and ``suffix`` capture surrounding wildcard characters so
+    ``LIKE '%foo%'`` → ``VariableLiteralNode('x1', prefix='%', suffix='%')``.
+    """
+    def __init__(self, _name: str, prefix: str = "", suffix: str = "",
+                 _alias: Optional[str] = None, **kwargs):
+        super().__init__(NodeType.VAR_LITERAL, **kwargs)
+        self.name = _name
+        self.prefix = prefix
+        self.suffix = suffix
+        self.alias = _alias
+
+    def __eq__(self, other):
+        if not isinstance(other, VariableLiteralNode):
+            return False
+        return (super().__eq__(other) and self.name == other.name
+                and self.prefix == other.prefix and self.suffix == other.suffix
+                and self.alias == other.alias)
+
+    def __hash__(self):
+        return hash((super().__hash__(), self.name, self.prefix, self.suffix, self.alias))
 
 
 class OperatorNode(Node):
@@ -233,7 +258,7 @@ class UnaryOperatorNode(OperatorNode):
 
 class FunctionNode(Node):
     """Function call node"""
-    def __init__(self, _name: str, _args: Optional[List[Node]] = None, _alias: Optional[str] = None, **kwargs):
+    def __init__(self, _name: str, _args: Optional[List[Node]] = None, _alias: Optional[Union[str, 'ElementVariableNode']] = None, **kwargs):
         if _args is None:
             _args = []
         super().__init__(NodeType.FUNCTION, children=_args, **kwargs)

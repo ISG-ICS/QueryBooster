@@ -35,6 +35,7 @@ from core.ast.node import (
     UnaryOperatorNode,
     ElementVariableNode,
     SetVariableNode,
+    VariableLiteralNode,
     WhenThenNode,
     WhereNode,
 )
@@ -350,31 +351,54 @@ class RuleParserV2:
                 return node
             pa = col.parent_alias
             nm = col.name
-            new_alias = _replace_internal_in_string(col.alias) if isinstance(col.alias, str) else col.alias
+            if isinstance(col.alias, str) and col.alias in rev:
+                new_alias: Optional[Union[str, ElementVariableNode]] = ElementVariableNode(rev[col.alias])
+            elif isinstance(col.alias, str):
+                new_alias = _replace_internal_in_string(col.alias)
+            else:
+                new_alias = col.alias
             new_pa = _replace_internal_in_string(pa) if isinstance(pa, str) else pa
+
+            # Bare column variable (no qualifier): promote to ElementVariableNode
             if pa is None and nm in rev:
                 return RuleParserV2._placeholder_varnode(nm, rev[nm])
+
+            # Both name and parent_alias are variables
             if pa is not None and pa in rev and nm in rev:
-                return ColumnNode(rev[nm], _alias=new_alias, _parent_alias=rev[pa])
+                return ElementVariableNode(rev[nm], parent_alias=ElementVariableNode(rev[pa]), alias=new_alias)
+
+            # Only parent_alias is a variable (concrete column, variable table qualifier)
             if pa is not None and pa in rev:
-                return ColumnNode(nm, _alias=new_alias, _parent_alias=rev[pa])
+                return ColumnNode(nm, _alias=new_alias, _parent_alias=ElementVariableNode(rev[pa]))
+
+            # Only column name is a variable (concrete table qualifier)
             if pa is not None and nm in rev:
-                return ColumnNode(rev[nm], _alias=new_alias, _parent_alias=new_pa)
+                return ElementVariableNode(rev[nm], parent_alias=new_pa, alias=new_alias)
+
             return ColumnNode(nm, _alias=new_alias, _parent_alias=new_pa)
 
         if node.type == NodeType.TABLE:
             t = node
             if not isinstance(t, TableNode):
                 return node
-            # If table name is a SET variable placeholder (<<name>>), promote to SetVariableNode
-            # so it matches any table or list of tables in the FROM clause.
-            # Element variable tokens (EV...) stay as TableNode so _match_node handles them.
             sv_base = VarTypesInfo[VarType.SetVariable]["internalBase"]
+            ev_base = VarTypesInfo[VarType.ElementVariable]["internalBase"]
+
+            # SET variable table: promote to SetVariableNode
             if isinstance(t.name, str) and t.name in rev and t.name.startswith(sv_base):
                 return SetVariableNode(rev[t.name])
+
+            # ELEMENT variable table: promote to ElementVariableNode
+            if isinstance(t.name, str) and t.name in rev and t.name.startswith(ev_base):
+                # alias may also be a variable
+                if t.alias is not None and isinstance(t.alias, str) and t.alias in rev:
+                    return ElementVariableNode(rev[t.name], alias=ElementVariableNode(rev[t.alias]))
+                return ElementVariableNode(rev[t.name])
+
+            # Concrete table
             new_name = rev.get(t.name, t.name) if isinstance(t.name, str) else t.name
             if t.alias is not None and isinstance(t.alias, str) and t.alias in rev:
-                new_alias = rev[t.alias]
+                new_alias = ElementVariableNode(rev[t.alias])
             else:
                 new_alias = t.alias
             return TableNode(new_name, new_alias)
@@ -385,10 +409,15 @@ class RuleParserV2:
                 return node
             alias = _replace_internal_in_string(lit.alias) if isinstance(getattr(lit, "alias", None), str) else getattr(lit, "alias", None)
             if isinstance(lit.value, str):
-                # If the entire literal value is an internal placeholder token, promote to var node
+                # Exact match: the entire literal is a placeholder token → variable literal
                 if lit.value in rev:
-                    return LiteralNode(rev[lit.value], _alias=alias)
-                # Otherwise substitute any embedded tokens (e.g. '%EV001%' to '%x%')
+                    return VariableLiteralNode(rev[lit.value], _alias=alias)
+                # Embedded token: e.g. '%EV001%' → VariableLiteralNode with surrounding wildcards
+                stripped = lit.value.replace("%", "")
+                if stripped in rev:
+                    prefix = "%" if lit.value.startswith("%") else ""
+                    suffix = "%" if lit.value.endswith("%") else ""
+                    return VariableLiteralNode(rev[stripped], prefix=prefix, suffix=suffix, _alias=alias)
                 return LiteralNode(_replace_internal_in_string(lit.value), _alias=alias)
             return LiteralNode(lit.value, _alias=alias)
 
@@ -465,6 +494,8 @@ class RuleParserV2:
             if not isinstance(lim, LimitNode):
                 return node
             if isinstance(lim.limit, str):
+                if lim.limit in rev:
+                    return LimitNode(ElementVariableNode(rev[lim.limit]))
                 return LimitNode(_replace_internal_in_string(lim.limit))
             return LimitNode(lim.limit)
 
@@ -473,6 +504,8 @@ class RuleParserV2:
             if not isinstance(off, OffsetNode):
                 return node
             if isinstance(off.offset, str):
+                if off.offset in rev:
+                    return OffsetNode(ElementVariableNode(rev[off.offset]))
                 return OffsetNode(_replace_internal_in_string(off.offset))
             return OffsetNode(off.offset)
 
@@ -514,7 +547,12 @@ class RuleParserV2:
             if not isinstance(f, FunctionNode):
                 return node
             new_args = [RuleParserV2._substitute_placeholders(a, rev) for a in f.children]
-            alias = _replace_internal_in_string(f.alias) if isinstance(f.alias, str) else f.alias
+            if isinstance(f.alias, str) and f.alias in rev:
+                alias = ElementVariableNode(rev[f.alias])
+            elif isinstance(f.alias, str):
+                alias = _replace_internal_in_string(f.alias)
+            else:
+                alias = f.alias
             return FunctionNode(f.name, _args=new_args, _alias=alias)
 
         if node.type == NodeType.LIST:

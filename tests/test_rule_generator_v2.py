@@ -7,21 +7,20 @@ from core.ast.node import QueryNode
 from core.query_formatter import QueryFormatter
 from core.query_parser import QueryParser
 from core.rule_generator_v2 import RuleGeneratorV2
+from core.rule import RuleV2
 from core.rule_parser_v2 import RuleParserV2, VarType
 from data.rules import get_rule_v2 as get_rule
 
 
-def _build_rule(pattern: str, rewrite: str):
+def _build_rule(pattern: str, rewrite: str) -> RuleV2:
     parsed = RuleParserV2.parse(pattern, rewrite)
-    return {
-        "pattern": pattern,
-        "rewrite": rewrite,
-        "pattern_ast": parsed.pattern_ast,
-        "rewrite_ast": parsed.rewrite_ast,
-        "mapping": parsed.mapping,
-        "constraints": "",
-        "actions": "",
-    }
+    return RuleV2(
+        pattern=pattern,
+        rewrite=rewrite,
+        pattern_ast=parsed.pattern_ast,
+        rewrite_ast=parsed.rewrite_ast,
+        mapping=parsed.mapping,
+    )
 
 
 def _has_clause(query: QueryNode, clause_type: NodeType) -> bool:
@@ -1052,7 +1051,7 @@ def test_branches_4():
     )
     branches = RuleGeneratorV2.branches(result.pattern_ast, result.rewrite_ast)
     actual = {(b["key"], RuleGeneratorV2.deparse(b["value"])) for b in branches}
-    assert actual == {("eq_rhs", "TIMESTAMP('x')")}
+    assert actual == {("eq_rhs", "TIMESTAMP('<x>')")}
 
 
 def test_branches_5():
@@ -1428,13 +1427,13 @@ def test_generate_general_rule_10():
         FROM   <x1>
         WHERE  <x6> IN (SELECT <x5>
                         FROM   <x2>
-                        WHERE  <x4> = <x8>)
+                        WHERE  <x4> = '<x8>')
     """
     expected_rewrite = """
         SELECT DISTINCT <x3>
         FROM   <x1>, <x2>
         WHERE  <x1>.<x6> = <x2>.<x5>
-        AND    <x2>.<x4> = <x8>
+        AND    <x2>.<x4> = '<x8>'
     """
     _assert_matches_expected(q0, q1, expected_pattern, expected_rewrite)
 
@@ -1884,14 +1883,35 @@ def test_generate_rule_graph_0():
     q0 = "CAST(created_at AS DATE)"
     q1 = "created_at"
     root_rule = RuleGeneratorV2.generate_rule_graph(q0, q1)
-    assert isinstance(root_rule, dict)
+    assert isinstance(root_rule, RuleV2)
     children = root_rule["children"]
     assert len(children) == 1
     child_rule = children[0]
     assert child_rule["pattern"] == "CAST(<x1> AS DATE)"
     assert child_rule["rewrite"] == "<x1>"
 
+def test_spreadsheet_id_1():
+    q0 = """SELECT users.id 
+  FROM users INNER JOIN addresses 
+    ON addresses.user_id = users.id 
+   AND addresses.type = 'VerifiedAddress' 
+WHERE users.deleted_at IS NULL
+  AND users.id in (11144,10569,21519,783,15671,21726,17787,11665,19579,12226,1324,9413,5461,20981,12906) 
+  AND addresses.state != 'manual_verification'"""
+    q1 = """SELECT addresses.user_id
+  FROM addresses
+ WHERE addresses.type = 'VerifiedAddress' 
+   AND addresses.user_id in (11144,10569,21519,783,15671,21726,17787,11665,19579,12226,1324,9413,5461,20981,12906)
+   AND addresses.state != 'manual_verification'"""
 
+    _assert_matches_expected(
+        q0,
+        q1,
+        "SELECT <x1>.<x4> FROM <x1> INNER JOIN <x2> ON <x2>.<x7> = <x1>.<x4> AND <<y3>> "
+        "WHERE <x1>.<x3> IS NULL AND <x1>.<x4> IN (<<y1>>) AND <<y2>>",
+        "SELECT <x2>.<x7> FROM <x2> WHERE <<y3>> AND <x2>.<x7> IN (<<y1>>) AND <<y2>>",
+    )
+    
 def test_generate_spreadsheet_id_3():
     q0 = "SELECT EMPNO FROM EMP WHERE EMPNO > 10 AND EMPNO <= 10"
     q1 = "SELECT EMPNO FROM EMP WHERE FALSE"
@@ -2082,8 +2102,8 @@ WHERE t.pubCode IN ('hyrmas', 'ayqioa', 'rj49as99') and
     _assert_matches_expected(
         q0,
         q1,
-        "SELECT DISTINCT ON (<x1>.<x2>) <<x3>>, COALESCE(<x4>.<x5>, <x6>), <x7> FROM <x1> LEFT JOIN <x4> ON <<x8>> LEFT JOIN <x9> ON <<x10>> WHERE <<x11>> AND <<x12>> AND <<x13>> ORDER BY <x14> DESC",
-        "SELECT <<x3>>, COALESCE((SELECT <x4>.<x5> FROM <x4> WHERE <<x8>> AND <<x13>> LIMIT <x15>), <x6>), (SELECT <x7> FROM <x9> WHERE <<x10>> AND <<x12>> LIMIT <x15>) FROM <x1> WHERE <<x11>>",
+        "SELECT DISTINCT ON (<x1>.<x2>) <<x3>>, COALESCE(<x4>.<x5>, '<x6>'), <x7> FROM <x1> LEFT JOIN <x4> ON <<x8>> LEFT JOIN <x9> ON <<x10>> WHERE <<x11>> AND <<x12>> AND <<x13>> ORDER BY <x14> DESC",
+        "SELECT <<x3>>, COALESCE((SELECT <x4>.<x5> FROM <x4> WHERE <<x8>> AND <<x13>> LIMIT <x15>), '<x6>'), (SELECT <x7> FROM <x9> WHERE <<x10>> AND <<x12>> LIMIT <x15>) FROM <x1> WHERE <<x11>>",
     )
 
 

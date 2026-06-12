@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import copy
 import logging
-import re
 from contextlib import contextmanager
 from collections import deque
 from enum import Enum
@@ -60,6 +59,7 @@ from core.ast.node import (
     TableNode,
     TimeUnitNode,
     UnaryOperatorNode,
+    VariableLiteralNode,
     WhenThenNode,
     WhereNode,
 )
@@ -142,18 +142,12 @@ def _bind(var_name: str, value: Any, memo: dict) -> bool:
         # (table vars bind to whole TableNode; ColumnNode.parent_alias binds to string)
         if isinstance(existing, TableNode) and isinstance(value, str):
             return (existing.alias or existing.name) == value
-        if isinstance(value, TableNode) and isinstance(existing, str):
-            return (value.alias or value.name) == existing
         if isinstance(existing, Node) and isinstance(value, Node):
             return existing == value
         return existing == value
     memo[var_name] = value
     return True
 
-
-def _is_var_name(s: Any, mapping: dict) -> bool:
-    """True if s is a string that is an external variable name in the rule mapping."""
-    return isinstance(s, str) and s in mapping
 
 
 # ============================================================================
@@ -167,6 +161,34 @@ def _match_node(
 
     # --- variable nodes in pattern ---
     if isinstance(p, ElementVariableNode):
+        # Qualified column variable: ElementVariableNode with parent_alias that is a variable name
+        if isinstance(p.parent_alias, ElementVariableNode):
+            if not isinstance(q, ColumnNode):
+                return False
+            if q.parent_alias is None:
+                return False
+            if not _bind(p.name, q.name, memo):
+                return False
+            return _bind(p.parent_alias.name, q.parent_alias, memo)
+        # Table variable with variable alias: ElementVariableNode with alias that is a variable name
+        # e.g. ElementVariableNode("tb1", alias=ElementVariableNode("t1")) where "tb1" -> TableNode(name), "t1" -> alias string
+        # Bind a stripped TableNode (no alias) to p.name so that when p.name appears as a bare
+        # table variable in the rewrite (e.g. inner FROM <tb1>), it materializes as TableNode(name)
+        # without leaking the alias. The alias is separately captured via p.alias.
+        if isinstance(p.alias, ElementVariableNode):
+            if not isinstance(q, TableNode):
+                return False
+            if not _bind(p.name, TableNode(q.name), memo):
+                return False
+            if q.alias is None:
+                return False
+            return _bind(p.alias.name, q.alias, memo)
+        # Default: whole-node binding.
+        # JoinNode is a compound structural node (not an atomic value) that should never be
+        # bound to a bare element variable — it would violate the type contract and cause
+        # spurious second-pass matches after joins have been introduced.
+        if isinstance(q, JoinNode):
+            return False
         return _bind(p.name, q, memo)
 
     if isinstance(p, SetVariableNode):
@@ -187,24 +209,30 @@ def _match_node(
 
     # --- type must be compatible ---
     if not isinstance(q, type(p)) and not isinstance(p, type(q)):
-        # Allow OperatorNode / UnaryOperatorNode subclass relationship
-        if not (isinstance(q, OperatorNode) and isinstance(p, OperatorNode)):
-            return False
+        # VariableLiteralNode matches against LiteralNode; allow it before the strict type guard
+        if not isinstance(p, VariableLiteralNode):
+            # Allow OperatorNode / UnaryOperatorNode subclass relationship
+            if not (isinstance(q, OperatorNode) and isinstance(p, OperatorNode)):
+                return False
 
     # --- leaf nodes ---
+    if isinstance(p, VariableLiteralNode):
+        if not isinstance(q, LiteralNode):
+            return False
+        qv = q.value
+        if not isinstance(qv, str):
+            return False
+        if p.prefix and not qv.startswith(p.prefix):
+            return False
+        if p.suffix and not qv.endswith(p.suffix):
+            return False
+        inner = qv[len(p.prefix): len(qv) - len(p.suffix) if p.suffix else len(qv)]
+        return _bind(p.name, LiteralNode(inner), memo)
+
     if isinstance(p, LiteralNode):
         if not isinstance(q, LiteralNode):
             return False
         qv, pv = q.value, p.value
-        # RuleParserV2 may represent placeholders inside string literals like `'<s>'`
-        # as LiteralNode("s") (where "s" is a declared rule variable). In that case,
-        # treat it as a bindable placeholder rather than a concrete string.
-
-        # TODO: We hope to further flatten variables in the literal, e.g.,
-        # q: {like: [name, '%joe%']} -> Func(like, [Col('name'), LiteralNode('%joe%')]) 
-        # p: {like: [x, '%y%']} -> Func(like, [EV(x),  LitrlComb([LiteralNode('%'), EV(y), LiteralNode('%')])])
-        if isinstance(pv, str) and _is_var_name(pv, mapping):
-            return _bind(pv, q, memo)
         if isinstance(qv, str) and isinstance(pv, str):
             return qv.lower() == pv.lower()
         return qv == pv
@@ -215,28 +243,20 @@ def _match_node(
     if isinstance(p, TimeUnitNode):
         return isinstance(q, TimeUnitNode) and q.name.upper() == p.name.upper()
 
-    # --- TableNode: name and alias may be variable names ---
+    # --- TableNode: name is always concrete; alias may be a variable name ---
     if isinstance(p, TableNode):
         if not isinstance(q, TableNode):
             return False
-        if _is_var_name(p.name, mapping) and p.alias is None:
-            # Variable stands for the entire table reference (name + alias).
-            # Bind to the whole TableNode so the rewrite can reproduce it faithfully.
-            return _bind(p.name, q, memo)
-        if _is_var_name(p.name, mapping):
-            if not _bind(p.name, q.name, memo):
-                return False
-        else:
-            if not isinstance(q.name, str) or q.name.lower() != p.name.lower():
-                return False
+        if not isinstance(q.name, str) or q.name.lower() != p.name.lower():
+            return False
         if p.alias is not None:
             # Pattern requires an alias (even if it's a variable). Do not match
             # unaliased tables, otherwise the alias var would bind to None and
             # rewrites expecting a real alias/identifier become nonsensical.
             if q.alias is None:
                 return False
-            if _is_var_name(p.alias, mapping):
-                if not _bind(p.alias, q.alias, memo):
+            if isinstance(p.alias, ElementVariableNode):
+                if not _bind(p.alias.name, q.alias, memo):
                     return False
             else:
                 qa = q.alias or ""
@@ -244,23 +264,19 @@ def _match_node(
                     return False
         return True
 
-    # --- ColumnNode: name and parent_alias may be variable names ---
+    # --- ColumnNode: name is always concrete; parent_alias may be a variable name ---
     if isinstance(p, ColumnNode):
         if not isinstance(q, ColumnNode):
             return False
-        if _is_var_name(p.name, mapping):
-            if not _bind(p.name, q.name, memo):
-                return False
-        else:
-            if not isinstance(q.name, str) or q.name.lower() != p.name.lower():
-                return False
+        if not isinstance(q.name, str) or q.name.lower() != p.name.lower():
+            return False
         if p.parent_alias is not None:
             # Pattern requires a qualifier (even if it's a variable). Do not match
             # unqualified columns, otherwise the qualifier var would bind to None.
             if q.parent_alias is None:
                 return False
-            if _is_var_name(p.parent_alias, mapping):
-                if not _bind(p.parent_alias, q.parent_alias, memo):
+            if isinstance(p.parent_alias, ElementVariableNode):
+                if not _bind(p.parent_alias.name, q.parent_alias, memo):
                     return False
             else:
                 qpa = q.parent_alias or ""
@@ -318,10 +334,10 @@ def _match_node(
         if p.alias is not None:
             if q.alias is None:
                 return False
-            if _is_var_name(p.alias, mapping):
-                if not _bind(p.alias, q.alias, memo):
+            if isinstance(p.alias, ElementVariableNode):
+                if not _bind(p.alias.name, q.alias, memo):
                     return False
-            elif q.alias.lower() != p.alias.lower():
+            elif isinstance(q.alias, str) and q.alias.lower() != p.alias.lower():
                 return False
         return _match_children_list(list(q.children), list(p.children), memo, mode, mapping)
 
@@ -373,16 +389,16 @@ def _match_node(
     if isinstance(p, LimitNode):
         if not isinstance(q, LimitNode):
             return False
-        if isinstance(p.limit, str) and _is_var_name(p.limit, mapping):
-            return _bind(p.limit, q.limit, memo)
+        if isinstance(p.limit, ElementVariableNode):
+            return _bind(p.limit.name, q.limit, memo)
         return q.limit == p.limit
 
     # --- OffsetNode ---
     if isinstance(p, OffsetNode):
         if not isinstance(q, OffsetNode):
             return False
-        if isinstance(p.offset, str) and _is_var_name(p.offset, mapping):
-            return _bind(p.offset, q.offset, memo)
+        if isinstance(p.offset, ElementVariableNode):
+            return _bind(p.offset.name, q.offset, memo)
         return q.offset == p.offset
 
     # --- JoinNode ---
@@ -639,11 +655,15 @@ def _subst(node: Node, memo: dict) -> Node:
         """Convert an element-variable binding into a concrete AST node.
 
         Rules:
-        - If bound to a Node, return it (but strip `.alias` to avoid leaking output aliases
-          unless the rewrite explicitly carries them).
+        - If bound to a TableNode, return it directly (table aliases must be preserved
+          so that qualified column references like e1.col remain valid in the rewrite).
+        - If bound to any other Node, return it (but strip `.alias` to avoid leaking
+          output aliases unless the rewrite explicitly carries them).
         - If bound to scalar identifiers, materialize as ColumnNode/LiteralNode so the
           formatter can emit SQL.
         """
+        if isinstance(val, TableNode):
+            return val
         if isinstance(val, Node):
             if hasattr(val, "alias") and getattr(val, "alias") is not None:
                 cloned = copy.deepcopy(val)
@@ -652,13 +672,39 @@ def _subst(node: Node, memo: dict) -> Node:
             return val
         if isinstance(val, str):
             return ColumnNode(val)
-        if isinstance(val, (int, float, bool)) or val is None:
-            return LiteralNode(val)
-        # Fallback: caller will keep the variable node unchanged.
         return None
 
     if isinstance(node, ElementVariableNode):
         val = memo.get(node.name, node)
+        # If variable has a parent_alias that is a variable name, reconstruct qualified column
+        # e.g. ElementVariableNode("a1", parent_alias=ElementVariableNode("t1")) where "a1" -> "id", "t1" -> "e1"
+        # produces ColumnNode("id", _parent_alias="e1")
+        # The node's own alias (if any) is a literal string from the rewrite template; preserve it.
+        pa_key = node.parent_alias.name if isinstance(node.parent_alias, ElementVariableNode) else node.parent_alias
+        if pa_key is not None and pa_key in memo:
+            pa_val = memo[pa_key]
+            col_name = val if isinstance(val, str) else (val.name if isinstance(val, Node) and hasattr(val, 'name') else None)
+            if col_name is not None:
+                if isinstance(pa_val, TableNode):
+                    pa_str = pa_val.alias if pa_val.alias is not None else pa_val.name
+                elif isinstance(pa_val, str):
+                    pa_str = pa_val
+                else:
+                    pa_str = None
+                if pa_str is not None:
+                    return ColumnNode(col_name, _alias=node.alias, _parent_alias=pa_str)
+        # If variable has an alias that is a variable name, reconstruct a TableNode
+        # e.g. ElementVariableNode("tb1", alias=ElementVariableNode("t1")) where "tb1" -> TableNode("employee", ...), "t1" -> "e1"
+        # produces TableNode("employee", "e1")
+        alias_key = node.alias.name if isinstance(node.alias, ElementVariableNode) else node.alias
+        if alias_key is not None and alias_key in memo:
+            alias_val = memo[alias_key]
+            # val may be a whole TableNode (from binding) or a string
+            table_name = val.name if isinstance(val, TableNode) else None
+            if table_name is not None:
+                alias_str = alias_val if isinstance(alias_val, str) else None
+                if alias_str is not None:
+                    return TableNode(table_name, alias_str)
         materialized = _materialize_element_binding(val)
         if materialized is not None:
             return materialized
@@ -668,33 +714,19 @@ def _subst(node: Node, memo: dict) -> Node:
         # Should not appear at this level; caller handles list expansion
         return node
 
+    if isinstance(node, VariableLiteralNode):
+        bound = memo.get(node.name)
+        if bound is None:
+            return node
+        val = bound.value if isinstance(bound, LiteralNode) else str(bound)
+        return LiteralNode(f"{node.prefix}{val}{node.suffix}")
+
     if isinstance(node, (LiteralNode, DataTypeNode, TimeUnitNode)):
-        # For string literals, substitute any variable names embedded in the value
-        # (e.g. LiteralNode('%y%') with memo['y']=LiteralNode('iphone') to LiteralNode('%iphone%'))
-        if isinstance(node, LiteralNode) and isinstance(node.value, str):
-            new_val = node.value
-            for var_name, bound in memo.items():
-                if not isinstance(var_name, str) or var_name.startswith("_"):
-                    continue
-                if var_name not in new_val:
-                    continue
-                if isinstance(bound, LiteralNode) and isinstance(bound.value, (str, int, float)):
-                    new_val = re.sub(r"\b" + re.escape(var_name) + r"\b", str(bound.value), new_val)
-                elif isinstance(bound, str):
-                    new_val = re.sub(r"\b" + re.escape(var_name) + r"\b", bound, new_val)
-            if new_val != node.value:
-                return LiteralNode(new_val)
         return node
 
     if isinstance(node, TableNode):
-        # If the name variable is bound to a whole TableNode, return it directly
-        if isinstance(node.name, str) and node.name in memo:
-            val = memo[node.name]
-            if isinstance(val, TableNode):
-                return val
-        new_name = _subst_str(node.name, memo)
         new_alias = _subst_str(node.alias, memo) if node.alias is not None else None
-        return TableNode(new_name, new_alias)
+        return TableNode(node.name, new_alias)
 
     if isinstance(node, ColumnNode):
         new_name = _subst_str(node.name, memo)
@@ -749,16 +781,16 @@ def _subst(node: Node, memo: dict) -> Node:
 
     if isinstance(node, LimitNode):
         val = node.limit
-        if isinstance(val, str):
-            val = memo.get(val, val)
+        if isinstance(val, ElementVariableNode):
+            val = memo.get(val.name, val)
         if isinstance(val, LiteralNode):
             val = val.value
         return LimitNode(val)
 
     if isinstance(node, OffsetNode):
         val = node.offset
-        if isinstance(val, str):
-            val = memo.get(val, val)
+        if isinstance(val, ElementVariableNode):
+            val = memo.get(val.name, val)
         if isinstance(val, LiteralNode):
             val = val.value
         return OffsetNode(val)
@@ -803,7 +835,7 @@ def _subst(node: Node, memo: dict) -> Node:
 
 
 def _subst_str(s: Any, memo: dict) -> Any:
-    """Substitute a string field if it matches a variable name in memo.
+    """Substitute a string or ElementVariableNode alias/parent_alias field from memo.
 
     Extracts a canonical string from the bound value:
     - str  to return directly
@@ -812,9 +844,11 @@ def _subst_str(s: Any, memo: dict) -> Any:
     - FunctionNode (rare): if an element variable bound to e.g. COUNT(col) in the SELECT
       list is substituted into a string-only context, unwrap COUNT(col) -> ``col`` name.
       Normally bindings are ColumnNode/TableNode/str here.
+    ElementVariableNode in alias/parent_alias fields (from widened field type) looks up .name in memo.
     """
-    if isinstance(s, str) and s in memo:
-        val = memo[s]
+    key = s.name if isinstance(s, ElementVariableNode) else s
+    if isinstance(key, str) and key in memo:
+        val = memo[key]
         if isinstance(val, str):
             return val
         if isinstance(val, TableNode):
@@ -859,7 +893,7 @@ def _replace_in_tree(tree: Node, target_id: int, replacement: Node) -> Node:
         return replacement
 
     if isinstance(tree, (LiteralNode, DataTypeNode, TimeUnitNode, TableNode, ColumnNode,
-                         ElementVariableNode, SetVariableNode)):
+                         ElementVariableNode, SetVariableNode, VariableLiteralNode)):
         return tree
 
     if isinstance(tree, FunctionNode):
@@ -982,7 +1016,7 @@ def _node_subst(tree: Any, src: Any, tgt: Any) -> Any:
     if isinstance(tree, TableNode):
         return TableNode(_subst_val(tree.name, src, tgt), _subst_val(tree.alias, src, tgt))
 
-    if isinstance(tree, (LiteralNode, DataTypeNode, TimeUnitNode)):
+    if isinstance(tree, (LiteralNode, DataTypeNode, TimeUnitNode, VariableLiteralNode)):
         return tree
 
     if isinstance(tree, FunctionNode):
