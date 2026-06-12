@@ -648,23 +648,31 @@ class RuleGeneratorV2:
 
     @staticmethod
     def variablize_subtree(rule: RuleV2, subtree: Node) -> RuleV2:
-        """Return a new rule where every occurrence of subtree (in both ASTs) is replaced by a fresh element variable.
+        """Return a new rule where every occurrence of subtree (in both ASTs) is replaced by a fresh variable.
 
-        Allocates the next available <x?> in the mapping and re-deparses both sides. The input rule is not mutated.
+        A list subtree (the operands of an ``IN (...)`` clause) collapses into a set
+        variable ``<<y?>>`` so it matches a comma-separated list of arbitrary length,
+        matching the ``<x> IN (<<y>>)`` convention. Every other subtree collapses into
+        an element variable ``<x?>``. The input rule is not mutated.
         """
         new_rule = copy.deepcopy(rule)
         mapping = copy.deepcopy(new_rule["mapping"])
         if not isinstance(mapping, dict):
             raise TypeError("rule['mapping'] must be a dict[str, str]")
 
-        mapping, external_name = RuleGeneratorV2._find_next_element_variable(mapping)
+        if isinstance(subtree, ListNode):
+            mapping, external_name = RuleGeneratorV2._find_next_set_variable(mapping)
+            replacement: Node = SetVariableNode(external_name)
+        else:
+            mapping, external_name = RuleGeneratorV2._find_next_element_variable(mapping)
+            replacement = ElementVariableNode(external_name)
         new_rule["mapping"] = mapping
 
         for key in ("pattern_ast", "rewrite_ast"):
             ast = new_rule.get(key)
             if not isinstance(ast, Node):
                 raise TypeError(f"rule['{key}'] must be an AST Node")
-            new_rule[key] = RuleGeneratorV2._replace_subtree_in_ast(ast, subtree, ElementVariableNode(external_name))
+            new_rule[key] = RuleGeneratorV2._replace_subtree_in_ast(ast, subtree, copy.deepcopy(replacement))
 
         RuleGeneratorV2._sync_rule_strings(new_rule)
         return new_rule

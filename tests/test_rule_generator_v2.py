@@ -1890,7 +1890,28 @@ def test_generate_rule_graph_0():
     assert child_rule["pattern"] == "CAST(<x1> AS DATE)"
     assert child_rule["rewrite"] == "<x1>"
 
+def test_spreadsheet_id_1():
+    q0 = """SELECT users.id 
+  FROM users INNER JOIN addresses 
+    ON addresses.user_id = users.id 
+   AND addresses.type = 'VerifiedAddress' 
+WHERE users.deleted_at IS NULL
+  AND users.id in (11144,10569,21519,783,15671,21726,17787,11665,19579,12226,1324,9413,5461,20981,12906) 
+  AND addresses.state != 'manual_verification'"""
+    q1 = """SELECT addresses.user_id
+  FROM addresses
+ WHERE addresses.type = 'VerifiedAddress' 
+   AND addresses.user_id in (11144,10569,21519,783,15671,21726,17787,11665,19579,12226,1324,9413,5461,20981,12906)
+   AND addresses.state != 'manual_verification'"""
 
+    _assert_matches_expected(
+        q0,
+        q1,
+        "SELECT <x1>.<x4> FROM <x1> INNER JOIN <x2> ON <x2>.<x7> = <x1>.<x4> AND <<y3>> "
+        "WHERE <x1>.<x3> IS NULL AND <x1>.<x4> IN (<<y1>>) AND <<y2>>",
+        "SELECT <x2>.<x7> FROM <x2> WHERE <<y3>> AND <x2>.<x7> IN (<<y1>>) AND <<y2>>",
+    )
+    
 def test_generate_spreadsheet_id_3():
     q0 = "SELECT EMPNO FROM EMP WHERE EMPNO > 10 AND EMPNO <= 10"
     q1 = "SELECT EMPNO FROM EMP WHERE FALSE"
