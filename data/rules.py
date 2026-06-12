@@ -770,9 +770,10 @@ def get_rule_v2(key: str) -> RuleV2:
     if rule is None:
         raise ValueError(f"Rule {key} not found")
     result = RuleParserV2.parse(rule['pattern'], rule['rewrite'])
-    # TODO: reuse v1 parse_actions?
+    # Action variables stay as external names (s1/t2/...) since match() binds those
+    # in memo, so parse with an identity mapping rather than external->internal.
     identity_mapping = json.dumps({k: k for k in result.mapping})
-    actions_json = RuleParser.parse_actions(rule['actions'], identity_mapping)
+    actions_json = json.loads(RuleParser.parse_actions(rule['actions'], identity_mapping))
     return RuleV2(
         id=rule['id'],
         key=rule['key'],
@@ -782,6 +783,7 @@ def get_rule_v2(key: str) -> RuleV2:
         rewrite_ast=result.rewrite_ast,
         mapping=result.mapping,
         actions=rule['actions'],
+        actions_json=actions_json,
     )
 
 
