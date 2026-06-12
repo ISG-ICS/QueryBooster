@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Set, Optional, Union
+from typing import List, Set, Optional, Tuple, Union
 from abc import ABC
 
 from .enums import NodeType, JoinType, SortOrder
@@ -46,7 +46,7 @@ class Node(ABC):
 
 class TableNode(Node):
     """Table reference node"""
-    def __init__(self, _name: str, _alias: Optional[str] = None, **kwargs):
+    def __init__(self, _name: str, _alias: Optional[Union[str, 'ElementVariableNode']] = None, **kwargs):
         super().__init__(NodeType.TABLE, **kwargs)
         self.name = _name
         self.alias = _alias
@@ -80,7 +80,7 @@ class SubqueryNode(Node):
 
 class ColumnNode(Node):
     """Column reference node"""
-    def __init__(self, _name: str, _alias: Optional[str] = None, _parent_alias: Optional[str] = None, _parent: Optional[TableNode|SubqueryNode] = None, **kwargs):
+    def __init__(self, _name: str, _alias: Optional[Union[str, 'ElementVariableNode']] = None, _parent_alias: Optional[Union[str, 'ElementVariableNode']] = None, _parent: Optional[TableNode|SubqueryNode] = None, **kwargs):
         super().__init__(NodeType.COLUMN, **kwargs)
         self.name = _name
         self.alias = _alias
@@ -101,18 +101,20 @@ class ColumnNode(Node):
 
 class LiteralNode(Node):
     """Literal value node"""
-    def __init__(self, _value: str|int|float|bool|datetime|None, **kwargs):
+    def __init__(self, _value: str|int|float|bool|datetime|None, _alias: Optional[str] = None, **kwargs):
         super().__init__(NodeType.LITERAL, **kwargs)
         self.value = _value
+        self.alias = _alias
 
     def __eq__(self, other):
         if not isinstance(other, LiteralNode):
             return False
         return (super().__eq__(other) and 
-                self.value == other.value)
+                self.value == other.value and
+                self.alias == other.alias)
     
     def __hash__(self):
-        return hash((super().__hash__(), self.value))
+        return hash((super().__hash__(), self.value, self.alias))
 
 class DataTypeNode(Node):
     """SQL data type node used in CAST expressions (e.g. TEXT, DATE, INTEGER)"""
@@ -170,17 +172,19 @@ class IntervalNode(Node):
 
 class ElementVariableNode(Node):
     """Rule element variable ``<name>`` (see ``VarType.ElementVariable`` in rule_parser_v2)."""
-    def __init__(self, _name: str, **kwargs):
+    def __init__(self, _name: str, parent_alias: Optional[Union[str, 'ElementVariableNode']] = None, alias: Optional[Union[str, 'ElementVariableNode']] = None, **kwargs):
         super().__init__(NodeType.VAR, **kwargs)
         self.name = _name
+        self.parent_alias = parent_alias
+        self.alias = alias
 
     def __eq__(self, other):
         if not isinstance(other, ElementVariableNode):
             return False
-        return super().__eq__(other) and self.name == other.name
+        return super().__eq__(other) and self.name == other.name and self.parent_alias == other.parent_alias and self.alias == other.alias
 
     def __hash__(self):
-        return hash((super().__hash__(), self.name))
+        return hash((super().__hash__(), self.name, self.parent_alias, self.alias))
 
 
 class SetVariableNode(Node):
@@ -196,6 +200,31 @@ class SetVariableNode(Node):
 
     def __hash__(self):
         return hash((super().__hash__(), self.name))
+
+
+class VariableLiteralNode(Node):
+    """A string literal placeholder, e.g. ``'%<x1>%'`` in a LIKE predicate.
+
+    ``prefix`` and ``suffix`` capture surrounding wildcard characters so
+    ``LIKE '%foo%'`` → ``VariableLiteralNode('x1', prefix='%', suffix='%')``.
+    """
+    def __init__(self, _name: str, prefix: str = "", suffix: str = "",
+                 _alias: Optional[str] = None, **kwargs):
+        super().__init__(NodeType.VAR_LITERAL, **kwargs)
+        self.name = _name
+        self.prefix = prefix
+        self.suffix = suffix
+        self.alias = _alias
+
+    def __eq__(self, other):
+        if not isinstance(other, VariableLiteralNode):
+            return False
+        return (super().__eq__(other) and self.name == other.name
+                and self.prefix == other.prefix and self.suffix == other.suffix
+                and self.alias == other.alias)
+
+    def __hash__(self):
+        return hash((super().__hash__(), self.name, self.prefix, self.suffix, self.alias))
 
 
 class OperatorNode(Node):
@@ -229,7 +258,7 @@ class UnaryOperatorNode(OperatorNode):
 
 class FunctionNode(Node):
     """Function call node"""
-    def __init__(self, _name: str, _args: Optional[List[Node]] = None, _alias: Optional[str] = None, **kwargs):
+    def __init__(self, _name: str, _args: Optional[List[Node]] = None, _alias: Optional[Union[str, 'ElementVariableNode']] = None, **kwargs):
         if _args is None:
             _args = []
         super().__init__(NodeType.FUNCTION, children=_args, **kwargs)
@@ -249,24 +278,31 @@ class FunctionNode(Node):
 
 class JoinNode(Node):
     """JOIN clause node"""
-    def __init__(self, _left_table: Union['TableNode', 'JoinNode', 'SubqueryNode'], _right_table: Union['TableNode', 'SubqueryNode'], _join_type: JoinType = JoinType.INNER, _on_condition: Optional['Node'] = None, **kwargs):
+    def __init__(self, _left_table: Union['TableNode', 'JoinNode', 'SubqueryNode'], _right_table: Union['TableNode', 'SubqueryNode'], _join_type: JoinType = JoinType.INNER, _on_condition: Optional['Node'] = None, _using: Optional[List['Node']] = None, **kwargs):
         children = [_left_table, _right_table]
         if _on_condition:
             children.append(_on_condition)
+        if _using:
+            children.extend(_using)
         super().__init__(NodeType.JOIN, children=children, **kwargs)
         self.left_table = _left_table
         self.right_table = _right_table
         self.join_type = _join_type
         self.on_condition = _on_condition
-    
+        self.using = list(_using) if _using else None
+
     def __eq__(self, other):
         if not isinstance(other, JoinNode):
             return False
         return (super().__eq__(other) and 
-                self.join_type == other.join_type)
+                self.join_type == other.join_type and
+                self.using == other.using)
     
     def __hash__(self):
-        return hash((super().__hash__(), self.join_type))
+        using_key: Tuple = ()
+        if self.using:
+            using_key = tuple(self.using)
+        return hash((super().__hash__(), self.join_type, using_key))
 
 # ============================================================================
 # Query Structure Nodes
